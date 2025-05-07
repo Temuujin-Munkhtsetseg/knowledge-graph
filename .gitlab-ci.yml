@@ -35,6 +35,20 @@ rust-unit-tests:
     - cargo test -- --nocapture
   extends: .rust-job-template
 
+rust-unit-test-report:
+  stage: test
+  before_script:
+    - rustup toolchain install nightly
+    - cargo install --root . cargo2junit
+  script:
+    - cargo +nightly test -- -Z unstable-options --format json --report-time | bin/cargo2junit > report.xml
+  extends: .rust-job-template
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - report.xml
+
 rust-fmt-check:
   stage: test
   script:
