@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/indexer", "crates/cli", "crates/xtask"]
+resolver = "2"
+
+[workspace.dependencies]
+parser-core = { git = "https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git", tag = "v0.1.0" }
+gitalisk-core = { git = "https://gitlab.com/gitlab-org/rust/gitalisk.git", tag = "v0.1.0" }
+anyhow = "1.0.98"
+clap = { version = "4.5.37", features = ["derive"] }
+toml = "0.8.22"
+ignore = "0.4.23"
