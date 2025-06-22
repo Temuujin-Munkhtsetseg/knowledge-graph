@@ -43,6 +43,6 @@ What is the Big(O) complexity of your change?
 - [ ] Have you considered compile-time optimizations (e.g., `const fn`, generics instead of trait objects)?
 - [ ] Are debug assertions (`debug_assert!`) used instead of runtime checks where appropriate?
 
-/label ~"devops::ai-powered" ~"section::dev" ~"gitlab-code-parser" ~"section::data-science"
+/label ~"devops::ai-powered" ~"section::dev" ~"knowledge graph" ~"section::data-science"
 
 /assign me
