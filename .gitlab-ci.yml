@@ -1,4 +1,5 @@
 stages:
+  - lint
   - test
   - tag
   
@@ -67,6 +68,15 @@ xtask-version-check:
   script:
     - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
   extends: .rust-job-template
+  
+lint:mr-title:
+  image: ${GITLAB_DEPENDENCY_PROXY}node:lts-alpine
+  stage: lint
+  needs: []
+  before_script:
+    - npm install -g @commitlint/cli @commitlint/config-conventional
+  script:
+    - ./scripts/check-mr-title.sh
 
 version_tag:
   stage: tag
