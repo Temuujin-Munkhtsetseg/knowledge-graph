@@ -1,5 +1,11 @@
+# Rust
+.cargo/
 target
 report.xml
+
+# Output
+output
+kuzu_db
 
 # Node.js
 node_modules
