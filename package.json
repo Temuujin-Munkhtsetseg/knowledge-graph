@@ -1,0 +1,35 @@
+{
+  "name": "@gitlab-org/knowledge-graph",
+  "version": "0.1.0",
+  "description": "A framework to create a structured, queryable graph database from code repositories to power AI features and enhance developer productivity.",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "semantic-release": "semantic-release"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@gitlab.com/gitlab-org/rust/knowledge-graph.git"
+  },
+  "keywords": [
+    "gitlab",
+    "knowledge",
+    "graph"
+  ],
+  "author": "GitLab",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://gitlab.com/gitlab-org/rust/knowledge-graph/issues"
+  },
+  "homepage": "https://gitlab.com/gitlab-org/rust/knowledge-graph#readme",
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/gitlab": "^13.2.6",
+    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/release-notes-generator": "^14.0.3",
+    "semantic-release": "^24.2.5",
+    "semantic-release-slack-bot": "^4.0.2"
+  }
+}

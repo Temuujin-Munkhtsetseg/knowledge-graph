@@ -2,6 +2,13 @@
 members = ["crates/indexer", "crates/cli", "crates/xtask"]
 resolver = "2"
 
+[workspace.package]
+version = "0.1.0"
+license = "MIT"
+authors = ["GitLab Inc."]
+description = "A framework to create a structured, queryable graph database from code repositories to power AI features and enhance developer productivity."
+repository = "https://gitlab.com/gitlab-org/rust/knowledge-graph"
+
 [workspace.dependencies]
 parser-core = { git = "https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git", tag = "v0.1.0" }
 gitalisk-core = { git = "https://gitlab.com/gitlab-org/rust/gitalisk.git", tag = "v0.1.0" }
