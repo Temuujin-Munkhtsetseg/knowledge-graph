@@ -8,3 +8,20 @@ path = "src/lib.rs"
 
 [dependencies]
 parser-core = { workspace = true }
+gitalisk-core = { workspace = true }
+anyhow = { workspace = true }
+crossbeam-channel = { workspace = true }
+log = { workspace = true }
+num_cpus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+parquet = { workspace = true }
+arrow = { workspace = true }
+kuzu = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+

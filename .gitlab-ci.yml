@@ -7,9 +7,12 @@ variables:
   GLAB_VERSION: "1.55.0"
 
 .rust-job-template:
+  tags:
+    - saas-linux-large-amd64
   image: rust:latest
   needs: []
   before_script:
+    - apt update && apt install -y build-essential cmake
     - rustc --version && cargo --version
     - export PATH=$PATH:$CARGO_HOME/bin
   only:
@@ -26,19 +29,19 @@ variables:
       - .cargo/bin
       - .cargo/registry/index
       - .cargo/registry/cache
-      - target/debug/deps
-      - target/debug/build
+      - target/
     policy: pull-push
 
 rust-unit-tests:
   stage: test
   script:
-    - cargo test -- --nocapture
+    - cargo test --workspace -- --nocapture   
   extends: .rust-job-template
 
 rust-unit-test-report:
   stage: test
   before_script:
+    - apt update && apt install -y build-essential cmake
     - rustup toolchain install nightly
     - cargo install --root . cargo2junit
   script:
