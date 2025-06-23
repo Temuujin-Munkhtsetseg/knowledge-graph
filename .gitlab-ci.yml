@@ -1,6 +1,6 @@
 stages:
   - test
-  - tag
+  - deploy
   
 variables:
   GLAB_VERSION: "1.55.0"
@@ -68,24 +68,33 @@ xtask-version-check:
     - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
   extends: .rust-job-template
 
-version_tag:
-  stage: tag
-  image: registry.gitlab.com/gitlab-org/cli:v${GLAB_VERSION}
-  rules:
-    # Run on main branch updates but only if the VERSION file exists
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-      exists:
-        - VERSION
-  script:
-    - VERSION=$(cat VERSION)
-    - echo "Checking if tag v${VERSION} already exist"
-    - glab auth login --hostname $CI_SERVER_HOST --token $TAG_CREATOR_TOKEN
+publish-release::manual:
+  image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
+  stage: deploy
+  before_script:
+    # Validate that the repository contains a package.json and extract a few values from it.
     - |
-      # Check if version tag exists
-      if glab api /projects/$CI_PROJECT_ID/repository/tags/v${VERSION} --silent; then
-        echo "Tag v${VERSION} already exists, skipping creation"
-      else
-        echo "Tag v${VERSION} doesn't exist, will create it"
-        echo "Creating tag v${VERSION}"
-        glab api /projects/$CI_PROJECT_ID/repository/tags -X POST -f "tag_name=v${VERSION}" -f "ref=$CI_COMMIT_SHA" -f "message=Release version ${VERSION}"
+      if [[ ! -f package.json ]]; then
+        echo "No package.json found! A package.json file is required to publish a package to GitLab's NPM registry."
+        echo 'For more information, see https://docs.gitlab.com/ee/user/packages/npm_registry/#creating-a-project'
+        exit 1
       fi
+    - NPM_PACKAGE_NAME=$(node -p "require('./package.json').name")
+    - NPM_PACKAGE_VERSION=$(node -p "require('./package.json').version")
+    # Validate that the package name is properly scoped to the project's root namespace.
+    # For more information, see https://docs.gitlab.com/user/packages/npm_registry/#naming-convention
+    - |
+      if [[ ! $NPM_PACKAGE_NAME =~ ^@$CI_PROJECT_ROOT_NAMESPACE/ ]]; then
+        echo "Invalid package scope! Packages must be scoped in the root namespace of the project, e.g. \"@${CI_PROJECT_ROOT_NAMESPACE}/${CI_PROJECT_NAME}\""
+        echo 'For more information, see https://docs.gitlab.com/user/packages/npm_registry/#naming-convention'
+        exit 1
+      fi
+  script:
+    - npm ci
+    - PREVIOUS_VERSION=$(node -p "require('./package.json').version")
+    - npm run semantic-release
+    - echo "PACKAGE_VERSION=$(node -p "require('./package.json').version")" >> ./build.env
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  allow_failure: false
