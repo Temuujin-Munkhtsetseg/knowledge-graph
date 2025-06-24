@@ -1,9 +1,9 @@
 mod cli;
 
-use cli::{Cli, Commands, run_indexing};
+use cli::{Commands, GkgCli, run_indexing};
 
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse_args();
+    let cli = GkgCli::parse_args();
 
     match cli.command {
         Commands::Index {

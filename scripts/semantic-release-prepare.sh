@@ -41,10 +41,10 @@ if [ -f "Cargo.toml" ]; then
     fi
     
     # Update cli
-    if [ -f "crates/cli/Cargo.toml" ]; then
+    if [ -f "crates/gkg/Cargo.toml" ]; then
         echo "📦 Updating cli version..."
-        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/cli/Cargo.toml"
-        rm -f "crates/cli/Cargo.toml.bak"
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/gkg/Cargo.toml"
+        rm -f "crates/gkg/Cargo.toml.bak"
         echo "✅ Updated cli to version $NEW_VERSION"
     fi
     
