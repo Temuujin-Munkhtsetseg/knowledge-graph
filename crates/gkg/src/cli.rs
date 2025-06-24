@@ -7,18 +7,18 @@ use std::time::Instant;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "knowledge-graph",
+    name = "gkg",
     author = "GitLab Inc.",
     version = "0.1.0",
-    about = "GitLab Knowledge Graph",
+    about = "GitLab Knowledge Graph CLI",
     long_about = "Creates a structured, queryable representation of code repositories."
 )]
-pub struct Cli {
+pub struct GkgCli {
     #[command(subcommand)]
     pub command: Commands,
 }
 
-impl Cli {
+impl GkgCli {
     pub fn parse_args() -> Self {
         Self::parse()
     }

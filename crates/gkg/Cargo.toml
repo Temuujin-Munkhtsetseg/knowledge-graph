@@ -1,7 +1,8 @@
 [package]
-name = "cli"
+name = "gkg"
 version = "0.1.0"
 edition = "2024"
+description = "GitLab Knowledge Graph CLI"
 
 [dependencies]
 indexer = { path = "../indexer" }
