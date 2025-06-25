@@ -35,7 +35,7 @@ variables:
 rust-unit-tests:
   stage: test
   script:
-    - cargo test --workspace -- --nocapture   
+    - RUST_BACKTRACE=1 cargo test --workspace -- --nocapture   
   extends: .rust-job-template
 
 rust-unit-test-report:
