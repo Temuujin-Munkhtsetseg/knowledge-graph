@@ -183,8 +183,7 @@ impl IndexingStats {
 
             if total > 0 {
                 result.push_str(&format!(
-                    "  • .{}: {} total (✅ {} processed, ⏭️ {} skipped, ❌ {} errors)\n",
-                    file_type, total, proc_count, skip_count, err_count
+                    "  • .{file_type}: {total} total (✅ {proc_count} processed, ⏭️ {skip_count} skipped, ❌ {err_count} errors)\n"
                 ));
             }
         }

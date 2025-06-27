@@ -168,7 +168,7 @@ pub fn run_indexing(
         };
 
         let database_str = default_db_path.to_str();
-        println!("database_path: {:?}", database_str);
+        println!("database_path: {database_str:?}");
 
         match repository.process_repository_full_with_database(
             &config,
@@ -208,12 +208,9 @@ pub fn run_indexing(
                 // Show database results if applicable
                 if let Some(ref db_path) = result.database_path {
                     if result.database_loaded {
-                        println!(
-                            "  🗄️ Database: Successfully loaded graph data into {}",
-                            db_path
-                        );
+                        println!("  🗄️ Database: Successfully loaded graph data into {db_path}");
                     } else {
-                        println!("  ⚠️ Database: Failed to load graph data into {}", db_path);
+                        println!("  ⚠️ Database: Failed to load graph data into {db_path}");
                     }
                 }
 
@@ -221,7 +218,7 @@ pub fn run_indexing(
                 if !result.errors.is_empty() {
                     println!("  ⚠️ Errors encountered ({} total):", result.errors.len());
                     for (file_path, error_msg) in result.errors.iter().take(5) {
-                        println!("    • {}: {}", file_path, error_msg);
+                        println!("    • {file_path}: {error_msg}");
                     }
                     if result.errors.len() > 5 {
                         println!("    • ... and {} more errors", result.errors.len() - 5);
@@ -255,22 +252,22 @@ pub fn run_indexing(
 
     // Print final summary
     let total_time = start_time.elapsed();
-    println!("\n🎉 Indexing completed in {:?}", total_time);
+    println!("\n🎉 Indexing completed in {total_time:?}");
     println!("📊 Summary:");
-    println!("  • Repositories processed: {}", repositories_processed);
-    println!("  • Files processed: {}", total_files_processed);
-    println!("  • Files skipped: {}", total_files_skipped);
-    println!("  • Files with errors: {}", total_files_errored);
+    println!("  • Repositories processed: {repositories_processed}");
+    println!("  • Files processed: {total_files_processed}");
+    println!("  • Files skipped: {total_files_skipped}");
+    println!("  • Files with errors: {total_files_errored}");
 
     if total_files_processed > 0 {
         let files_per_sec = total_files_processed as f64 / total_time.as_secs_f64();
-        println!("  • Processing rate: {:.1} files/second", files_per_sec);
+        println!("  • Processing rate: {files_per_sec:.1} files/second");
     }
 
     if !total_errors.is_empty() && total_errors.len() <= 10 {
         println!("  • Recent errors:");
         for (file_path, error_msg) in total_errors.iter().take(10) {
-            println!("    • {}: {}", file_path, error_msg);
+            println!("    • {file_path}: {error_msg}");
         }
         if total_errors.len() > 10 {
             println!("    • ... and {} more errors", total_errors.len() - 10);

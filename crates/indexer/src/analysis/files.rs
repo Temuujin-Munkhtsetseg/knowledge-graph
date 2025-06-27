@@ -55,9 +55,7 @@ impl FileSystemAnalyzer {
                         .to_string();
 
                     log::debug!(
-                        "Creating directory node: '{}' (from file: '{}')",
-                        current_path,
-                        file_path
+                        "Creating directory node: '{current_path}' (from file: '{file_path}')"
                     );
                     directory_nodes.push(DirectoryNode {
                         path: current_path.clone(),
@@ -68,9 +66,7 @@ impl FileSystemAnalyzer {
                     created_directories.insert(current_path.clone());
                 } else {
                     log::debug!(
-                        "Directory already exists: '{}' (from file: '{}')",
-                        current_path,
-                        file_path
+                        "Directory already exists: '{current_path}' (from file: '{file_path}')"
                     );
                 }
 

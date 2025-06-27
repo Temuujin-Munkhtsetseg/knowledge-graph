@@ -365,21 +365,21 @@ impl AnalysisStats {
         if !self.files_by_language.is_empty() {
             result.push_str("  • Files by language:\n");
             for (language, count) in &self.files_by_language {
-                result.push_str(&format!("    - {}: {}\n", language, count));
+                result.push_str(&format!("    - {language}: {count}\n"));
             }
         }
 
         if !self.definitions_by_type.is_empty() {
             result.push_str("  • Definitions by type:\n");
             for (def_type, count) in &self.definitions_by_type {
-                result.push_str(&format!("    - {}: {}\n", def_type, count));
+                result.push_str(&format!("    - {def_type}: {count}\n"));
             }
         }
 
         if !self.relationships_by_type.is_empty() {
             result.push_str("  • Relationships by type:\n");
             for (rel_type, count) in &self.relationships_by_type {
-                result.push_str(&format!("    - {}: {}\n", rel_type, count));
+                result.push_str(&format!("    - {rel_type}: {count}\n"));
             }
         }
 

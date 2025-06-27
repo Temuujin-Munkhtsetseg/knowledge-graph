@@ -45,9 +45,7 @@ impl RubyAnalyzer {
                         // Same type - this is normal in Ruby (method redefinition, module reopening, etc.)
                         existing_def.add_location(location);
                         log::debug!(
-                            "Merged definition '{}' from file '{}'",
-                            fqn_string,
-                            relative_file_path
+                            "Merged definition '{fqn_string}' from file '{relative_file_path}'"
                         );
                     } else {
                         // Different types - this is a true conflict

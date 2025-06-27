@@ -20,17 +20,6 @@ variables:
     - merge_requests
   variables:
     CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
-  cache:
-    key:
-      files:
-        - Cargo.toml
-        - Cargo.lock
-    paths:
-      - .cargo/bin
-      - .cargo/registry/index
-      - .cargo/registry/cache
-      - target/
-    policy: pull-push
 
 rust-unit-tests:
   stage: test
