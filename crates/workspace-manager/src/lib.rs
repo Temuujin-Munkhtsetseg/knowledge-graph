@@ -15,3 +15,4 @@
 pub mod data_directory;
 pub mod errors;
 pub mod manifest;
+pub mod state_service;
