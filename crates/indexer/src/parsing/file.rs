@@ -185,9 +185,3 @@ pub fn process_file_info(file_info: FileInfo, content: &str) -> Result<FileProce
     let file = File::from_file_info(file_info, content);
     file.process()
 }
-
-/// Process a file from its content (legacy method)
-pub fn process_file_content(file_path: &str, content: &str) -> Result<FileProcessingResult> {
-    let file = File::new(file_path.to_string(), content);
-    file.process()
-}

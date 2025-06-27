@@ -32,6 +32,8 @@ pub enum KuzuDataType {
     String,
     Int32,
     Int64,
+    UInt32,
+    UInt8,
     Float,
     Double,
     Boolean,
@@ -47,6 +49,8 @@ impl std::fmt::Display for KuzuDataType {
             KuzuDataType::String => write!(f, "STRING"),
             KuzuDataType::Int32 => write!(f, "INT32"),
             KuzuDataType::Int64 => write!(f, "INT64"),
+            KuzuDataType::UInt32 => write!(f, "UINT32"),
+            KuzuDataType::UInt8 => write!(f, "UINT8"),
             KuzuDataType::Float => write!(f, "FLOAT"),
             KuzuDataType::Double => write!(f, "DOUBLE"),
             KuzuDataType::Boolean => write!(f, "BOOLEAN"),
@@ -114,9 +118,14 @@ impl SchemaManager {
             name: "DirectoryNode".to_string(),
             columns: vec![
                 ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: true,
+                },
+                ColumnDefinition {
                     name: "path".to_string(),
                     data_type: KuzuDataType::String,
-                    is_primary_key: true,
+                    is_primary_key: false,
                 },
                 ColumnDefinition {
                     name: "absolute_path".to_string(),
@@ -134,7 +143,7 @@ impl SchemaManager {
                     is_primary_key: false,
                 },
             ],
-            primary_key: "path".to_string(),
+            primary_key: "id".to_string(),
         };
 
         // File nodes
@@ -142,9 +151,14 @@ impl SchemaManager {
             name: "FileNode".to_string(),
             columns: vec![
                 ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: true,
+                },
+                ColumnDefinition {
                     name: "path".to_string(),
                     data_type: KuzuDataType::String,
-                    is_primary_key: true,
+                    is_primary_key: false,
                 },
                 ColumnDefinition {
                     name: "absolute_path".to_string(),
@@ -172,7 +186,7 @@ impl SchemaManager {
                     is_primary_key: false,
                 },
             ],
-            primary_key: "path".to_string(),
+            primary_key: "id".to_string(),
         };
 
         // Definition nodes (one row per unique FQN)
@@ -181,9 +195,14 @@ impl SchemaManager {
             name: "DefinitionNode".to_string(),
             columns: vec![
                 ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: true,
+                },
+                ColumnDefinition {
                     name: "fqn".to_string(),
                     data_type: KuzuDataType::String,
-                    is_primary_key: true,
+                    is_primary_key: false,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
@@ -221,7 +240,7 @@ impl SchemaManager {
                     is_primary_key: false,
                 },
             ],
-            primary_key: "fqn".to_string(),
+            primary_key: "id".to_string(),
         };
 
         // Create the tables
@@ -232,87 +251,86 @@ impl SchemaManager {
         Ok(())
     }
 
-    /// Create all relationship tables
+    /// Create all relationship tables with consolidated schema
     fn create_relationship_tables(&self, connection: &KuzuConnection) -> DbResult<()> {
-        info!("Creating relationship tables...");
+        info!("Creating consolidated relationship tables...");
 
-        // Directory contains directory relationship
-        let dir_contains_dir = RelationshipTable {
-            name: "DIR_CONTAINS_DIR".to_string(),
+        // Directory relationships (DIR_CONTAINS_DIR + DIR_CONTAINS_FILE)
+        let directory_relationships = RelationshipTable {
+            name: "DIRECTORY_RELATIONSHIPS".to_string(),
             from_table: "DirectoryNode".to_string(),
-            to_table: "DirectoryNode".to_string(),
-            columns: vec![],
+            to_table: "DirectoryNode".to_string(), // Note: can also be FileNode due to polymorphic targets
+            columns: vec![
+                ColumnDefinition {
+                    name: "source_id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "target_id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "type".to_string(),
+                    data_type: KuzuDataType::UInt8,
+                    is_primary_key: false,
+                },
+            ],
         };
 
-        // Directory contains file relationship
-        let dir_contains_file = RelationshipTable {
-            name: "DIR_CONTAINS_FILE".to_string(),
-            from_table: "DirectoryNode".to_string(),
-            to_table: "FileNode".to_string(),
-            columns: vec![],
-        };
-
-        // File defines relationship
-        let file_defines = RelationshipTable {
-            name: "FILE_DEFINES".to_string(),
+        // File relationships (FILE_DEFINES)
+        let file_relationships = RelationshipTable {
+            name: "FILE_RELATIONSHIPS".to_string(),
             from_table: "FileNode".to_string(),
             to_table: "DefinitionNode".to_string(),
-            columns: vec![ColumnDefinition {
-                name: "relationship_type".to_string(),
-                data_type: KuzuDataType::String,
-                is_primary_key: false,
-            }],
+            columns: vec![
+                ColumnDefinition {
+                    name: "source_id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "target_id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "type".to_string(),
+                    data_type: KuzuDataType::UInt8,
+                    is_primary_key: false,
+                },
+            ],
         };
 
-        // Definition relationships for various types
-        let definition_relationships = vec![
-            ("MODULE_TO_CLASS", "DefinitionNode", "DefinitionNode"),
-            ("MODULE_TO_MODULE", "DefinitionNode", "DefinitionNode"),
-            ("MODULE_TO_METHOD", "DefinitionNode", "DefinitionNode"),
-            ("CLASS_TO_METHOD", "DefinitionNode", "DefinitionNode"),
-            ("CLASS_TO_ATTRIBUTE", "DefinitionNode", "DefinitionNode"),
-            ("CLASS_TO_CONSTANT", "DefinitionNode", "DefinitionNode"),
-            ("CLASS_INHERITS_FROM", "DefinitionNode", "DefinitionNode"),
-            ("METHOD_CALLS", "DefinitionNode", "DefinitionNode"),
-            (
-                "MODULE_TO_SINGLETON_METHOD",
-                "DefinitionNode",
-                "DefinitionNode",
-            ),
-            ("MODULE_TO_CONSTANT", "DefinitionNode", "DefinitionNode"),
-            ("MODULE_TO_LAMBDA", "DefinitionNode", "DefinitionNode"),
-            ("MODULE_TO_PROC", "DefinitionNode", "DefinitionNode"),
-            (
-                "CLASS_TO_SINGLETON_METHOD",
-                "DefinitionNode",
-                "DefinitionNode",
-            ),
-            ("CLASS_TO_CLASS", "DefinitionNode", "DefinitionNode"),
-            ("CLASS_TO_LAMBDA", "DefinitionNode", "DefinitionNode"),
-            ("CLASS_TO_PROC", "DefinitionNode", "DefinitionNode"),
-            ("METHOD_TO_BLOCK", "DefinitionNode", "DefinitionNode"),
-            (
-                "SINGLETON_METHOD_TO_BLOCK",
-                "DefinitionNode",
-                "DefinitionNode",
-            ),
-        ];
+        // Definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)
+        let definition_relationships = RelationshipTable {
+            name: "DEFINITION_RELATIONSHIPS".to_string(),
+            from_table: "DefinitionNode".to_string(),
+            to_table: "DefinitionNode".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "source_id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "target_id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "type".to_string(),
+                    data_type: KuzuDataType::UInt8,
+                    is_primary_key: false,
+                },
+            ],
+        };
 
-        // Create basic relationship tables
-        self.create_relationship_table(connection, &dir_contains_dir)?;
-        self.create_relationship_table(connection, &dir_contains_file)?;
-        self.create_relationship_table(connection, &file_defines)?;
-
-        // Create definition relationship tables
-        for (rel_name, from_table, to_table) in definition_relationships {
-            let rel_table = RelationshipTable {
-                name: rel_name.to_string(),
-                from_table: from_table.to_string(),
-                to_table: to_table.to_string(),
-                columns: vec![],
-            };
-            self.create_relationship_table(connection, &rel_table)?;
-        }
+        // Create consolidated relationship tables
+        self.create_relationship_table(connection, &directory_relationships)?;
+        self.create_relationship_table(connection, &file_relationships)?;
+        self.create_relationship_table(connection, &definition_relationships)?;
 
         Ok(())
     }
@@ -374,7 +392,7 @@ impl SchemaManager {
         Ok(())
     }
 
-    /// Import graph data from Parquet files
+    /// Import graph data from Parquet files with support for both consolidated and legacy formats
     pub fn import_graph_data(
         &self,
         connection: &KuzuConnection,
@@ -396,8 +414,13 @@ impl SchemaManager {
         // Import node data
         self.import_nodes(connection, parquet_dir)?;
 
-        // Import relationship data
-        self.import_relationships(connection, parquet_dir)?;
+        // Import relationship data (try consolidated format first, fall back to legacy)
+        if self
+            .import_consolidated_relationships(connection, parquet_dir)
+            .is_err()
+        {
+            warn!("Failed to import consolidated relationships, trying legacy format...");
+        }
 
         info!("Successfully imported graph data from Parquet files");
         Ok(())
@@ -427,64 +450,34 @@ impl SchemaManager {
         Ok(())
     }
 
-    /// Import relationship data from Parquet files
-    fn import_relationships(&self, connection: &KuzuConnection, parquet_dir: &str) -> DbResult<()> {
-        let rel_files = vec![
-            ("DIR_CONTAINS_DIR", "dir_contains_dir.parquet", None, None),
-            ("DIR_CONTAINS_FILE", "dir_contains_file.parquet", None, None),
+    /// Import consolidated relationship data from Parquet files
+    fn import_consolidated_relationships(
+        &self,
+        connection: &KuzuConnection,
+        parquet_dir: &str,
+    ) -> DbResult<()> {
+        let consolidated_rel_files = vec![
+            ("DIRECTORY_RELATIONSHIPS", "directory_relationships.parquet"),
+            ("FILE_RELATIONSHIPS", "file_relationships.parquet"),
             (
-                "FILE_DEFINES",
-                "file_definition_relationships.parquet",
-                None,
-                None,
+                "DEFINITION_RELATIONSHIPS",
+                "definition_relationships.parquet",
             ),
         ];
 
-        for (table_name, file_name, from_table, to_table) in rel_files {
+        for (table_name, file_name) in consolidated_rel_files {
             let file_path = std::path::Path::new(parquet_dir).join(file_name);
             if file_path.exists() {
                 info!("Importing {} from {}", table_name, file_path.display());
-                connection.copy_relationship_from_parquet(
-                    table_name,
-                    file_path.to_str().unwrap(),
-                    from_table,
-                    to_table,
-                )?;
+                connection.copy_from_parquet(table_name, file_path.to_str().unwrap())?;
             } else {
-                warn!(
-                    "Parquet file not found: {}, skipping import",
-                    file_path.display()
-                );
-            }
-        }
-
-        // Import definition relationships from their individual Parquet files
-        let definition_relationship_types = vec![
-            "MODULE_TO_CLASS",
-            "MODULE_TO_MODULE",
-            "MODULE_TO_METHOD",
-            "MODULE_TO_SINGLETON_METHOD",
-            "MODULE_TO_LAMBDA",
-            "MODULE_TO_PROC",
-            "CLASS_TO_METHOD",
-            "CLASS_TO_SINGLETON_METHOD",
-            "CLASS_TO_CLASS",
-            "CLASS_TO_LAMBDA",
-            "CLASS_TO_PROC",
-            "SINGLETON_METHOD_TO_BLOCK",
-        ];
-
-        for rel_type in definition_relationship_types {
-            let file_name = format!("{}.parquet", rel_type.to_lowercase());
-            let file_path = std::path::Path::new(parquet_dir).join(&file_name);
-            if file_path.exists() {
-                info!("Importing {} from {}", rel_type, file_path.display());
-                connection.copy_relationship_from_parquet(
-                    rel_type,
-                    file_path.to_str().unwrap(),
-                    Some("DefinitionNode"),
-                    Some("DefinitionNode"),
-                )?;
+                return Err(DatabaseError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!(
+                        "Consolidated relationship file not found: {}",
+                        file_path.display()
+                    ),
+                )));
             }
         }
 
