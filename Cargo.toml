@@ -1,6 +1,7 @@
 [workspace]
 members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-manager"]
 resolver = "2"
+edition = "2024"
 
 [workspace.package]
 version = "0.1.0"
