@@ -256,18 +256,15 @@ fn test_module_reopening_merge() {
 
     assert!(
         file_paths.contains(&"authentication.rb"),
-        "Should include authentication.rb, got: {:?}",
-        file_paths
+        "Should include authentication.rb, got: {file_paths:?}"
     );
     assert!(
         file_paths.contains(&"providers.rb"),
-        "Should include providers.rb, got: {:?}",
-        file_paths
+        "Should include providers.rb, got: {file_paths:?}"
     );
     assert!(
         file_paths.contains(&"tokens.rb"),
-        "Should include tokens.rb, got: {:?}",
-        file_paths
+        "Should include tokens.rb, got: {file_paths:?}"
     );
 
     // Verify we have Authentication::Providers module
@@ -542,7 +539,7 @@ fn test_detailed_data_inspection() {
         });
 
     for (rel_type, count) in &relationship_counts {
-        println!("  🔗 {}: {}", rel_type, count);
+        println!("  🔗 {rel_type}: {count}");
     }
 
     // 5. Verify specific expected definitions exist
@@ -569,7 +566,7 @@ fn test_detailed_data_inspection() {
                 println!("     🔄 Reopened in {} files", def.file_locations.len());
             }
         } else {
-            println!("  ❌ Missing: {} ({})", expected_fqn, expected_type);
+            println!("  ❌ Missing: {expected_fqn} ({expected_type})");
         }
     }
 
@@ -727,8 +724,7 @@ fn test_parquet_file_structure() {
     for required_file in required_node_files {
         assert!(
             file_types.contains(&required_file),
-            "Should have created {} Parquet file",
-            required_file
+            "Should have created {required_file} Parquet file"
         );
     }
 
@@ -776,8 +772,8 @@ fn test_parquet_file_structure() {
         .map(|d| d.file_locations.len())
         .sum();
 
-    println!("  🔢 Unique definitions: {}", unique_definitions);
-    println!("  🔢 Total locations (flattened): {}", total_locations);
+    println!("  🔢 Unique definitions: {unique_definitions}");
+    println!("  🔢 Total locations (flattened): {total_locations}");
 
     // The Parquet file should have one record per unique definition (not per location)
     assert_eq!(

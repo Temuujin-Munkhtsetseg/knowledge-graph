@@ -112,7 +112,7 @@ fn check_versions() -> anyhow::Result<()> {
         .trim()
         .to_string();
 
-    println!("Expected version: {}", expected_version);
+    println!("Expected version: {expected_version}");
 
     let mismatches = Mutex::new(false);
     let errors = Mutex::new(Vec::new());
@@ -188,7 +188,7 @@ fn check_versions() -> anyhow::Result<()> {
     let collected_errors = errors.into_inner().unwrap();
     if !collected_errors.is_empty() {
         for err in collected_errors {
-            eprintln!("{:?}", err);
+            eprintln!("{err:?}");
         }
         return Err(anyhow!("Errors occurred during version check"));
     }

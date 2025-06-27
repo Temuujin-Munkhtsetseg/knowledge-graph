@@ -362,7 +362,7 @@ impl SchemaManager {
                 .map(|col| format!("{} {}", col.name, col.data_type))
                 .collect::<Vec<_>>()
                 .join(", ");
-            query.push_str(&format!(", {}", columns_str));
+            query.push_str(&format!(", {columns_str}"));
         }
 
         query.push(')');
@@ -389,7 +389,7 @@ impl SchemaManager {
         if !parquet_path.exists() {
             return Err(DatabaseError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Parquet directory not found: {}", parquet_dir),
+                format!("Parquet directory not found: {parquet_dir}"),
             )));
         }
 

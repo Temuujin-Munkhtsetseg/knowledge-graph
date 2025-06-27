@@ -153,7 +153,7 @@ impl Repository {
                 include_ignored: false,
                 include_hidden: false,
             })
-            .map_err(|e| format!("Failed to discover files: {}", e))?;
+            .map_err(|e| format!("Failed to discover files: {e}"))?;
 
         // Filter files based on configuration (using pre-computed metadata)
         self.files = file_infos
@@ -206,10 +206,7 @@ impl Repository {
         };
 
         let total_files = self.files.len();
-        info!(
-            "Processing {} files using {} worker threads",
-            total_files, worker_count
-        );
+        info!("Processing {total_files} files using {worker_count} worker threads");
 
         // Create stats tracker
         let stats = Arc::new(IndexingStats::new());
@@ -249,7 +246,7 @@ impl Repository {
             let max_file_size = config.max_file_size;
 
             let handle = thread::spawn(move || {
-                debug!("Worker {} started", worker_id);
+                debug!("Worker {worker_id} started");
                 Self::worker_task(
                     worker_id,
                     worker_receiver,
@@ -257,7 +254,7 @@ impl Repository {
                     repo_path,
                     max_file_size,
                 );
-                debug!("Worker {} finished", worker_id);
+                debug!("Worker {worker_id} finished");
             });
             worker_handles.push(handle);
         }
@@ -322,27 +319,23 @@ impl Repository {
                             file_results.push(file_result);
                         }
                         ResultMessage::Skipped(file_path, reason) => {
-                            debug!("Skipped {}: {}", file_path, reason);
+                            debug!("Skipped {file_path}: {reason}");
                         }
                         ResultMessage::Error(file_path, error_msg) => {
                             errors.push((file_path.clone(), error_msg.clone()));
-                            error!("Error processing {}: {}", file_path, error_msg);
+                            error!("Error processing {file_path}: {error_msg}");
                         }
                     }
 
                     // Check if we've processed all files
                     if messages_received >= total_files {
-                        info!(
-                            "All {} files processed, finishing result collection",
-                            total_files
-                        );
+                        info!("All {total_files} files processed, finishing result collection");
                         break;
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {
                     warn!(
-                        "Result collection timeout after {}s. Received {}/{} messages. Checking if workers are still alive...",
-                        RESULT_TIMEOUT_SECS, messages_received, total_files
+                        "Result collection timeout after {RESULT_TIMEOUT_SECS}s. Received {messages_received}/{total_files} messages. Checking if workers are still alive..."
                     );
 
                     // Check if any worker threads are still running
@@ -357,10 +350,7 @@ impl Repository {
                         warn!("No active workers remaining, breaking from result collection");
                         break;
                     } else {
-                        info!(
-                            "{} workers still active, continuing to wait...",
-                            active_workers
-                        );
+                        info!("{active_workers} workers still active, continuing to wait...");
                     }
                 }
                 Err(RecvTimeoutError::Disconnected) => {
@@ -381,7 +371,7 @@ impl Repository {
         for (i, handle) in worker_handles.into_iter().enumerate() {
             handle
                 .join()
-                .map_err(|_| format!("Worker thread {} panicked", i))?;
+                .map_err(|_| format!("Worker thread {i} panicked"))?;
         }
 
         let total_processing_time = start_time.elapsed();
@@ -402,7 +392,7 @@ impl Repository {
         // Log file type statistics
         let file_type_stats = stats.format_file_type_stats();
         if !file_type_stats.trim().is_empty() {
-            info!("📁 File type breakdown:\n{}", file_type_stats);
+            info!("📁 File type breakdown:\n{file_type_stats}");
         }
 
         Ok(RepositoryIndexingResult {
@@ -441,7 +431,7 @@ impl Repository {
         // Analyze the file processing results to create graph data
         let graph_data = analysis_service
             .analyze_results(&indexing_result.file_results)
-            .map_err(|e| format!("Analysis failed: {}", e))?;
+            .map_err(|e| format!("Analysis failed: {e}"))?;
 
         info!(
             "Analysis completed: {} files, {} definitions, {} relationships",
@@ -452,11 +442,11 @@ impl Repository {
 
         // Create writer service and write parquet files
         let writer_service = WriterService::new(output_directory)
-            .map_err(|e| format!("Failed to create writer service: {}", e))?;
+            .map_err(|e| format!("Failed to create writer service: {e}"))?;
 
         let writer_result = writer_service
             .write_graph_data(&graph_data)
-            .map_err(|e| format!("Writing failed: {}", e))?;
+            .map_err(|e| format!("Writing failed: {e}"))?;
 
         let analysis_duration = start_time.elapsed();
         info!(
@@ -471,7 +461,7 @@ impl Repository {
 
         // Load data into Kuzu database if database path is provided
         if let Some(db_path) = database_path {
-            info!("Loading graph data into Kuzu database at: {}", db_path);
+            info!("Loading graph data into Kuzu database at: {db_path}");
             match self.load_into_database(output_directory, db_path) {
                 Ok(_) => {
                     info!("✅ Successfully loaded graph data into Kuzu database");
@@ -479,7 +469,7 @@ impl Repository {
                     indexing_result.database_loaded = true;
                 }
                 Err(e) => {
-                    warn!("⚠️ Failed to load graph data into database: {}", e);
+                    warn!("⚠️ Failed to load graph data into database: {e}");
                     indexing_result.database_path = Some(db_path.to_string());
                     indexing_result.database_loaded = false;
                     // Note: We don't return an error here to avoid breaking the entire pipeline
@@ -534,31 +524,31 @@ impl Repository {
 
         // Create database
         let database = KuzuConnection::create_database(config)
-            .map_err(|e| format!("Failed to create database: {:?}", e))?;
+            .map_err(|e| format!("Failed to create database: {e:?}"))?;
 
         // Create connection manager with reference to database
         let connection_manager = KuzuConnection::new(&database, database_path.to_string())
-            .map_err(|e| format!("Failed to create database connection: {:?}", e))?;
+            .map_err(|e| format!("Failed to create database connection: {e:?}"))?;
 
         // Create schema manager and initialize schema
         let schema_manager = SchemaManager::new();
         schema_manager
             .initialize_schema(&connection_manager)
-            .map_err(|e| format!("Failed to initialize database schema: {:?}", e))?;
+            .map_err(|e| format!("Failed to initialize database schema: {e:?}"))?;
 
         // Import graph data from Parquet files
         schema_manager
             .import_graph_data(&connection_manager, parquet_directory)
-            .map_err(|e| format!("Failed to import graph data: {:?}", e))?;
+            .map_err(|e| format!("Failed to import graph data: {e:?}"))?;
 
         // Get and log database statistics
         match schema_manager.get_schema_stats(&connection_manager) {
             Ok(stats) => {
                 info!("Database loading completed successfully:");
-                info!("{}", stats);
+                info!("{stats}");
             }
             Err(e) => {
-                warn!("Failed to get database statistics: {:?}", e);
+                warn!("Failed to get database statistics: {e:?}");
             }
         }
 
@@ -590,7 +580,7 @@ impl Repository {
                     };
 
                     if result_sender.send(result_msg).is_err() {
-                        error!("Worker {}: Result channel closed", worker_id);
+                        error!("Worker {worker_id}: Result channel closed");
                         break;
                     }
                 }
@@ -609,12 +599,12 @@ impl Repository {
         let full_path = if file_path.starts_with(repo_path) {
             file_path.clone()
         } else {
-            format!("{}/{}", repo_path, file_path)
+            format!("{repo_path}/{file_path}")
         };
 
         // Check file size
         let metadata = std::fs::metadata(&full_path).map_err(|e| {
-            ProcessingError::Error(file_path.clone(), format!("Failed to read metadata: {}", e))
+            ProcessingError::Error(file_path.clone(), format!("Failed to read metadata: {e}"))
         })?;
 
         if metadata.len() as usize > max_file_size {
@@ -626,7 +616,7 @@ impl Repository {
 
         // Read file content
         let content = std::fs::read_to_string(&full_path).map_err(|e| {
-            ProcessingError::Error(file_path.clone(), format!("Failed to read file: {}", e))
+            ProcessingError::Error(file_path.clone(), format!("Failed to read file: {e}"))
         })?;
 
         process_file_info(file_info, &content)

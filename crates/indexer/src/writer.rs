@@ -434,10 +434,7 @@ impl WriterService {
         }
 
         let total_records = fqn_values.len();
-        log::info!(
-            "Created {} definition records (one per unique FQN)",
-            total_records
-        );
+        log::info!("Created {total_records} definition records (one per unique FQN)");
 
         // Define Arrow schema matching the database schema
         let schema = Arc::new(Schema::new(vec![
@@ -488,10 +485,7 @@ impl WriterService {
         writer.write(&batch)?;
         writer.close()?;
 
-        log::info!(
-            "✅ Successfully wrote {} definition records to Parquet",
-            total_records
-        );
+        log::info!("✅ Successfully wrote {total_records} definition records to Parquet");
         Ok(total_records)
     }
 

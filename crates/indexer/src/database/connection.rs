@@ -57,15 +57,13 @@ impl<'db> KuzuConnection<'db> {
             if db_path.is_dir() {
                 std::fs::remove_dir_all(db_path).map_err(|e| {
                     DatabaseError::InitializationFailed(format!(
-                        "Failed to remove existing database directory: {}",
-                        e
+                        "Failed to remove existing database directory: {e}"
                     ))
                 })?;
             } else {
                 std::fs::remove_file(db_path).map_err(|e| {
                     DatabaseError::InitializationFailed(format!(
-                        "Failed to remove existing database file: {}",
-                        e
+                        "Failed to remove existing database file: {e}"
                     ))
                 })?;
             }
@@ -76,8 +74,7 @@ impl<'db> KuzuConnection<'db> {
             if !parent.exists() {
                 std::fs::create_dir_all(parent).map_err(|e| {
                     DatabaseError::InitializationFailed(format!(
-                        "Failed to create database directory: {}",
-                        e
+                        "Failed to create database directory: {e}"
                     ))
                 })?;
             }
@@ -127,8 +124,7 @@ impl<'db> KuzuConnection<'db> {
 
         self.connection.prepare(query).map_err(|e| {
             DatabaseError::PreparedStatementError(format!(
-                "Failed to prepare statement '{}': {}",
-                query, e
+                "Failed to prepare statement '{query}': {e}"
             ))
         })
     }
@@ -231,11 +227,11 @@ impl<'db> KuzuConnection<'db> {
         // HEADER is not needed as schema is embedded in Parquet metadata
         let mut options = Vec::new();
         if let Some(from) = from_table {
-            options.push(format!("from='{}'", from));
+            options.push(format!("from='{from}'"));
         }
 
         if let Some(to) = to_table {
-            options.push(format!("to='{}'", to));
+            options.push(format!("to='{to}'"));
         }
 
         if !options.is_empty() {
@@ -266,7 +262,7 @@ impl<'db> KuzuConnection<'db> {
 
         for table_name in &table_names {
             // Check if it's a node or relationship table by trying to count
-            let count_query = format!("MATCH (n:{}) RETURN count(n)", table_name);
+            let count_query = format!("MATCH (n:{table_name}) RETURN count(n)");
             if let Ok(mut result) = self.query(&count_query) {
                 if let Some(row) = result.next() {
                     if let Some(kuzu::Value::Int64(count)) = row.first() {
@@ -276,7 +272,7 @@ impl<'db> KuzuConnection<'db> {
                 }
             } else {
                 // Try as relationship table
-                let rel_count_query = format!("MATCH ()-[r:{}]-() RETURN count(r)", table_name);
+                let rel_count_query = format!("MATCH ()-[r:{table_name}]-() RETURN count(r)");
                 if let Ok(mut result) = self.query(&rel_count_query) {
                     if let Some(row) = result.next() {
                         if let Some(kuzu::Value::Int64(count)) = row.first() {

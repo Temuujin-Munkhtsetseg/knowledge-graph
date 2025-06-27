@@ -31,5 +31,5 @@ fn init_logging(verbose: bool) {
         .with_target(false)
         .init();
 
-    println!("Logging level set to: {}", log_level);
+    println!("Logging level set to: {log_level}");
 }
