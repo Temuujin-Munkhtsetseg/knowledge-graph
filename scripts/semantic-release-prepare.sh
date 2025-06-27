@@ -47,6 +47,14 @@ if [ -f "Cargo.toml" ]; then
         rm -f "crates/gkg/Cargo.toml.bak"
         echo "✅ Updated cli to version $NEW_VERSION"
     fi
+
+    # Update mcp
+    if [ -f "crates/mcp/Cargo.toml" ]; then
+        echo "📦 Updating mcp version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/mcp/Cargo.toml"
+        rm -f "crates/mcp/Cargo.toml.bak"
+        echo "✅ Updated mcp to version $NEW_VERSION"
+    fi
     
     # Update http-server
     if [ -f "crates/http-server/Cargo.toml" ]; then

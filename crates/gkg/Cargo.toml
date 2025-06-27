@@ -8,6 +8,7 @@ description = "GitLab Knowledge Graph CLI"
 indexer = { path = "../indexer" }
 workspace-manager = { path = "../workspace-manager" }
 http-server = { path = "../http-server" }
+mcp = { path = "../mcp" }
 parser-core = { workspace = true }
 gitalisk-core = { workspace = true }
 clap = { workspace = true, features = ["derive"] }

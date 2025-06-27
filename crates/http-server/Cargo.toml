@@ -8,6 +8,7 @@ anyhow = "1.0.81"
 axum = "0.7.4"
 futures-util = "0.3.30"
 indexer = { path = "../indexer" }
+mcp = { path = "../mcp" }
 workspace-manager = { path = "../workspace-manager" }
 http = "1.1.0"
 once_cell = "1.19.0"

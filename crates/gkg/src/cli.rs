@@ -37,5 +37,9 @@ pub enum Commands {
         verbose: bool,
     },
     /// Start the gkg server
-    Server,
+    Server {
+        /// Register with MCP (Model Context Protocol) configuration
+        #[arg(long)]
+        register_mcp: bool,
+    },
 }
