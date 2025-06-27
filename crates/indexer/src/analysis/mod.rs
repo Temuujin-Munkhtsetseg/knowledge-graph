@@ -1,7 +1,7 @@
 pub mod files;
 pub mod ruby;
 
-use crate::parsing::file::FileProcessingResult;
+use crate::parsing::processor::FileProcessingResult;
 use parser_core::{definitions::DefinitionTypeInfo, ruby::types::RubyDefinitionType};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -224,6 +224,8 @@ impl AnalysisService {
             file_nodes.push(file_node);
 
             // Process definitions from this file (currently Ruby-specific)
+            // TODO: refactor this so that we have a cleaner architecture on
+            // parsing detection, language detection, indexer language management, etc.
             if file_result.is_supported {
                 // Pass the relative path to ensure consistency with FileNode primary keys
                 self.ruby_analyzer.process_definitions(

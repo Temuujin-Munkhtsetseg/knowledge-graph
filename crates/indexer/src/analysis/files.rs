@@ -1,5 +1,5 @@
 use super::{DirectoryNode, DirectoryRelationship, FileNode};
-use crate::parsing::file::FileProcessingResult;
+use crate::parsing::processor::FileProcessingResult;
 use std::{collections::HashSet, path::Path};
 
 /// Handles filesystem-related analysis operations

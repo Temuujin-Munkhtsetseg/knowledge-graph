@@ -1,7 +1,7 @@
 use super::{
     DefinitionLocation, DefinitionNode, DefinitionRelationship, FileDefinitionRelationship,
 };
-use crate::parsing::file::FileProcessingResult;
+use crate::parsing::processor::FileProcessingResult;
 use parser_core::ruby::{
     definitions::RubyDefinitionInfo,
     fqn::{RubyFqn, ruby_fqn_to_string},

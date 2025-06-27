@@ -6,6 +6,7 @@ description = "GitLab Knowledge Graph CLI"
 
 [dependencies]
 indexer = { path = "../indexer" }
+workspace-manager = { path = "../workspace-manager" }
 parser-core = { workspace = true }
 gitalisk-core = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
