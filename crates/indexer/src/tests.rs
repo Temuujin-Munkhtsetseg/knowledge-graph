@@ -733,7 +733,7 @@ fn test_parquet_file_structure() {
 
     let writer_result = result.writer_result.expect("Should have writer result");
 
-    println!("\n📁 === PARQUET FILE STRUCTURE VERIFICATION ===");
+    println!("\n📁 === CONSOLIDATED PARQUET FILE STRUCTURE VERIFICATION ===");
 
     // List all generated Parquet files
     println!("\n📊 Generated Parquet Files:");
@@ -765,13 +765,8 @@ fn test_parquet_file_structure() {
         .map(|f| f.file_type.as_str())
         .collect();
 
-    // Check for core node files
-    let required_node_files = vec![
-        "directories",
-        "files",
-        "definitions",
-        "file_definition_relationships",
-    ];
+    // Check for core node files (now with integer IDs)
+    let required_node_files = vec!["directories", "files", "definitions"];
     for required_file in required_node_files {
         assert!(
             file_types.contains(&required_file),
@@ -779,42 +774,86 @@ fn test_parquet_file_structure() {
         );
     }
 
-    // Check for directory relationship files (separated by type)
-    let has_dir_relationships = file_types.iter().any(|f| f.contains("dir_contains"));
-    assert!(
-        has_dir_relationships,
-        "Should have created directory relationship files"
-    );
+    // Check for consolidated relationship files (NEW STRUCTURE)
+    let required_relationship_files = vec![
+        "directory_relationships",  // Replaces dir_contains_dir + dir_contains_file
+        "file_relationships",       // Replaces file_definition_relationships
+        "definition_relationships", // Replaces all MODULE_TO_*, CLASS_TO_*, METHOD_* files
+    ];
 
-    // Check for definition relationship files (separated by type)
-    let definition_rel_types = [
+    for required_file in required_relationship_files {
+        assert!(
+            file_types.contains(&required_file),
+            "Should have created {required_file} Parquet file (consolidated schema)"
+        );
+    }
+
+    // Verify we DON'T have the old separate relationship files
+    let old_file_patterns = [
+        "dir_contains_dir",
+        "dir_contains_file",
+        "file_definition_relationships",
         "MODULE_TO_CLASS",
         "CLASS_TO_METHOD",
         "MODULE_TO_MODULE",
         "CLASS_TO_SINGLETON_METHOD",
         "MODULE_TO_SINGLETON_METHOD",
     ];
-    let has_def_relationships = definition_rel_types
-        .iter()
-        .any(|rel_type| file_types.contains(rel_type));
+
+    for old_pattern in old_file_patterns {
+        assert!(
+            !file_types.contains(&old_pattern),
+            "Should NOT have created old-style {old_pattern} file (should use consolidated schema)"
+        );
+    }
+
+    // Verify relationship type mapping file exists
+    let mapping_file = output_dir.join("relationship_types.json");
     assert!(
-        has_def_relationships,
-        "Should have created definition relationship files"
+        mapping_file.exists(),
+        "Should have created relationship_types.json mapping file"
     );
 
-    // Focus on definitions file (should contain flattened structure)
+    // Read and verify the mapping file contains expected relationship types
+    let mapping_content = fs::read_to_string(&mapping_file)
+        .expect("Should be able to read relationship mapping file");
+
+    println!("\n📊 Relationship Type Mapping:");
+    println!("  📄 File: {}", mapping_file.display());
+    println!(
+        "  📋 Content preview: {}",
+        &mapping_content[..std::cmp::min(mapping_content.len(), 200)]
+    );
+
+    // Verify mapping contains expected relationship types
+    let expected_rel_types = [
+        "DIR_CONTAINS_DIR",
+        "DIR_CONTAINS_FILE",
+        "FILE_DEFINES",
+        "MODULE_TO_CLASS",
+        "CLASS_TO_METHOD",
+    ];
+
+    for expected_type in expected_rel_types {
+        assert!(
+            mapping_content.contains(expected_type),
+            "Relationship mapping should contain {expected_type}"
+        );
+    }
+
+    // Focus on definitions file (should contain flattened structure with IDs)
     let definitions_file = writer_result
         .files_written
         .iter()
         .find(|f| f.file_type == "definitions")
         .expect("Should have definitions file");
 
-    println!("\n📊 Definitions File Analysis:");
+    println!("\n📊 Definitions File Analysis (with Integer IDs):");
     println!("  📄 File: {}", definitions_file.file_path.display());
     println!("  📊 Records: {}", definitions_file.record_count);
     println!("  💾 Size: {} bytes", definitions_file.file_size_bytes);
 
-    // Verify we have more records than definition nodes (due to flattening)
+    // Verify we have the correct number of records
     let graph_data = result.graph_data.expect("Should have graph data");
     let unique_definitions = graph_data.definition_nodes.len();
     let total_locations: usize = graph_data
@@ -826,10 +865,10 @@ fn test_parquet_file_structure() {
     println!("  🔢 Unique definitions: {unique_definitions}");
     println!("  🔢 Total locations (flattened): {total_locations}");
 
-    // The Parquet file should have one record per unique definition (not per location)
+    // The Parquet file should have one record per unique definition (using primary location + ID)
     assert_eq!(
         definitions_file.record_count, unique_definitions,
-        "Parquet records should equal unique definitions (using primary location)"
+        "Parquet records should equal unique definitions (one per unique FQN with integer ID)"
     );
 
     // Verify Authentication module contributes 1 record (using primary location)
@@ -846,25 +885,81 @@ fn test_parquet_file_structure() {
     assert_eq!(
         auth_def.file_locations.len(),
         3,
-        "Authentication should have 3 locations but only 1 Parquet record"
+        "Authentication should have 3 locations but only 1 Parquet record (with integer ID)"
     );
 
-    // Verify file-definition relationships count
-    let file_def_rels_file = writer_result
+    // Verify consolidated relationship files contain expected data
+    println!("\n📊 Consolidated Relationship Files:");
+
+    // Directory relationships (DIR_CONTAINS_DIR + DIR_CONTAINS_FILE)
+    let dir_rels_file = writer_result
         .files_written
         .iter()
-        .find(|f| f.file_type == "file_definition_relationships")
-        .expect("Should have file_definition_relationships file");
+        .find(|f| f.file_type == "directory_relationships")
+        .expect("Should have directory_relationships file");
 
-    println!("\n📊 File-Definition Relationships:");
-    println!("  📊 Records: {}", file_def_rels_file.record_count);
-
-    // Should be one relationship per definition location (this remains flattened)
-    assert_eq!(
-        file_def_rels_file.record_count, total_locations,
-        "File-definition relationships should equal total locations"
+    println!(
+        "  📁 Directory relationships: {} records",
+        dir_rels_file.record_count
+    );
+    assert!(
+        dir_rels_file.record_count > 0,
+        "Should have directory relationship records"
     );
 
-    println!("\n✅ Parquet file structure verification completed!");
+    // File relationships (FILE_DEFINES)
+    let file_rels_file = writer_result
+        .files_written
+        .iter()
+        .find(|f| f.file_type == "file_relationships")
+        .expect("Should have file_relationships file");
+
+    println!(
+        "  📄 File relationships: {} records",
+        file_rels_file.record_count
+    );
+
+    // Should equal total definition locations (one FILE_DEFINES relationship per definition location)
+    assert_eq!(
+        file_rels_file.record_count, total_locations,
+        "File relationships should equal total definition locations"
+    );
+
+    // Definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)
+    let def_rels_file = writer_result
+        .files_written
+        .iter()
+        .find(|f| f.file_type == "definition_relationships")
+        .expect("Should have definition_relationships file");
+
+    println!(
+        "  🔗 Definition relationships: {} records",
+        def_rels_file.record_count
+    );
+    assert!(
+        def_rels_file.record_count > 0,
+        "Should have definition relationship records"
+    );
+
+    // Verify total relationship count matches expectation
+    let total_relationship_records =
+        dir_rels_file.record_count + file_rels_file.record_count + def_rels_file.record_count;
+
+    let expected_total_relationships = writer_result.total_directory_relationships
+        + writer_result.total_file_definition_relationships
+        + writer_result.total_definition_relationships;
+
+    assert_eq!(
+        total_relationship_records, expected_total_relationships,
+        "Total relationship records should match expected count"
+    );
+
+    println!("\n📊 Consolidated Schema Summary:");
+    println!("  📁 Node files: 3");
+    println!("  🔗 Relationship files: 3 (consolidated from 20+ separate files)");
+    println!("  📋 Relationship types: mapped in relationship_types.json");
+    println!("  🚀 Storage efficiency: Much improved with integer IDs and consolidated tables");
+
+    println!("\n✅ Consolidated Parquet file structure verification completed!");
     println!("📁 Output directory: {}", output_dir.display());
 }
