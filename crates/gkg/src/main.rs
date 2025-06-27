@@ -75,17 +75,7 @@ async fn main() -> anyhow::Result<()> {
                 );
                 process::exit(1);
             }
-
-            if verbose {
-                tracing_subscriber::fmt()
-                    .with_max_level(tracing::Level::DEBUG)
-                    .init();
-            } else {
-                tracing_subscriber::fmt()
-                    .with_max_level(tracing::Level::INFO)
-                    .init();
-            }
-
+            init_logging(verbose);
             run_client_indexer(workspace_path, threads, |msg| println!("{msg}"))
         }
         Commands::Server => {
@@ -119,4 +109,19 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+}
+
+fn init_logging(verbose: bool) {
+    let log_level = if verbose { "debug" } else { "info" };
+
+    // Initialize tracing subscriber
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level));
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .init();
+
+    println!("Logging level set to: {log_level}");
 }
