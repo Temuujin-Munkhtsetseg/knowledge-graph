@@ -48,6 +48,14 @@ if [ -f "Cargo.toml" ]; then
         echo "✅ Updated cli to version $NEW_VERSION"
     fi
     
+    # Update http-server
+    if [ -f "crates/http-server/Cargo.toml" ]; then
+        echo "📦 Updating http-server version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/http-server/Cargo.toml"
+        rm -f "crates/http-server/Cargo.toml.bak"
+        echo "✅ Updated http-server to version $NEW_VERSION"
+    fi
+    
     # Update Cargo.lock with new workspace versions
     echo "🔄 Updating Cargo.lock..."
     cargo update --workspace
