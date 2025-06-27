@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 
 /// Status of a workspace folder or project
@@ -11,6 +12,17 @@ pub enum Status {
     Indexing,
     Error,
     Pending,
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Status::Indexed => write!(f, "indexed"),
+            Status::Indexing => write!(f, "indexing"),
+            Status::Error => write!(f, "error"),
+            Status::Pending => write!(f, "pending"),
+        }
+    }
 }
 
 impl Default for Status {

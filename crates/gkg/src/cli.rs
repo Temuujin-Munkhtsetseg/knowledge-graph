@@ -36,4 +36,6 @@ pub enum Commands {
         #[arg(short, long)]
         verbose: bool,
     },
+    /// Start the gkg server
+    Server,
 }
