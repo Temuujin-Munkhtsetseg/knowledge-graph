@@ -930,6 +930,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "tracing-subscriber",
+ "workspace-manager",
 ]
 
 [[package]]
@@ -1039,6 +1040,8 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
+ "workspace-manager",
 ]
 
 [[package]]
@@ -1421,8 +1424,8 @@ dependencies = [
 
 [[package]]
 name = "parser-core"
-version = "0.3.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.3.0#1195c497e8a4458c75b42a138823a6bccaf19d53"
+version = "0.4.0"
+source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.4.0#5c2e06b32abd076e5f8b2834ca4a40b3350b65ac"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",

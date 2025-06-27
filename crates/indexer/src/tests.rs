@@ -1,4 +1,6 @@
-use crate::indexer::{IndexingConfig, Repository};
+use crate::indexer::{IndexingConfig, RepositoryIndexer};
+use crate::project::file_info::FileInfo;
+use crate::project::source::{GitaliskFileSource, PathFileSource};
 use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
 use std::fs;
 use std::path::Path;
@@ -52,24 +54,90 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
 }
 
 #[test]
+fn test_new_indexer_with_gitalisk_file_source() {
+    let temp_repo = create_test_repository();
+    let repo_path = temp_repo.path().to_str().unwrap();
+
+    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
+
+    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
+    let file_source = GitaliskFileSource::new(gitalisk_repo);
+
+    let config = IndexingConfig {
+        worker_threads: 1,
+        max_file_size: 5_000_000,
+        respect_gitignore: false,
+    };
+
+    let result = indexer
+        .index_files(file_source, &config)
+        .expect("Failed to index files");
+
+    assert!(
+        result.total_files_processed > 0,
+        "Should have processed some files"
+    );
+    assert_eq!(result.total_files_errored, 0, "Should have no errors");
+
+    println!("✅ New indexer test completed successfully!");
+    println!("📊 Processed {} files", result.total_files_processed);
+}
+
+#[test]
+fn test_new_indexer_with_path_file_source() {
+    let temp_repo = create_test_repository();
+    let repo_path = temp_repo.path();
+
+    let mut ruby_files = Vec::new();
+    for entry in walkdir::WalkDir::new(repo_path) {
+        let entry = entry.unwrap();
+        if entry.path().extension().and_then(|s| s.to_str()) == Some("rb") {
+            ruby_files.push(FileInfo::from_path(entry.path().to_path_buf()));
+        }
+    }
+
+    let indexer = RepositoryIndexer::new(
+        "test-repo".to_string(),
+        repo_path.to_string_lossy().to_string(),
+    );
+    let file_source = PathFileSource::new(ruby_files);
+
+    let config = IndexingConfig {
+        worker_threads: 1,
+        max_file_size: 5_000_000,
+        respect_gitignore: false,
+    };
+
+    let result = indexer
+        .index_files(file_source, &config)
+        .expect("Failed to index files");
+
+    assert!(
+        result.total_files_processed > 0,
+        "Should have processed some files"
+    );
+    assert_eq!(result.total_files_errored, 0, "Should have no errors");
+
+    println!("✅ Path file source test completed successfully!");
+    println!("📊 Processed {} files", result.total_files_processed);
+}
+
+#[test]
 fn test_full_indexing_pipeline() {
     // Create temporary repository with test files
     let temp_repo = create_test_repository();
     let repo_path = temp_repo.path().to_str().unwrap();
 
     // Create a gitalisk repository wrapper
-    let gitalisk_repo = CoreGitaliskRepository {
-        path: repo_path.to_string(),
-        workspace_path: repo_path.to_string(),
-    };
+    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
 
-    // Create our Repository wrapper
-    let mut repository = Repository::new(gitalisk_repo);
+    // Create our RepositoryIndexer wrapper
+    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
+    let file_source = GitaliskFileSource::new(gitalisk_repo);
 
     // Configure indexing for Ruby files
     let config = IndexingConfig {
         worker_threads: 1, // Use single thread for deterministic testing
-        file_extensions: vec!["rb".to_string()],
         max_file_size: 5_000_000,
         respect_gitignore: false, // Don't use gitignore in tests
     };
@@ -79,8 +147,8 @@ fn test_full_indexing_pipeline() {
     let output_path = output_dir.to_str().unwrap();
 
     // Run the full processing pipeline
-    let result = repository
-        .process_repository_full(&config, output_path)
+    let result = indexer
+        .process_files_full(file_source, &config, output_path)
         .expect("Failed to process repository");
 
     // Verify we processed files
@@ -178,28 +246,22 @@ fn test_module_reopening_merge() {
     let repo_path = temp_repo.path().to_str().unwrap();
 
     // Create a gitalisk repository wrapper
-    let gitalisk_repo = CoreGitaliskRepository {
-        path: repo_path.to_string(),
-        workspace_path: repo_path.to_string(),
-    };
+    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
 
-    // Create our Repository wrapper
-    let mut repository = Repository::new(gitalisk_repo);
+    // Create our RepositoryIndexer wrapper
+    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
+    let file_source = GitaliskFileSource::new(gitalisk_repo);
 
     // Configure indexing for Ruby files
     let config = IndexingConfig {
         worker_threads: 1,
-        file_extensions: vec!["rb".to_string()],
         max_file_size: 5_000_000,
         respect_gitignore: false,
     };
 
-    // Discover and index files
-    repository
-        .discover_files(&config)
-        .expect("Failed to discover files");
-    let index_result = repository
-        .index_repository(&config)
+    // Index files and get results
+    let index_result = indexer
+        .index_files(file_source, &config)
         .expect("Failed to index repository");
 
     // Verify we have files
@@ -209,10 +271,8 @@ fn test_module_reopening_merge() {
     );
 
     // Run analysis to get graph data
-    let analysis_service = crate::analysis::AnalysisService::new(
-        repository.name.clone(),
-        repository.gitalisk_repo.path.clone(),
-    );
+    let analysis_service =
+        crate::analysis::AnalysisService::new(indexer.name.clone(), indexer.path.clone());
 
     let graph_data = analysis_service
         .analyze_results(&index_result.file_results)
@@ -312,18 +372,15 @@ fn test_inheritance_relationships() {
     let repo_path = temp_repo.path().to_str().unwrap();
 
     // Create a gitalisk repository wrapper
-    let gitalisk_repo = CoreGitaliskRepository {
-        path: repo_path.to_string(),
-        workspace_path: repo_path.to_string(),
-    };
+    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
 
-    // Create our Repository wrapper
-    let mut repository = Repository::new(gitalisk_repo);
+    // Create our RepositoryIndexer wrapper
+    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
+    let file_source = GitaliskFileSource::new(gitalisk_repo);
 
     // Configure indexing for Ruby files
     let config = IndexingConfig {
         worker_threads: 1,
-        file_extensions: vec!["rb".to_string()],
         max_file_size: 5_000_000,
         respect_gitignore: false,
     };
@@ -332,8 +389,8 @@ fn test_inheritance_relationships() {
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
 
-    let result = repository
-        .process_repository_full(&config, output_path)
+    let result = indexer
+        .process_files_full(file_source, &config, output_path)
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -401,18 +458,15 @@ fn test_detailed_data_inspection() {
     let repo_path = temp_repo.path().to_str().unwrap();
 
     // Create a gitalisk repository wrapper
-    let gitalisk_repo = CoreGitaliskRepository {
-        path: repo_path.to_string(),
-        workspace_path: repo_path.to_string(),
-    };
+    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
 
-    // Create our Repository wrapper
-    let mut repository = Repository::new(gitalisk_repo);
+    // Create our RepositoryIndexer wrapper
+    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
+    let file_source = GitaliskFileSource::new(gitalisk_repo);
 
     // Configure indexing for Ruby files
     let config = IndexingConfig {
         worker_threads: 1,
-        file_extensions: vec!["rb".to_string()],
         max_file_size: 5_000_000,
         respect_gitignore: false,
     };
@@ -421,8 +475,8 @@ fn test_detailed_data_inspection() {
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
 
-    let result = repository
-        .process_repository_full(&config, output_path)
+    let result = indexer
+        .process_files_full(file_source, &config, output_path)
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -654,18 +708,15 @@ fn test_parquet_file_structure() {
     let repo_path = temp_repo.path().to_str().unwrap();
 
     // Create a gitalisk repository wrapper
-    let gitalisk_repo = CoreGitaliskRepository {
-        path: repo_path.to_string(),
-        workspace_path: repo_path.to_string(),
-    };
+    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
 
-    // Create our Repository wrapper
-    let mut repository = Repository::new(gitalisk_repo);
+    // Create our RepositoryIndexer wrapper
+    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
+    let file_source = GitaliskFileSource::new(gitalisk_repo);
 
     // Configure indexing for Ruby files
     let config = IndexingConfig {
         worker_threads: 1,
-        file_extensions: vec!["rb".to_string()],
         max_file_size: 5_000_000,
         respect_gitignore: false,
     };
@@ -676,8 +727,8 @@ fn test_parquet_file_structure() {
     let output_path = output_dir.to_str().unwrap();
 
     // Run full processing pipeline
-    let result = repository
-        .process_repository_full(&config, output_path)
+    let result = indexer
+        .process_files_full(file_source, &config, output_path)
         .expect("Failed to process repository");
 
     let writer_result = result.writer_result.expect("Should have writer result");
