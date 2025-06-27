@@ -4,7 +4,7 @@ use super::{
 use crate::parsing::file::FileProcessingResult;
 use parser_core::ruby::{
     definitions::RubyDefinitionInfo,
-    fqn::{ruby_fqn_to_string, RubyFqn},
+    fqn::{RubyFqn, ruby_fqn_to_string},
     types::RubyDefinitionType,
 };
 use std::collections::HashMap;
@@ -51,7 +51,10 @@ impl RubyAnalyzer {
                         // Different types - this is a true conflict
                         log::warn!(
                             "Conflicting definition types for FQN '{}': existing {:?} vs new {:?} in file '{}'",
-                            fqn_string, existing_def.definition_type, definition.definition_type, relative_file_path
+                            fqn_string,
+                            existing_def.definition_type,
+                            definition.definition_type,
+                            relative_file_path
                         );
                         // Still add the location for completeness
                         existing_def.add_location(location);

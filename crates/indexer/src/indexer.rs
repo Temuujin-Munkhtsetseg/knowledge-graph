@@ -11,7 +11,7 @@
 // ██║   ██║██╔══██╗██╔══██║██╔═══╝ ██╔══██║
 // ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║
 //  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝
-use crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
 use gitalisk_core::repository::gitalisk_repository::{
     CoreGitaliskRepository, FileInfo, IterFileOptions,
 };

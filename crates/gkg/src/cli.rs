@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use gitalisk_core::workspace_folder::gitalisk_workspace::CoreGitaliskWorkspaceFolder;
-use indexer::repository::{IndexingConfig, Repository};
+use indexer::indexer::{IndexingConfig, Repository};
 use std::path::PathBuf;
 use std::time::Instant;
 
