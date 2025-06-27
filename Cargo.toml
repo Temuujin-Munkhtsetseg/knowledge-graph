@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-manager", "crates/http-server"]
+members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-manager", "crates/http-server", "crates/mcp"]
 resolver = "2"
 edition = "2024"
 

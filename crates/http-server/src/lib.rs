@@ -3,14 +3,19 @@ use crate::api::{
     WorkspacePathRequest, WorkspaceResponse,
 };
 use anyhow::Result;
+use axum::http::HeaderValue;
 use axum::{
     http::StatusCode,
     response::{sse::Event, IntoResponse, Json, Sse},
     routing::{get, post},
     Router,
 };
-use http::HeaderValue;
 use indexer::runner::run_client_indexer;
+use mcp::types::{McpBatchResponse, McpRequest, McpResponse};
+use mcp::{
+    handlers::{handle_mcp_batch, handle_mcp_request},
+    health_status,
+};
 use once_cell::sync::Lazy;
 use std::convert::Infallible;
 use std::net::{SocketAddr, TcpListener};
@@ -158,6 +163,19 @@ fn spawn_indexing_task(workspace_path: String, progress_tx: Option<broadcast::Se
     });
 }
 
+// MCP route handlers
+async fn mcp_handler(Json(payload): Json<McpRequest>) -> Json<McpResponse<serde_json::Value>> {
+    Json(handle_mcp_request(payload))
+}
+
+async fn mcp_batch_handler(Json(requests): Json<Vec<McpRequest>>) -> Json<McpBatchResponse> {
+    Json(handle_mcp_batch(requests))
+}
+
+async fn mcp_health_handler() -> Json<serde_json::Value> {
+    Json(health_status())
+}
+
 pub async fn run(port: u16) -> Result<()> {
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
         |origin: &HeaderValue, _| {
@@ -180,6 +198,9 @@ pub async fn run(port: u16) -> Result<()> {
         )
         .route("/workspace/index", post(index_handler))
         .route("/workspace/load", post(load_workspace_handler))
+        .route("/mcp", post(mcp_handler))
+        .route("/mcp/batch", post(mcp_batch_handler))
+        .route("/mcp/health", get(mcp_health_handler))
         .layer(cors_layer);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
