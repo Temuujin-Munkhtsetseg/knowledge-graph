@@ -1,4 +1,4 @@
-use crate::repository::{IndexingConfig, Repository};
+use crate::indexer::{IndexingConfig, Repository};
 use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
 use std::fs;
 use std::path::Path;

@@ -248,8 +248,13 @@ impl AnalysisService {
             directory_nodes.len(),
             file_nodes.len(),
             definition_nodes.len(),
-            definition_nodes.iter().map(|d| d.file_locations.len()).sum::<usize>(),
-            directory_relationships.len() + file_definition_relationships.len() + definition_relationships.len()
+            definition_nodes
+                .iter()
+                .map(|d| d.file_locations.len())
+                .sum::<usize>(),
+            directory_relationships.len()
+                + file_definition_relationships.len()
+                + definition_relationships.len()
         );
 
         Ok(GraphData {

@@ -1,9 +1,9 @@
 use anyhow::Result;
 use gitalisk_core::repository::gitalisk_repository::FileInfo;
 use parser_core::{
-    parser::{detect_language_from_extension, GenericParser, LanguageParser, SupportedLanguage},
+    parser::{GenericParser, LanguageParser, SupportedLanguage, detect_language_from_extension},
     ruby::{analyzer::RubyAnalyzer, definitions::RubyDefinitionInfo},
-    rules::{run_rules, RuleManager},
+    rules::{RuleManager, run_rules},
 };
 use std::time::{Duration, Instant};
 
