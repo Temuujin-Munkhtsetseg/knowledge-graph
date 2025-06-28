@@ -5,10 +5,10 @@ use crate::api::{
 use anyhow::Result;
 use axum::http::HeaderValue;
 use axum::{
-    http::StatusCode,
-    response::{sse::Event, IntoResponse, Json, Sse},
-    routing::{get, post},
     Router,
+    http::StatusCode,
+    response::{IntoResponse, Json, Sse, sse::Event},
+    routing::{get, post},
 };
 use indexer::runner::run_client_indexer;
 use mcp::types::{McpBatchResponse, McpRequest, McpResponse};
@@ -21,11 +21,11 @@ use std::convert::Infallible;
 use std::net::{SocketAddr, TcpListener};
 use std::path::PathBuf;
 use tokio::sync::broadcast;
-use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tower_http::cors::CorsLayer;
-use workspace_manager::manifest::Status;
 use workspace_manager::WorkspaceManager;
+use workspace_manager::manifest::Status;
 
 mod api;
 
@@ -105,7 +105,7 @@ async fn index_handler(Json(payload): Json<IndexRequest>) -> impl IntoResponse {
                     status: "workspace_not_loaded".to_string(),
                 }),
             )
-                .into_response()
+                .into_response();
         }
     }
 

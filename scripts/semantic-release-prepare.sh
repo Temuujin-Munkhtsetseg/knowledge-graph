@@ -63,6 +63,22 @@ if [ -f "Cargo.toml" ]; then
         rm -f "crates/http-server/Cargo.toml.bak"
         echo "✅ Updated http-server to version $NEW_VERSION"
     fi
+
+    # Update workspace-manager
+    if [ -f "crates/workspace-manager/Cargo.toml" ]; then
+        echo "📦 Updating workspace-manager version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/workspace-manager/Cargo.toml"
+        rm -f "crates/workspace-manager/Cargo.toml.bak"
+        echo "✅ Updated workspace-manager to version $NEW_VERSION"
+    fi
+
+    # Update xtask
+    if [ -f "crates/xtask/Cargo.toml" ]; then
+        echo "📦 Updating xtask version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/xtask/Cargo.toml"
+        rm -f "crates/xtask/Cargo.toml.bak"
+        echo "✅ Updated xtask to version $NEW_VERSION"
+    fi
     
     # Update Cargo.lock with new workspace versions
     echo "🔄 Updating Cargo.lock..."
