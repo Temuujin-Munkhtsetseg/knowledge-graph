@@ -1091,7 +1091,6 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.2.1"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.2.1#8320cf845d4c3f06a37394b05de62951613b81a3"
 dependencies = [
  "ignore",
  "serde",
@@ -1841,7 +1840,6 @@ dependencies = [
 [[package]]
 name = "parser-core"
 version = "0.4.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.4.0#5c2e06b32abd076e5f8b2834ca4a40b3350b65ac"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
@@ -3270,7 +3268,7 @@ dependencies = [
 
 [[package]]
 name = "workspace-manager"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "dirs",
@@ -3288,7 +3286,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
