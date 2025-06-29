@@ -33,7 +33,7 @@ pub struct GraphData {
 /// Represents a directory node in the graph
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DirectoryNode {
-    /// Primary key: relative path from repository root
+    /// Relative path from repository root
     pub path: String,
     /// Absolute path on filesystem
     pub absolute_path: String,
@@ -46,7 +46,7 @@ pub struct DirectoryNode {
 /// Represents a file node in the graph
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileNode {
-    /// Primary key: relative path from repository root
+    /// Relative path from repository root
     pub path: String,
     /// Absolute path on filesystem
     pub absolute_path: String,
@@ -76,7 +76,7 @@ pub struct DefinitionLocation {
 /// Represents a definition node in the graph (can span multiple files for Ruby modules/classes)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefinitionNode {
-    /// Primary key: fully qualified name
+    /// Fully qualified name (unique identifier)
     pub fqn: String,
     /// Simple name of the definition
     pub name: String,

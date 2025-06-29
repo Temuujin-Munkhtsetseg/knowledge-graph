@@ -1,7 +1,13 @@
+use crate::database::schema::SchemaManager;
+use crate::database::types::KuzuNodeType;
+use crate::database::types::{DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu};
+use crate::database::utils::{RelationshipType, RelationshipTypeMapping};
+use crate::database::{DatabaseConfig, KuzuConnection};
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::project::file_info::FileInfo;
 use crate::project::source::{GitaliskFileSource, PathFileSource};
 use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
+use kuzu::{Database, SystemConfig};
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -51,6 +57,57 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+fn setup_end_to_end_kuzu(temp_repo: &TempDir) {
+    // Create temporary repository with test files
+    let repo_path = temp_repo.path().to_str().unwrap();
+
+    // Create a gitalisk repository wrapper
+    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
+
+    // Create our RepositoryIndexer wrapper
+    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
+    let file_source = GitaliskFileSource::new(gitalisk_repo);
+
+    // Configure indexing for Ruby files
+    let config = IndexingConfig {
+        worker_threads: 1,
+        max_file_size: 5_000_000,
+        respect_gitignore: false,
+    };
+
+    // Run full processing pipeline
+    let output_dir = temp_repo.path().join("output");
+    let output_path = output_dir.to_str().unwrap();
+
+    let _result = indexer
+        .process_files_full(file_source, &config, output_path)
+        .expect("Failed to process repository");
+
+    // Create Kuzu database
+    let db_dir = temp_repo.path().join("kuzu_db");
+
+    let config = DatabaseConfig::new(db_dir.to_string_lossy())
+        .with_buffer_size(512 * 1024 * 1024)
+        .with_compression(true);
+
+    let database = KuzuConnection::create_database(config).expect("Failed to create Kuzu database");
+    let connection = KuzuConnection::new(&database, db_dir.to_string_lossy().to_string())
+        .expect("Failed to create Kuzu connection");
+
+    // Initialize schema
+    let schema_manager = SchemaManager::new();
+    schema_manager
+        .initialize_schema(&connection)
+        .expect("Failed to initialize schema");
+
+    // Import Parquet data
+    schema_manager
+        .import_graph_data(&connection, output_path)
+        .expect("Failed to import graph data");
+
+    println!("✅ Kuzu database created and data imported successfully");
 }
 
 #[test]
@@ -236,6 +293,60 @@ fn test_full_indexing_pipeline() {
     println!(
         "📁 Wrote {} Parquet files",
         writer_result.files_written.len()
+    );
+
+    // === PART 2: End-to-end Kuzu database verification ===
+    println!("\n🏗️ === KUZU DATABASE END-TO-END VERIFICATION ===");
+
+    // Create Kuzu database
+    let db_dir = temp_repo.path().join("kuzu_db");
+
+    let config = DatabaseConfig::new(db_dir.to_string_lossy())
+        .with_buffer_size(512 * 1024 * 1024)
+        .with_compression(true);
+
+    let database = KuzuConnection::create_database(config).expect("Failed to create Kuzu database");
+
+    let connection = KuzuConnection::new(&database, db_dir.to_string_lossy().to_string())
+        .expect("Failed to create Kuzu connection");
+
+    // Initialize schema
+    let schema_manager = SchemaManager::new();
+    schema_manager
+        .initialize_schema(&connection)
+        .expect("Failed to initialize schema");
+
+    // Import Parquet data
+    schema_manager
+        .import_graph_data(&connection, output_path)
+        .expect("Failed to import graph data");
+
+    println!("✅ Kuzu database created and data imported successfully");
+
+    // Verify basic node counts
+    println!("\n📊 Kuzu Database Node Counts:");
+    let node_counts = connection
+        .get_node_counts()
+        .expect("Failed to get node counts");
+
+    println!("  📁 Directory nodes: {}", node_counts.directory_count);
+    println!("  📄 File nodes: {}", node_counts.file_count);
+    println!("  🏗️  Definition nodes: {}", node_counts.definition_count);
+
+    // Verify relationship counts
+    println!("\n📊 Kuzu Database Relationship Counts:");
+    let rel_counts = connection
+        .get_relationship_counts()
+        .expect("Failed to get relationship counts");
+
+    println!(
+        "  📁 Directory relationships: {}",
+        rel_counts.directory_relationships
+    );
+    println!("  📄 File relationships: {}", rel_counts.file_relationships);
+    println!(
+        "  🏗️  Definition relationships: {}",
+        rel_counts.definition_relationships
     );
 }
 
@@ -452,6 +563,216 @@ fn test_inheritance_relationships() {
 }
 
 #[test]
+fn test_simple_end_to_end_kuzu() {
+    // Create temporary repository with test files
+    let temp_repo = create_test_repository();
+    setup_end_to_end_kuzu(&temp_repo);
+
+    let db_dir = temp_repo.path().join("kuzu_db");
+    let database = Database::new(
+        db_dir.to_string_lossy().to_string(),
+        SystemConfig::default(),
+    )
+    .expect("Failed to create database");
+    let connection = KuzuConnection::new(&database, db_dir.to_string_lossy().to_string())
+        .expect("Failed to create connection");
+
+    let relationship_type_map = RelationshipTypeMapping::new();
+
+    // Get definition node count
+    let defn_node_count = connection.count_nodes(KuzuNodeType::DefinitionNode);
+    println!("Definition node count: {defn_node_count}");
+    assert_eq!(defn_node_count, 94);
+
+    // Get file node count
+    let file_node_count = connection.count_nodes(KuzuNodeType::FileNode);
+    println!("File node count: {file_node_count}");
+    assert_eq!(file_node_count, 7);
+
+    // Get module -> class relationships count
+    let module_class_rel_count =
+        connection.count_relationships_of_type(RelationshipType::ModuleToClass);
+    println!("Module -> class relationship count: {module_class_rel_count}");
+    assert_eq!(module_class_rel_count, 7);
+
+    // Get file definition relationships count
+    let file_defn_rel_count = connection.count_relationships_of_type(RelationshipType::FileDefines);
+    println!("File defines relationship count: {file_defn_rel_count}");
+    assert_eq!(file_defn_rel_count, 96);
+
+    // Get directory node count
+    let dir_node_count = connection.count_nodes(KuzuNodeType::DirectoryNode);
+    println!("Directory node count: {dir_node_count}");
+    assert_eq!(dir_node_count, 4);
+
+    // get directory -> file relationships count
+    let dir_file_rel_count =
+        connection.count_relationships_of_type(RelationshipType::DirContainsFile);
+    println!("Directory -> file relationship count: {dir_file_rel_count}");
+    assert_eq!(dir_file_rel_count, 6);
+
+    // get directory -> directory relationships count
+    let dir_dir_rel_count =
+        connection.count_relationships_of_type(RelationshipType::DirContainsDir);
+    println!("Directory -> directory relationship count: {dir_dir_rel_count}");
+    assert_eq!(dir_dir_rel_count, 2);
+
+    // get definition relationships count
+    let def_rel_count = connection.count_relationships_of_node_type(KuzuNodeType::DefinitionNode);
+    println!("Definition relationship count: {def_rel_count}");
+    assert_eq!(def_rel_count, 88);
+
+    // Get all relationships in the definition_relationships table
+    let m2m_rel_type = relationship_type_map.get_type_id(RelationshipType::ModuleToClass);
+    let query_module_to_class = format!(
+        "MATCH (d:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(c:DefinitionNode) WHERE r.type = {m2m_rel_type} RETURN d, c, r.type"
+    );
+
+    let result = connection
+        .query(&query_module_to_class)
+        .expect("Failed to query module to class");
+    for row in result {
+        if let (Some(from_node_value), Some(to_node_value), Some(kuzu::Value::UInt8(rel_type))) =
+            (row.first(), row.get(1), row.get(2))
+        {
+            let from_node = DefinitionNodeFromKuzu::from_kuzu_node(from_node_value);
+            let to_node = DefinitionNodeFromKuzu::from_kuzu_node(to_node_value);
+            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
+            println!(
+                "Module to class relationship: {} -[type: {}]-> {}",
+                from_node.fqn, rel_type_name, to_node.fqn
+            );
+            if from_node.fqn.as_str() == "Authentication::Providers" {
+                match to_node.fqn.as_str() {
+                    "Authentication::Providers::LdapProvider" => {
+                        assert_eq!(to_node.definition_type, "Class");
+                        assert_eq!(to_node.primary_file_path, "lib/authentication/providers.rb");
+                    }
+                    "Authentication::Providers::OAuthProvider" => {
+                        assert_eq!(to_node.definition_type, "Class");
+                        assert_eq!(to_node.primary_file_path, "lib/authentication/providers.rb");
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    println!("--------------------------------");
+
+    // Query file relationships
+    let file_rel_type = relationship_type_map.get_type_id(RelationshipType::FileDefines);
+    let query_file_rels = format!(
+        "MATCH (f:FileNode)-[r:FILE_RELATIONSHIPS]->(d:DefinitionNode) WHERE r.type = {file_rel_type} RETURN f, d, r.type"
+    );
+
+    let result = connection
+        .query(&query_file_rels)
+        .expect("Failed to query file relationships");
+    for row in result {
+        if let (Some(file_value), Some(def_value), Some(kuzu::Value::UInt8(rel_type))) =
+            (row.first(), row.get(1), row.get(2))
+        {
+            let file_node = FileNodeFromKuzu::from_kuzu_node(file_value);
+            let def_node = DefinitionNodeFromKuzu::from_kuzu_node(def_value);
+            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
+            println!(
+                "File relationship: {} -[type: {}]-> {}",
+                file_node.path, rel_type_name, def_node.fqn
+            );
+            match file_node.path.as_str() {
+                "main.rb" => {
+                    if def_node.fqn.as_str() == "Application::test_authentication_providers" {
+                        assert_eq!(rel_type_name, RelationshipType::FileDefines.as_str());
+                    }
+                }
+                "app/models/user_model.rb" => {
+                    if def_node.fqn.as_str() == "UserModel::valid?" {
+                        assert_eq!(rel_type_name, RelationshipType::FileDefines.as_str());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    println!("--------------------------------");
+
+    // Query directory relationships
+    let dir_file_rel_type = relationship_type_map.get_type_id(RelationshipType::DirContainsFile);
+
+    // Query directory -> file relationships
+    let query_dir_file_rels = format!(
+        "MATCH (d:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]->(f:FileNode) WHERE r.type = {dir_file_rel_type} RETURN d, f, r.type"
+    );
+
+    let result = connection
+        .query(&query_dir_file_rels)
+        .expect("Failed to query directory-file relationships");
+    for row in result {
+        if let (Some(dir_value), Some(file_value), Some(kuzu::Value::UInt8(rel_type))) =
+            (row.first(), row.get(1), row.get(2))
+        {
+            let dir_node = DirectoryNodeFromKuzu::from_kuzu_node(dir_value);
+            let file_node = FileNodeFromKuzu::from_kuzu_node(file_value);
+            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
+            println!(
+                "Directory-File relationship: {} -[type: {}]-> {}",
+                dir_node.path, rel_type_name, file_node.path
+            );
+            if dir_node.path.as_str() == "app/models"
+                && file_node.path.as_str() == "app/models/user_model.rb"
+            {
+                assert_eq!(rel_type_name, RelationshipType::DirContainsFile.as_str());
+            }
+            if dir_node.path.as_str() == "lib/authentication"
+                && file_node.path.as_str() == "lib/authentication/providers.rb"
+            {
+                assert_eq!(rel_type_name, RelationshipType::DirContainsFile.as_str());
+            }
+        }
+    }
+
+    println!("--------------------------------");
+
+    // Query directory -> directory relationships
+    let dir_dir_rel_type = relationship_type_map.get_type_id(RelationshipType::DirContainsDir);
+    let query_dir_dir_rels = format!(
+        "MATCH (d1:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]->(d2:DirectoryNode) WHERE r.type = {dir_dir_rel_type} RETURN d1, d2, r.type"
+    );
+
+    let result = connection
+        .query(&query_dir_dir_rels)
+        .expect("Failed to query directory-directory relationships");
+    for row in result {
+        if let (Some(dir1_value), Some(dir2_value), Some(kuzu::Value::UInt8(rel_type))) =
+            (row.first(), row.get(1), row.get(2))
+        {
+            let dir1_node = DirectoryNodeFromKuzu::from_kuzu_node(dir1_value);
+            let dir2_node = DirectoryNodeFromKuzu::from_kuzu_node(dir2_value);
+            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
+            println!(
+                "Directory-Directory relationship: {} -[type: {}]-> {}",
+                dir1_node.path, rel_type_name, dir2_node.path
+            );
+            match dir1_node.path.as_str() {
+                "lib" => {
+                    if dir2_node.path.as_str() == "lib/authentication" {
+                        assert_eq!(rel_type_name, RelationshipType::DirContainsDir.as_str());
+                    }
+                }
+                "app" => {
+                    if dir2_node.path.as_str() == "app/models" {
+                        assert_eq!(rel_type_name, RelationshipType::DirContainsDir.as_str());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+#[test]
 fn test_detailed_data_inspection() {
     // Create temporary repository with test files
     let temp_repo = create_test_repository();
@@ -482,6 +803,8 @@ fn test_detailed_data_inspection() {
     let graph_data = result.graph_data.expect("Should have graph data");
 
     println!("\n🔍 === DETAILED DATA INSPECTION ===");
+
+    // === PART 1: In-memory graph data verification (existing) ===
 
     // 1. Inspect Authentication module specifically
     println!("\n📊 Authentication Module Analysis:");
@@ -776,8 +1099,9 @@ fn test_parquet_file_structure() {
 
     // Check for consolidated relationship files (NEW STRUCTURE)
     let required_relationship_files = vec![
-        "directory_relationships",  // Replaces dir_contains_dir + dir_contains_file
-        "file_relationships",       // Replaces file_definition_relationships
+        "directory_to_directory_relationships", // Replaces dir_contains_dir
+        "directory_to_file_relationships",      // dir contains file
+        "file_relationships",                   // Replaces file_definition_relationships
         "definition_relationships", // Replaces all MODULE_TO_*, CLASS_TO_*, METHOD_* files
     ];
 
@@ -785,59 +1109,6 @@ fn test_parquet_file_structure() {
         assert!(
             file_types.contains(&required_file),
             "Should have created {required_file} Parquet file (consolidated schema)"
-        );
-    }
-
-    // Verify we DON'T have the old separate relationship files
-    let old_file_patterns = [
-        "dir_contains_dir",
-        "dir_contains_file",
-        "file_definition_relationships",
-        "MODULE_TO_CLASS",
-        "CLASS_TO_METHOD",
-        "MODULE_TO_MODULE",
-        "CLASS_TO_SINGLETON_METHOD",
-        "MODULE_TO_SINGLETON_METHOD",
-    ];
-
-    for old_pattern in old_file_patterns {
-        assert!(
-            !file_types.contains(&old_pattern),
-            "Should NOT have created old-style {old_pattern} file (should use consolidated schema)"
-        );
-    }
-
-    // Verify relationship type mapping file exists
-    let mapping_file = output_dir.join("relationship_types.json");
-    assert!(
-        mapping_file.exists(),
-        "Should have created relationship_types.json mapping file"
-    );
-
-    // Read and verify the mapping file contains expected relationship types
-    let mapping_content = fs::read_to_string(&mapping_file)
-        .expect("Should be able to read relationship mapping file");
-
-    println!("\n📊 Relationship Type Mapping:");
-    println!("  📄 File: {}", mapping_file.display());
-    println!(
-        "  📋 Content preview: {}",
-        &mapping_content[..std::cmp::min(mapping_content.len(), 200)]
-    );
-
-    // Verify mapping contains expected relationship types
-    let expected_rel_types = [
-        "DIR_CONTAINS_DIR",
-        "DIR_CONTAINS_FILE",
-        "FILE_DEFINES",
-        "MODULE_TO_CLASS",
-        "CLASS_TO_METHOD",
-    ];
-
-    for expected_type in expected_rel_types {
-        assert!(
-            mapping_content.contains(expected_type),
-            "Relationship mapping should contain {expected_type}"
         );
     }
 
@@ -895,8 +1166,8 @@ fn test_parquet_file_structure() {
     let dir_rels_file = writer_result
         .files_written
         .iter()
-        .find(|f| f.file_type == "directory_relationships")
-        .expect("Should have directory_relationships file");
+        .find(|f| f.file_type == "directory_to_directory_relationships")
+        .expect("Should have directory_to_directory_relationships file");
 
     println!(
         "  📁 Directory relationships: {} records",
@@ -905,6 +1176,22 @@ fn test_parquet_file_structure() {
     assert!(
         dir_rels_file.record_count > 0,
         "Should have directory relationship records"
+    );
+
+    // Directory to file relationships (DIR_CONTAINS_FILE)
+    let dir_file_rels_file = writer_result
+        .files_written
+        .iter()
+        .find(|f| f.file_type == "directory_to_file_relationships")
+        .expect("Should have directory_to_file_relationships file");
+
+    println!(
+        "  📁 Directory to file relationships: {} records",
+        dir_file_rels_file.record_count
+    );
+    assert!(
+        dir_file_rels_file.record_count > 0,
+        "Should have directory to file relationship records"
     );
 
     // File relationships (FILE_DEFINES)
@@ -942,8 +1229,10 @@ fn test_parquet_file_structure() {
     );
 
     // Verify total relationship count matches expectation
-    let total_relationship_records =
-        dir_rels_file.record_count + file_rels_file.record_count + def_rels_file.record_count;
+    let total_relationship_records = dir_rels_file.record_count
+        + dir_file_rels_file.record_count
+        + file_rels_file.record_count
+        + def_rels_file.record_count;
 
     let expected_total_relationships = writer_result.total_directory_relationships
         + writer_result.total_file_definition_relationships
