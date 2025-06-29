@@ -75,7 +75,7 @@ impl RubyAnalyzer {
                 file_definition_relationships.push(FileDefinitionRelationship {
                     file_path: relative_file_path.to_string(),
                     definition_fqn: fqn_string,
-                    relationship_type: "DEFINES".to_string(),
+                    relationship_type: "FILE_DEFINES".to_string(),
                 });
             }
         }

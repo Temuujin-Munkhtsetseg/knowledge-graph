@@ -25,6 +25,7 @@ use crate::project::source::FileSource;
 use crate::stats::IndexingStats;
 use crate::writer::{WriterResult, WriterService};
 
+use crate::database::utils::NodeIdGenerator;
 pub use crate::parsing::processor::{FileProcessingResult, ProcessingStats};
 
 const DEFAULT_WORKER_THREADS: usize = 8;
@@ -347,8 +348,10 @@ impl RepositoryIndexer {
         let writer_service = WriterService::new(output_directory)
             .map_err(|e| format!("Failed to create writer service: {e}"))?;
 
+        let mut node_id_generator = NodeIdGenerator::new();
+
         let writer_result = writer_service
-            .write_graph_data(&graph_data)
+            .write_graph_data(&graph_data, &mut node_id_generator)
             .map_err(|e| format!("Writing failed: {e}"))?;
 
         let analysis_duration = start_time.elapsed();

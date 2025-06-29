@@ -1,4 +1,5 @@
 use crate::analysis::{DefinitionNode, DirectoryNode, FileNode, GraphData};
+use crate::database::utils::{NodeIdGenerator, RelationshipTypeMapping};
 use anyhow::{Context, Result};
 use arrow::{
     array::{Int32Array, Int64Array, StringArray, UInt8Array, UInt32Array},
@@ -7,184 +8,12 @@ use arrow::{
 };
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 use parser_core::definitions::DefinitionTypeInfo;
-use serde_json;
 use std::{
-    collections::HashMap,
     fs::File,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
-
-/// Relationship type mappings for efficient storage
-#[derive(Debug, Clone)]
-pub struct RelationshipTypeMapping {
-    /// Map from relationship type string to integer ID
-    type_to_id: HashMap<String, u8>,
-    /// Map from integer ID to relationship type string
-    id_to_type: HashMap<u8, String>,
-    /// Next available ID
-    next_id: u8,
-}
-
-impl Default for RelationshipTypeMapping {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl RelationshipTypeMapping {
-    pub fn new() -> Self {
-        let mut mapping = Self {
-            type_to_id: HashMap::new(),
-            id_to_type: HashMap::new(),
-            next_id: 1, // Start from 1, reserve 0 for unknown/default
-        };
-
-        // Pre-register known relationship types
-        mapping.register_known_types();
-        mapping
-    }
-
-    fn register_known_types(&mut self) {
-        let known_types = vec![
-            // Directory relationships
-            "DIR_CONTAINS_DIR",
-            "DIR_CONTAINS_FILE",
-            // File relationships
-            "FILE_DEFINES",
-            // Definition relationships - Module
-            "MODULE_TO_CLASS",
-            "MODULE_TO_MODULE",
-            "MODULE_TO_METHOD",
-            "MODULE_TO_SINGLETON_METHOD",
-            "MODULE_TO_CONSTANT",
-            "MODULE_TO_LAMBDA",
-            "MODULE_TO_PROC",
-            // Definition relationships - Class
-            "CLASS_TO_METHOD",
-            "CLASS_TO_ATTRIBUTE",
-            "CLASS_TO_CONSTANT",
-            "CLASS_INHERITS_FROM",
-            "CLASS_TO_SINGLETON_METHOD",
-            "CLASS_TO_CLASS",
-            "CLASS_TO_LAMBDA",
-            "CLASS_TO_PROC",
-            // Definition relationships - Method
-            "METHOD_CALLS",
-            "METHOD_TO_BLOCK",
-            "SINGLETON_METHOD_TO_BLOCK",
-        ];
-
-        for rel_type in known_types {
-            self.register_type(rel_type);
-        }
-    }
-
-    pub fn register_type(&mut self, type_name: &str) -> u8 {
-        if let Some(&id) = self.type_to_id.get(type_name) {
-            return id;
-        }
-
-        let id = self.next_id;
-        self.type_to_id.insert(type_name.to_string(), id);
-        self.id_to_type.insert(id, type_name.to_string());
-        self.next_id += 1;
-
-        if self.next_id == 0 {
-            panic!("Relationship type ID overflow! Consider using UINT16 instead of UINT8");
-        }
-
-        id
-    }
-
-    pub fn get_type_id(&self, type_name: &str) -> Option<u8> {
-        self.type_to_id.get(type_name).copied()
-    }
-
-    pub fn get_type_name(&self, type_id: u8) -> Option<&String> {
-        self.id_to_type.get(&type_id)
-    }
-}
-
-/// Node ID generator for assigning integer IDs to nodes
-#[derive(Debug, Clone)]
-pub struct NodeIdGenerator {
-    /// Directory path to ID mapping
-    directory_ids: HashMap<String, u32>,
-    /// File path to ID mapping
-    file_ids: HashMap<String, u32>,
-    /// Definition FQN to ID mapping
-    definition_ids: HashMap<String, u32>,
-    /// Next available IDs for each type
-    next_directory_id: u32,
-    next_file_id: u32,
-    next_definition_id: u32,
-}
-
-impl Default for NodeIdGenerator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl NodeIdGenerator {
-    pub fn new() -> Self {
-        Self {
-            directory_ids: HashMap::new(),
-            file_ids: HashMap::new(),
-            definition_ids: HashMap::new(),
-            next_directory_id: 1,
-            next_file_id: 1,
-            next_definition_id: 1,
-        }
-    }
-
-    pub fn get_or_assign_directory_id(&mut self, path: &str) -> u32 {
-        if let Some(&id) = self.directory_ids.get(path) {
-            return id;
-        }
-
-        let id = self.next_directory_id;
-        self.directory_ids.insert(path.to_string(), id);
-        self.next_directory_id += 1;
-        id
-    }
-
-    pub fn get_or_assign_file_id(&mut self, path: &str) -> u32 {
-        if let Some(&id) = self.file_ids.get(path) {
-            return id;
-        }
-
-        let id = self.next_file_id;
-        self.file_ids.insert(path.to_string(), id);
-        self.next_file_id += 1;
-        id
-    }
-
-    pub fn get_or_assign_definition_id(&mut self, fqn: &str) -> u32 {
-        if let Some(&id) = self.definition_ids.get(fqn) {
-            return id;
-        }
-
-        let id = self.next_definition_id;
-        self.definition_ids.insert(fqn.to_string(), id);
-        self.next_definition_id += 1;
-        id
-    }
-
-    pub fn get_directory_id(&self, path: &str) -> Option<u32> {
-        self.directory_ids.get(path).copied()
-    }
-
-    pub fn get_file_id(&self, path: &str) -> Option<u32> {
-        self.file_ids.get(path).copied()
-    }
-
-    pub fn get_definition_id(&self, fqn: &str) -> Option<u32> {
-        self.definition_ids.get(fqn).copied()
-    }
-}
 
 /// Consolidated relationship data for efficient storage
 #[derive(Debug, Clone)]
@@ -192,6 +21,15 @@ pub struct ConsolidatedRelationship {
     pub source_id: u32,
     pub target_id: u32,
     pub relationship_type: u8,
+}
+
+/// Container for different types of consolidated relationships
+#[derive(Default)]
+pub struct ConsolidatedRelationships {
+    pub directory_to_directory: Vec<ConsolidatedRelationship>,
+    pub directory_to_file: Vec<ConsolidatedRelationship>,
+    pub file_to_definition: Vec<ConsolidatedRelationship>,
+    pub definition_to_definition: Vec<ConsolidatedRelationship>,
 }
 
 /// Writer service for creating Parquet files from graph data
@@ -240,7 +78,11 @@ impl WriterService {
     }
 
     /// Write graph data to Parquet files with consolidated relationship schema
-    pub fn write_graph_data(&self, graph_data: &GraphData) -> Result<WriterResult> {
+    pub fn write_graph_data(
+        &self,
+        graph_data: &GraphData,
+        node_id_generator: &mut NodeIdGenerator,
+    ) -> Result<WriterResult> {
         let start_time = Instant::now();
         log::info!(
             "Starting to write graph data to Parquet files in directory: {}",
@@ -248,11 +90,10 @@ impl WriterService {
         );
 
         let mut files_written = Vec::new();
-        let mut node_id_generator = NodeIdGenerator::new();
         let mut relationship_mapping = RelationshipTypeMapping::new();
 
         // Pre-assign IDs to all nodes
-        self.assign_node_ids(&mut node_id_generator, graph_data)?;
+        self.assign_node_ids(node_id_generator, graph_data)?;
 
         // Write node tables with integer IDs
         if !graph_data.directory_nodes.is_empty() {
@@ -261,7 +102,7 @@ impl WriterService {
             self.write_directory_nodes_with_ids(
                 &file_path,
                 &graph_data.directory_nodes,
-                &node_id_generator,
+                node_id_generator,
             )?;
 
             files_written.push(WrittenFile {
@@ -275,7 +116,7 @@ impl WriterService {
         if !graph_data.file_nodes.is_empty() {
             let file_path = self.output_directory.join("files.parquet");
             let record_count = graph_data.file_nodes.len();
-            self.write_file_nodes_with_ids(&file_path, &graph_data.file_nodes, &node_id_generator)?;
+            self.write_file_nodes_with_ids(&file_path, &graph_data.file_nodes, node_id_generator)?;
 
             files_written.push(WrittenFile {
                 file_path: file_path.clone(),
@@ -290,7 +131,7 @@ impl WriterService {
             let record_count = self.write_definition_nodes_with_ids(
                 &file_path,
                 &graph_data.definition_nodes,
-                &node_id_generator,
+                node_id_generator,
             )?;
 
             files_written.push(WrittenFile {
@@ -302,33 +143,52 @@ impl WriterService {
         }
 
         // Write consolidated relationship tables
-        let (dir_rels, file_rels, def_rels) = self.consolidate_relationships(
+        let relationships = self.consolidate_relationships(
             graph_data,
-            &node_id_generator,
+            node_id_generator,
             &mut relationship_mapping,
         )?;
 
-        // Write directory relationships (DIR_CONTAINS_DIR + DIR_CONTAINS_FILE)
-        if !dir_rels.is_empty() {
+        // Write directory-to-directory relationships
+        if !relationships.directory_to_directory.is_empty() {
             let file_path = self
                 .output_directory
-                .join("directory_relationships.parquet");
-            let record_count = dir_rels.len();
-            self.write_consolidated_relationships(&file_path, &dir_rels)?;
+                .join("directory_to_directory_relationships.parquet");
+            let record_count = relationships.directory_to_directory.len();
+            self.write_consolidated_relationships(
+                &file_path,
+                &relationships.directory_to_directory,
+            )?;
 
             files_written.push(WrittenFile {
                 file_path: file_path.clone(),
-                file_type: "directory_relationships".to_string(),
+                file_type: "directory_to_directory_relationships".to_string(),
+                record_count,
+                file_size_bytes: self.get_file_size(&file_path)?,
+            });
+        }
+
+        // Write directory-to-file relationships
+        if !relationships.directory_to_file.is_empty() {
+            let file_path = self
+                .output_directory
+                .join("directory_to_file_relationships.parquet");
+            let record_count = relationships.directory_to_file.len();
+            self.write_consolidated_relationships(&file_path, &relationships.directory_to_file)?;
+
+            files_written.push(WrittenFile {
+                file_path: file_path.clone(),
+                file_type: "directory_to_file_relationships".to_string(),
                 record_count,
                 file_size_bytes: self.get_file_size(&file_path)?,
             });
         }
 
         // Write file relationships (FILE_DEFINES)
-        if !file_rels.is_empty() {
+        if !relationships.file_to_definition.is_empty() {
             let file_path = self.output_directory.join("file_relationships.parquet");
-            let record_count = file_rels.len();
-            self.write_consolidated_relationships(&file_path, &file_rels)?;
+            let record_count = relationships.file_to_definition.len();
+            self.write_consolidated_relationships(&file_path, &relationships.file_to_definition)?;
 
             files_written.push(WrittenFile {
                 file_path: file_path.clone(),
@@ -339,12 +199,15 @@ impl WriterService {
         }
 
         // Write definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)
-        if !def_rels.is_empty() {
+        if !relationships.definition_to_definition.is_empty() {
             let file_path = self
                 .output_directory
                 .join("definition_relationships.parquet");
-            let record_count = def_rels.len();
-            self.write_consolidated_relationships(&file_path, &def_rels)?;
+            let record_count = relationships.definition_to_definition.len();
+            self.write_consolidated_relationships(
+                &file_path,
+                &relationships.definition_to_definition,
+            )?;
 
             files_written.push(WrittenFile {
                 file_path: file_path.clone(),
@@ -353,9 +216,6 @@ impl WriterService {
                 file_size_bytes: self.get_file_size(&file_path)?,
             });
         }
-
-        // Write relationship type mapping for reference
-        self.write_relationship_mapping(&relationship_mapping)?;
 
         let writing_duration = start_time.elapsed();
 
@@ -370,9 +230,10 @@ impl WriterService {
             total_directories: graph_data.directory_nodes.len(),
             total_files: graph_data.file_nodes.len(),
             total_definitions: graph_data.definition_nodes.len(),
-            total_directory_relationships: dir_rels.len(),
-            total_file_definition_relationships: file_rels.len(),
-            total_definition_relationships: def_rels.len(),
+            total_directory_relationships: relationships.directory_to_directory.len()
+                + relationships.directory_to_file.len(),
+            total_file_definition_relationships: relationships.file_to_definition.len(),
+            total_definition_relationships: relationships.definition_to_definition.len(),
             writing_duration,
         })
     }
@@ -401,20 +262,14 @@ impl WriterService {
         Ok(())
     }
 
-    /// Consolidate all relationships into three categories with integer IDs and types
+    /// Consolidate all relationships into four categories with integer IDs and types
     fn consolidate_relationships(
         &self,
         graph_data: &GraphData,
         id_generator: &NodeIdGenerator,
         relationship_mapping: &mut RelationshipTypeMapping,
-    ) -> Result<(
-        Vec<ConsolidatedRelationship>,
-        Vec<ConsolidatedRelationship>,
-        Vec<ConsolidatedRelationship>,
-    )> {
-        let mut directory_relationships = Vec::new();
-        let mut file_relationships = Vec::new();
-        let mut definition_relationships = Vec::new();
+    ) -> Result<ConsolidatedRelationships> {
+        let mut relationships = ConsolidatedRelationships::default();
 
         // Process directory relationships
         for dir_rel in &graph_data.directory_relationships {
@@ -434,21 +289,25 @@ impl WriterService {
                             anyhow::anyhow!("Target directory ID not found: {}", dir_rel.to_path)
                         })?;
 
-                directory_relationships.push(ConsolidatedRelationship {
-                    source_id,
-                    target_id,
-                    relationship_type,
-                });
+                relationships
+                    .directory_to_directory
+                    .push(ConsolidatedRelationship {
+                        source_id,
+                        target_id,
+                        relationship_type,
+                    });
             } else if dir_rel.relationship_type == "DIR_CONTAINS_FILE" {
                 let target_id = id_generator.get_file_id(&dir_rel.to_path).ok_or_else(|| {
                     anyhow::anyhow!("Target file ID not found: {}", dir_rel.to_path)
                 })?;
 
-                directory_relationships.push(ConsolidatedRelationship {
-                    source_id,
-                    target_id,
-                    relationship_type,
-                });
+                relationships
+                    .directory_to_file
+                    .push(ConsolidatedRelationship {
+                        source_id,
+                        target_id,
+                        relationship_type,
+                    });
             }
         }
 
@@ -469,11 +328,13 @@ impl WriterService {
                 })?;
             let relationship_type = relationship_mapping.register_type(&file_rel.relationship_type);
 
-            file_relationships.push(ConsolidatedRelationship {
-                source_id,
-                target_id,
-                relationship_type,
-            });
+            relationships
+                .file_to_definition
+                .push(ConsolidatedRelationship {
+                    source_id,
+                    target_id,
+                    relationship_type,
+                });
         }
 
         // Process definition relationships
@@ -496,18 +357,16 @@ impl WriterService {
                 })?;
             let relationship_type = relationship_mapping.register_type(&def_rel.relationship_type);
 
-            definition_relationships.push(ConsolidatedRelationship {
-                source_id,
-                target_id,
-                relationship_type,
-            });
+            relationships
+                .definition_to_definition
+                .push(ConsolidatedRelationship {
+                    source_id,
+                    target_id,
+                    relationship_type,
+                });
         }
 
-        Ok((
-            directory_relationships,
-            file_relationships,
-            definition_relationships,
-        ))
+        Ok(relationships)
     }
 
     /// Write directory nodes with integer IDs
@@ -869,28 +728,6 @@ impl WriterService {
         log::info!(
             "✅ Successfully wrote {} consolidated relationships to Parquet",
             relationships.len()
-        );
-        Ok(())
-    }
-
-    /// Write relationship type mapping for reference
-    fn write_relationship_mapping(&self, mapping: &RelationshipTypeMapping) -> Result<()> {
-        let file_path = self.output_directory.join("relationship_types.json");
-
-        let mapping_data: HashMap<u8, String> = mapping.id_to_type.clone();
-        let json_data = serde_json::to_string_pretty(&mapping_data)
-            .context("Failed to serialize relationship mapping")?;
-
-        std::fs::write(&file_path, json_data).with_context(|| {
-            format!(
-                "Failed to write relationship mapping: {}",
-                file_path.display()
-            )
-        })?;
-
-        log::info!(
-            "✅ Successfully wrote relationship type mapping with {} types",
-            mapping_data.len()
         );
         Ok(())
     }

@@ -1,4 +1,6 @@
 use crate::database::DatabaseConfig;
+use crate::database::types::*;
+use crate::database::utils::{RelationshipType, RelationshipTypeMapping};
 use kuzu::{Connection, Database, QueryResult, SystemConfig};
 use std::path::Path;
 use thiserror::Error;
@@ -307,28 +309,256 @@ impl<'db> KuzuConnection<'db> {
     pub fn interrupt(&self) -> DbResult<()> {
         self.connection.interrupt().map_err(DatabaseError::Kuzu)
     }
-}
 
-/// Database statistics
-#[derive(Debug, Clone)]
-pub struct DatabaseStats {
-    pub total_tables: usize,
-    pub node_tables: usize,
-    pub rel_tables: usize,
-    pub total_nodes: usize,
-    pub total_relationships: usize,
-}
+    // TODO: abstract these both out into a trait, trait object, or just a higher order method that takes a closure
 
-impl std::fmt::Display for DatabaseStats {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Database Stats: {} tables ({} node, {} rel), {} nodes, {} relationships",
-            self.total_tables,
-            self.node_tables,
-            self.rel_tables,
-            self.total_nodes,
-            self.total_relationships
-        )
+    pub fn count_nodes(&self, node_type: KuzuNodeType) -> i64 {
+        let query = format!("MATCH (n:{}) RETURN COUNT(n)", node_type.as_str());
+        let mut result = match self.query(&query) {
+            Ok(result) => result,
+            Err(_) => return 0,
+        };
+
+        if let Some(row) = result.next() {
+            if let Some(kuzu::Value::Int64(count)) = row.first() {
+                *count
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+
+    pub fn count_relationships_of_type(&self, relationship_type: RelationshipType) -> i64 {
+        // Get the relationship label based on the type
+        let (rel_label, _type_id) = match relationship_type {
+            RelationshipType::DirContainsDir | RelationshipType::DirContainsFile => {
+                ("DIRECTORY_RELATIONSHIPS", relationship_type.as_str())
+            }
+            RelationshipType::FileDefines => ("FILE_RELATIONSHIPS", relationship_type.as_str()),
+            _ => {
+                // All other types are definition relationships
+                ("DEFINITION_RELATIONSHIPS", relationship_type.as_str())
+            }
+        };
+
+        let query = format!(
+            "MATCH (from)-[r:{}]->(to) WHERE r.type = {} RETURN COUNT(DISTINCT [from, to])",
+            rel_label,
+            RelationshipTypeMapping::new().get_type_id(relationship_type)
+        );
+
+        let mut result = match self.query(&query) {
+            Ok(result) => result,
+            Err(_) => return 0,
+        };
+
+        if let Some(row) = result.next() {
+            if let Some(kuzu::Value::Int64(count)) = row.first() {
+                *count
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+
+    pub fn count_relationships_of_node_type(&self, node_type: KuzuNodeType) -> i64 {
+        // Get the relationship label based on the type
+        let (rel_label, _type_id) = match node_type {
+            KuzuNodeType::DirectoryNode => ("DIRECTORY_RELATIONSHIPS", node_type.as_str()),
+            KuzuNodeType::FileNode => ("FILE_RELATIONSHIPS", node_type.as_str()),
+            KuzuNodeType::DefinitionNode => ("DEFINITION_RELATIONSHIPS", node_type.as_str()),
+        };
+
+        let query = format!("MATCH (from)-[r:{rel_label}]->(to) RETURN COUNT(DISTINCT [from, to])");
+
+        let mut result = match self.query(&query) {
+            Ok(result) => result,
+            Err(_) => return 0,
+        };
+
+        if let Some(row) = result.next() {
+            if let Some(kuzu::Value::Int64(count)) = row.first() {
+                *count
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+
+    // Knowledge graph specific methods
+
+    pub fn get_all_definition_nodes(&self) -> DbResult<Vec<DefinitionNodeFromKuzu>> {
+        let query = "MATCH (n:DefinitionNode) RETURN n";
+        let result = self.query(query)?;
+        let mut nodes = Vec::new();
+
+        for row in result {
+            if let Some(node_value) = row.first() {
+                let node = DefinitionNodeFromKuzu::from_kuzu_node(node_value);
+                nodes.push(node);
+            }
+        }
+        Ok(nodes)
+    }
+
+    pub fn get_all_file_nodes(&self) -> DbResult<Vec<FileNodeFromKuzu>> {
+        let query = "MATCH (n:FileNode) RETURN n";
+        let result = self.query(query)?;
+        let mut nodes = Vec::new();
+
+        for row in result {
+            if let Some(node_value) = row.first() {
+                let node = FileNodeFromKuzu::from_kuzu_node(node_value);
+                nodes.push(node);
+            }
+        }
+        Ok(nodes)
+    }
+
+    pub fn get_all_directory_nodes(&self) -> DbResult<Vec<DirectoryNodeFromKuzu>> {
+        let query = "MATCH (n:DirectoryNode) RETURN n";
+        let result = self.query(query)?;
+        let mut nodes = Vec::new();
+
+        for row in result {
+            if let Some(node_value) = row.first() {
+                let node = DirectoryNodeFromKuzu::from_kuzu_node(node_value);
+                nodes.push(node);
+            }
+        }
+        Ok(nodes)
+    }
+
+    pub fn delete_definition_nodes_by_paths(&self, paths: &[String]) -> DbResult<()> {
+        let paths_str = paths
+            .iter()
+            .map(|path| format!("'{path}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let query = format!(
+            "MATCH (n:DefinitionNode) WHERE n.primary_file_path IN [{paths_str}] DETACH DELETE n"
+        );
+
+        self.execute_ddl(&query)?;
+        Ok(())
+    }
+
+    pub fn delete_file_nodes_by_path(&self, paths: &[String]) -> DbResult<()> {
+        let paths_str = paths
+            .iter()
+            .map(|path| format!("'{path}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let query = format!("MATCH (n:FileNode) WHERE n.path IN [{paths_str}] DETACH DELETE n");
+
+        self.execute_ddl(&query)?;
+        Ok(())
+    }
+
+    pub fn delete_directory_nodes_by_path(&self, paths: &[String]) -> DbResult<()> {
+        let paths_str = paths
+            .iter()
+            .map(|path| format!("'{path}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let query =
+            format!("MATCH (n:DirectoryNode) WHERE n.path IN [{paths_str}] DETACH DELETE n");
+        self.execute_ddl(&query)?;
+        Ok(())
+    }
+
+    /// Get all nodes count by type
+    pub fn get_node_counts(&self) -> DbResult<NodeCounts> {
+        let mut directory_count = 0;
+        let mut file_count = 0;
+        let mut definition_count = 0;
+
+        // Count directory nodes
+        let query = "MATCH (n:DirectoryNode) RETURN count(n)";
+        if let Ok(mut result) = self.query(query) {
+            if let Some(row) = result.next() {
+                if let Some(kuzu::Value::Int64(count)) = row.first() {
+                    directory_count = *count as u32;
+                }
+            }
+        }
+
+        // Count file nodes
+        let query = "MATCH (n:FileNode) RETURN count(n)";
+        if let Ok(mut result) = self.query(query) {
+            if let Some(row) = result.next() {
+                if let Some(kuzu::Value::Int64(count)) = row.first() {
+                    file_count = *count as u32;
+                }
+            }
+        }
+
+        // Count definition nodes
+        let query = "MATCH (n:DefinitionNode) RETURN count(n)";
+        if let Ok(mut result) = self.query(query) {
+            if let Some(row) = result.next() {
+                if let Some(kuzu::Value::Int64(count)) = row.first() {
+                    definition_count = *count as u32;
+                }
+            }
+        }
+
+        Ok(NodeCounts {
+            directory_count,
+            file_count,
+            definition_count,
+        })
+    }
+
+    /// Get all relationship counts by type
+    pub fn get_relationship_counts(&self) -> DbResult<RelationshipCounts> {
+        let mut directory_relationships = 0;
+        let mut file_relationships = 0;
+        let mut definition_relationships = 0;
+
+        // Count directory relationships
+        let query = "MATCH ()-[r:DIRECTORY_RELATIONSHIPS]->() RETURN count(r)";
+        if let Ok(mut result) = self.query(query) {
+            if let Some(row) = result.next() {
+                if let Some(kuzu::Value::Int64(count)) = row.first() {
+                    directory_relationships = *count as u32;
+                }
+            }
+        }
+
+        // Count file relationships
+        let query = "MATCH ()-[r:FILE_RELATIONSHIPS]->() RETURN count(r)";
+        if let Ok(mut result) = self.query(query) {
+            if let Some(row) = result.next() {
+                if let Some(kuzu::Value::Int64(count)) = row.first() {
+                    file_relationships = *count as u32;
+                }
+            }
+        }
+
+        // Count definition relationships
+        let query = "MATCH ()-[r:DEFINITION_RELATIONSHIPS]->() RETURN count(r)";
+        if let Ok(mut result) = self.query(query) {
+            if let Some(row) = result.next() {
+                if let Some(kuzu::Value::Int64(count)) = row.first() {
+                    definition_relationships = *count as u32;
+                }
+            }
+        }
+
+        Ok(RelationshipCounts {
+            directory_relationships,
+            file_relationships,
+            definition_relationships,
+        })
     }
 }

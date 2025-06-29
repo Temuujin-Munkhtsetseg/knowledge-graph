@@ -1,5 +1,7 @@
 pub mod connection;
 pub mod schema;
+pub mod types;
+pub mod utils;
 
 // Re-export main types for easier access
 pub use connection::{DatabaseError, DbResult, KuzuConnection};
