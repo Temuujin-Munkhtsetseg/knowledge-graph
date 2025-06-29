@@ -38,8 +38,8 @@ pub enum Commands {
     },
     /// Start the gkg server
     Server {
-        /// Register with MCP (Model Context Protocol) configuration
+        /// Path to MCP configuration file (example: ~/.gitlab/duo/mcp.json)
         #[arg(long)]
-        register_mcp: bool,
+        register_mcp: Option<PathBuf>,
     },
 }
