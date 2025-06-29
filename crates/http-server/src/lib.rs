@@ -210,8 +210,22 @@ pub async fn run(port: u16) -> Result<()> {
     Ok(())
 }
 
+// The preferred port is an easter egg from "knowledge graph":
+// 'k' -> 0x6b, 'g' -> 0x67 => 0x6b67 => 27495
+const PREFERRED_PORT: u16 = 27495;
+
 pub fn find_unused_port() -> Result<u16> {
-    let listener = TcpListener::bind("127.0.0.1:0")?;
-    let port = listener.local_addr()?.port();
-    Ok(port)
+    match TcpListener::bind(("127.0.0.1", PREFERRED_PORT)) {
+        Ok(listener) => Ok(listener.local_addr()?.port()),
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            tracing::info!(
+                "Preferred port {} is busy, finding a random unused port",
+                PREFERRED_PORT
+            );
+            let listener = TcpListener::bind("127.0.0.1:0")?;
+            let port = listener.local_addr()?.port();
+            Ok(port)
+        }
+        Err(e) => Err(e.into()),
+    }
 }
