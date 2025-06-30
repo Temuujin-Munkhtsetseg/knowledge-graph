@@ -4,6 +4,7 @@ pub mod tools;
 pub mod types;
 
 // Re-export commonly used items for easier importing
+pub use configuration::*;
 pub use handlers::*;
 pub use types::*;
 

@@ -48,6 +48,12 @@ rust-fmt-check:
     - cargo fmt --check
   extends: .rust-job-template
 
+rust-check-packages:
+  stage: test
+  script:
+    - cargo check --workspace --all-features --all-targets
+  extends: .rust-job-template
+
 rust-lint-check:
   stage: test
   script:
