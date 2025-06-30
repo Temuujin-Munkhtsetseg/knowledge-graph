@@ -1,0 +1,12 @@
+[package]
+name = "logging"
+edition = "2024"
+version = "0.2.0"
+
+[dependencies]
+anyhow = "1.0.86"
+file-rotate = "0.8.0"
+tracing = "0.1.40"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
+workspace-manager = { path = "../workspace-manager" }

@@ -4,6 +4,7 @@ use crate::cli::{Commands, GkgCli};
 use anyhow::Result;
 use home::home_dir;
 use indexer::runner::run_client_indexer;
+use logging::LogMode;
 use mcp::configuration::add_local_http_server_to_mcp_config;
 use serde::{Deserialize, Serialize};
 use single_instance::SingleInstance;
@@ -64,11 +65,23 @@ fn is_server_running() -> Result<Option<u16>> {
 async fn main() -> anyhow::Result<()> {
     let cli = GkgCli::parse_args();
 
+    let verbose = match cli.command {
+        Commands::Index { verbose, .. } => verbose,
+        Commands::Server { .. } => false,
+    };
+
+    let mode = match cli.command {
+        Commands::Index { .. } => LogMode::Cli,
+        Commands::Server { .. } => LogMode::Server,
+    };
+
+    let _guard = logging::init(mode, verbose)?;
+
     match cli.command {
         Commands::Index {
             workspace_path,
             threads,
-            verbose,
+            verbose: _,
         } => {
             if let Some(port) = is_server_running()? {
                 eprintln!(
@@ -76,7 +89,6 @@ async fn main() -> anyhow::Result<()> {
                 );
                 process::exit(1);
             }
-            init_logging(verbose);
             run_client_indexer(workspace_path, threads, |msg| println!("{msg}"))
         }
         Commands::Server { register_mcp } => {
@@ -118,19 +130,4 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
-}
-
-fn init_logging(verbose: bool) {
-    let log_level = if verbose { "debug" } else { "info" };
-
-    // Initialize tracing subscriber
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level));
-
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .init();
-
-    println!("Logging level set to: {log_level}");
 }

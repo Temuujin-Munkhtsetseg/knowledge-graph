@@ -9,13 +9,12 @@ indexer = { path = "../indexer" }
 workspace-manager = { path = "../workspace-manager" }
 http-server = { path = "../http-server" }
 mcp = { path = "../mcp" }
+logging = { path = "../logging" }
 parser-core = { workspace = true }
 gitalisk-core = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 num_cpus = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
 single-instance = { workspace = true }
 home = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
