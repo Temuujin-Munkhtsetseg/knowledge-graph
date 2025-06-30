@@ -5,7 +5,7 @@
 //! The typical structure of the data directory would look like this:
 //!
 //! ```text
-//! gkg/
+//! .gkg/
 //! ├── gkg_workspace_folders/
 //! │   ├── workspace_folder_1_hash/
 //! │   │   ├── project_1_hash/
@@ -24,7 +24,7 @@
 use crate::errors::{Result, WorkspaceManagerError};
 use std::path::{Path, PathBuf};
 
-const GKG_DATA_DIR_NAME: &str = "gkg";
+const GKG_DATA_DIR_NAME: &str = ".gkg";
 const GKG_WORKSPACE_FOLDERS_NAME: &str = "gkg_workspace_folders";
 const GKG_MANIFEST_FILE_NAME: &str = "gkg_manifest.json";
 const GKG_KUZU_DB_NAME: &str = "kuzu_db";
@@ -57,7 +57,7 @@ impl DataDirectory {
     }
 
     pub fn get_system_data_directory() -> Result<PathBuf> {
-        dirs::data_dir()
+        dirs::home_dir()
             .map(|data_dir| data_dir.join(GKG_DATA_DIR_NAME))
             .ok_or(WorkspaceManagerError::SystemDataDirectoryNotFound)
     }
