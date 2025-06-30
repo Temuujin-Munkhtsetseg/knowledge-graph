@@ -81,6 +81,10 @@ mr-title-check:
 publish-release::manual:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
   stage: deploy
+  variables:
+    # Prevent rustup from auto-updating to avoid cross-device link issues in Docker
+    RUSTUP_UPDATE_ROOT: "false"
+    RUSTUP_DISABLE_AUTOUPDATE: "1"
   before_script:
     # Validate that the repository contains a package.json and extract a few values from it.
     - |
