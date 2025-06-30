@@ -10,6 +10,7 @@ futures-util = { workspace = true }
 indexer = { path = "../indexer" }
 mcp = { path = "../mcp" }
 workspace-manager = { path = "../workspace-manager" }
+logging = { path = "../logging" }
 http = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -24,3 +25,7 @@ ts-rs = { workspace = true }
 [dev-dependencies]
 axum-test = { workspace = true }
 tokio-test = { workspace = true }
+
+[[bin]]
+name = "dev-server"
+path = "src/bin/dev.rs"
