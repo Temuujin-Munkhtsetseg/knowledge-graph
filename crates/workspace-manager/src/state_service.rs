@@ -114,6 +114,20 @@ impl LocalStateService {
         self.with_manifest(|manifest| manifest.get_workspace_folder(workspace_path).cloned())
     }
 
+    pub fn update_workspace_folder<F>(&self, workspace_path: &str, f: F) -> Result<bool>
+    where
+        F: FnOnce(&mut crate::manifest::WorkspaceFolderMetadata),
+    {
+        self.with_manifest_mut(|manifest| {
+            if let Some(workspace_folder) = manifest.get_workspace_folder_mut(workspace_path) {
+                f(workspace_folder);
+                true
+            } else {
+                false
+            }
+        })
+    }
+
     pub fn add_workspace_folder(
         &self,
         workspace_path: String,

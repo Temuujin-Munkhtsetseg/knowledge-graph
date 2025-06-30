@@ -130,12 +130,43 @@ impl WorkspaceFolderMetadata {
     pub fn update_status_from_projects(&mut self) {
         if self.projects.is_empty() {
             self.status = Status::Pending;
+            self.last_indexed_at = None;
             return;
         }
 
-        let has_error = self.projects.values().any(|p| p.status == Status::Error);
-        let has_indexing = self.projects.values().any(|p| p.status == Status::Indexing);
-        let all_indexed = self.projects.values().all(|p| p.status == Status::Indexed);
+        let mut latest_indexed_at: Option<DateTime<Utc>> = None;
+        let mut has_error = false;
+        let mut has_indexing = false;
+        let mut all_indexed = true;
+
+        for project in self.projects.values() {
+            match project.status {
+                Status::Error => {
+                    has_error = true;
+                    all_indexed = false;
+                }
+                Status::Indexing => {
+                    has_indexing = true;
+                    all_indexed = false;
+                }
+                Status::Pending => {
+                    all_indexed = false;
+                }
+                Status::Indexed => {} // keep all_indexed as is
+            }
+
+            if let Some(indexed_at) = project.last_indexed_at {
+                match latest_indexed_at {
+                    Some(latest) if indexed_at > latest => {
+                        latest_indexed_at = Some(indexed_at);
+                    }
+                    None => {
+                        latest_indexed_at = Some(indexed_at);
+                    }
+                    _ => {} // current latest is still the latest
+                }
+            }
+        }
 
         self.status = if has_error {
             Status::Error
@@ -146,6 +177,8 @@ impl WorkspaceFolderMetadata {
         } else {
             Status::Pending
         };
+
+        self.last_indexed_at = latest_indexed_at;
     }
 }
 
@@ -264,6 +297,7 @@ pub fn generate_path_hash(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Duration, Utc};
 
     #[test]
     fn test_project_metadata_lifecycle() {
@@ -282,6 +316,103 @@ mod tests {
         project = project.with_error("Test error".to_string());
         assert_eq!(project.status, Status::Error);
         assert_eq!(project.error_message, Some("Test error".to_string()));
+    }
+
+    #[test]
+    fn test_workspace_status() {
+        let mut workspace = WorkspaceFolderMetadata::new("workspace_hash".to_string());
+
+        let now = Utc::now();
+        let earlier = now - Duration::hours(1);
+        let later = now + Duration::hours(1);
+
+        // Test 1: Multiple projects with different states and timestamps
+        // This tests the normal flow and timestamp handling
+        let mut project1 = ProjectMetadata::new("project1_hash".to_string());
+        project1.status = Status::Indexed;
+        project1.last_indexed_at = Some(earlier);
+
+        let mut project2 = ProjectMetadata::new("project2_hash".to_string());
+        project2.status = Status::Indexed;
+        project2.last_indexed_at = Some(later);
+
+        let project3 = ProjectMetadata::new("project3_hash".to_string()); // Pending by default
+
+        workspace.add_project("/path/to/project1".to_string(), project1);
+        workspace.add_project("/path/to/project2".to_string(), project2);
+        workspace.add_project("/path/to/project3".to_string(), project3);
+
+        workspace.update_status_from_projects();
+
+        // Should be pending because project3 is pending
+        assert_eq!(workspace.status, Status::Pending);
+        // Should use the latest timestamp from indexed projects
+        assert_eq!(workspace.last_indexed_at, Some(later));
+
+        // Mark project3 as indexed - now all are indexed
+        let project3 = workspace.get_project_mut("/path/to/project3").unwrap();
+        project3.status = Status::Indexed;
+        project3.last_indexed_at = Some(now);
+        workspace.update_status_from_projects();
+
+        assert_eq!(workspace.status, Status::Indexed);
+        assert_eq!(workspace.last_indexed_at, Some(later)); // Still latest
+
+        // Test 2: Add indexing project - should change workspace status
+        let project4 = ProjectMetadata::new("project4_hash".to_string()).mark_indexing();
+        workspace.add_project("/path/to/project4".to_string(), project4);
+        workspace.update_status_from_projects();
+
+        assert_eq!(workspace.status, Status::Indexing);
+        assert_eq!(workspace.last_indexed_at, Some(later)); // Keep latest indexed timestamp
+
+        // Test 3: Add error project - should become highest priority
+        let project5 =
+            ProjectMetadata::new("project5_hash".to_string()).with_error("Test error".to_string());
+        workspace.add_project("/path/to/project5".to_string(), project5);
+        workspace.update_status_from_projects();
+
+        assert_eq!(workspace.status, Status::Error);
+        assert_eq!(workspace.last_indexed_at, Some(later)); // Still keep latest indexed timestamp
+
+        // Test 4: Edge case - Mix of Error and Indexed only (bug would manifest here)
+        workspace.projects.clear();
+
+        let mut error_project = ProjectMetadata::new("error_project_hash".to_string());
+        error_project.status = Status::Error;
+        error_project.error_message = Some("Test error".to_string());
+
+        let mut indexed_project = ProjectMetadata::new("indexed_project_hash".to_string());
+        indexed_project.status = Status::Indexed;
+        indexed_project.last_indexed_at = Some(now);
+
+        workspace.add_project("/path/to/error_project".to_string(), error_project);
+        workspace.add_project("/path/to/indexed_project".to_string(), indexed_project);
+
+        workspace.update_status_from_projects();
+
+        // Should be Error (highest priority), not Indexed
+        assert_eq!(workspace.status, Status::Error);
+        assert_eq!(workspace.last_indexed_at, Some(now));
+
+        // Test 5: Edge case - Mix of Indexing and Indexed only
+        workspace.projects.clear();
+
+        let mut indexing_project = ProjectMetadata::new("indexing_project_hash".to_string());
+        indexing_project.status = Status::Indexing;
+
+        let mut indexed_project2 = ProjectMetadata::new("indexed_project2_hash".to_string());
+        indexed_project2.status = Status::Indexed;
+        indexed_project2.last_indexed_at = Some(now);
+
+        workspace.add_project("/path/to/indexing_project".to_string(), indexing_project);
+        workspace.add_project("/path/to/indexed_project2".to_string(), indexed_project2);
+
+        workspace.update_status_from_projects();
+
+        // Should be Indexing, not Indexed
+        assert_eq!(workspace.status, Status::Indexing);
+        assert_eq!(workspace.last_indexed_at, Some(now));
     }
 
     #[test]
