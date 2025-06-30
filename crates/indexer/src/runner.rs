@@ -2,6 +2,7 @@ use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::project::source::GitaliskFileSource;
 use anyhow::Result;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::{Level, error, info, warn};
 use workspace_manager::WorkspaceManager;
@@ -19,7 +20,12 @@ where
     }
 }
 
-pub fn run_client_indexer<F>(workspace_path: PathBuf, threads: usize, mut progress: F) -> Result<()>
+pub fn run_client_indexer<F>(
+    workspace_manager: Arc<WorkspaceManager>,
+    workspace_path: PathBuf,
+    threads: usize,
+    mut progress: F,
+) -> Result<()>
 where
     F: FnMut(&str),
 {
@@ -52,8 +58,6 @@ where
         &mut progress,
         Level::INFO,
     );
-    let workspace_manager = WorkspaceManager::new_system_default()
-        .map_err(|e| anyhow::anyhow!("Failed to create workspace manager: {}", e))?;
 
     progress_with_tracing(
         "📚 Discovering and registering workspace...",

@@ -11,8 +11,10 @@ use single_instance::SingleInstance;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, process};
+use workspace_manager::WorkspaceManager;
 
 const GKG_HTTP_SERVER: &str = "gkg-http-server";
 
@@ -77,6 +79,8 @@ async fn main() -> anyhow::Result<()> {
 
     let _guard = logging::init(mode, verbose)?;
 
+    let workspace_manager = Arc::new(WorkspaceManager::new_system_default()?);
+
     match cli.command {
         Commands::Index {
             workspace_path,
@@ -89,7 +93,12 @@ async fn main() -> anyhow::Result<()> {
                 );
                 process::exit(1);
             }
-            run_client_indexer(workspace_path, threads, |msg| println!("{msg}"))
+            run_client_indexer(
+                Arc::clone(&workspace_manager),
+                workspace_path,
+                threads,
+                |msg| println!("{msg}"),
+            )
         }
         Commands::Server { register_mcp } => {
             let instance = SingleInstance::new(GKG_HTTP_SERVER)?;
@@ -113,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
                     process::exit(0);
                 })?;
 
-                http_server::run(port).await
+                http_server::run(port, Arc::clone(&workspace_manager)).await
             } else if let Some(port) = is_server_running()? {
                 if let Some(mcp_config_path) = register_mcp {
                     add_local_http_server_to_mcp_config(mcp_config_path, port)?;
