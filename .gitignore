@@ -7,6 +7,9 @@ report.xml
 output
 kuzu_db
 
+# TypeScript test files
+test-bindings/
+
 # Node.js
 node_modules
 npm-debug.log

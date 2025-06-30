@@ -41,8 +41,14 @@ tokio = { version = "1.37.0", features = ["full"] }
 ctrlc = "3.4.4"
 single-instance = "0.3.1"
 home = "0.5.9"
-axum = "0.7.5"
+axum = "0.8"
 http = "1.1.0"
-tower-http = { version = "0.5.2", features = ["cors"] }
+tower-http = { version = "0.6", features = ["cors"] }
 futures-util = "0.3.30"
 tokio-stream = "0.1.15"
+ts-rs = "11.0.1"
+once_cell = "1.19.0"
+
+# Test dependencies
+axum-test = "17.3.0"
+tokio-test = "0.4.4"
