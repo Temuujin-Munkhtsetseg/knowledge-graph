@@ -24,9 +24,9 @@
 //!
 //! // Register a workspace folder
 //! let workspace_folder_path = Path::new("/path/to/workspace");
-//! let discovery_result = manager.register_workspace_folder(workspace_folder_path)?;
+//! let workspace_info = manager.register_workspace_folder(workspace_folder_path)?;
 //!
-//! println!("Found {} projects in workspace", discovery_result.projects_found.len());
+//! println!("Found {} projects in workspace", workspace_info.project_count);
 //!
 //! // List all registered projects
 //! let projects = manager.list_all_projects();
@@ -34,12 +34,13 @@
 //!     println!("Project: {} (Status: {:?})", project.project_path, project.status);
 //! }
 //!
-//! // Mark a project as being indexed
-//! if let Some(project) = discovery_result.projects_found.first() {
-//!     manager.mark_project_indexing(&discovery_result.workspace_folder_path, &project.project_path)?;
+//! // Get projects in the workspace and mark one as being indexed
+//! let workspace_projects = manager.list_projects_in_workspace(&workspace_info.workspace_folder_path);
+//! if let Some(project) = workspace_projects.first() {
+//!     manager.mark_project_indexing(&workspace_info.workspace_folder_path, &project.project_path)?;
 //!
 //!     // Access Gitalisk repository for a project
-//!     let project_info = manager.get_project_info(&discovery_result.workspace_folder_path, &project.project_path)
+//!     let project_info = manager.get_project_info(&workspace_info.workspace_folder_path, &project.project_path)
 //!         .ok_or("Project not found")?;
 //!     println!("Repository Branch: {}", project_info.repository.get_current_branch().unwrap_or_else(|_| "unknown".to_string()));
 //! }
@@ -80,4 +81,4 @@ pub use manifest::{
     Manifest, ProjectMetadata, Status, WorkspaceFolderMetadata, generate_path_hash,
 };
 pub use state_service::LocalStateService;
-pub use workspace_manager::{DiscoveryResult, ProjectInfo, WorkspaceFolderInfo, WorkspaceManager};
+pub use workspace_manager::{ProjectInfo, WorkspaceFolderInfo, WorkspaceManager};

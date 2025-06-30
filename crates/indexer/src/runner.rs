@@ -67,13 +67,13 @@ where
     progress_with_tracing(
         &format!(
             "📚 Found {} repositories in workspace",
-            discovery_result.projects_found.len()
+            discovery_result.project_count
         ),
         &mut progress,
         Level::INFO,
     );
 
-    if discovery_result.projects_found.is_empty() {
+    if discovery_result.project_count == 0 {
         progress_with_tracing(
             "ℹ️ No repositories found in workspace",
             &mut progress,
@@ -119,7 +119,7 @@ where
     let mut repositories_processed = 0;
 
     let workspace_folder_path = discovery_result.workspace_folder_path;
-    let projects = discovery_result.projects_found;
+    let projects = workspace_manager.list_projects_in_workspace(&workspace_folder_path);
 
     for (index, project_discovery) in projects.iter().enumerate() {
         let repo_progress = (index + 1) as f64 / projects.len() as f64 * 100.0;

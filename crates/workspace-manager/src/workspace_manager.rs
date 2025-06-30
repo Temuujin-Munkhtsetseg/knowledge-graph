@@ -21,13 +21,34 @@ pub struct WorkspaceManager {
 }
 
 /// Information about a registered workspace folder
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WorkspaceFolderInfo {
     pub workspace_folder_path: String,
     pub data_directory_name: String,
     pub status: Status,
     pub last_indexed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub project_count: usize,
+    pub gitalisk_workspace: Option<Arc<CoreGitaliskWorkspaceFolder>>,
+}
+
+// TODO: make CoreGitaliskWorkspaceFolder implement Debug
+impl std::fmt::Debug for WorkspaceFolderInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkspaceFolderInfo")
+            .field("workspace_folder_path", &self.workspace_folder_path)
+            .field("data_directory_name", &self.data_directory_name)
+            .field("status", &self.status)
+            .field("last_indexed_at", &self.last_indexed_at)
+            .field("project_count", &self.project_count)
+            .field(
+                "gitalisk_workspace",
+                &self
+                    .gitalisk_workspace
+                    .as_ref()
+                    .map(|_| "Arc<CoreGitaliskWorkspaceFolder>"),
+            )
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,14 +62,6 @@ pub struct ProjectInfo {
     pub database_path: PathBuf,
     pub parquet_directory: PathBuf,
     pub repository: CoreGitaliskRepository,
-}
-
-#[derive(Debug)]
-pub struct DiscoveryResult {
-    pub workspace_folder_path: String,
-    pub projects_found: Vec<ProjectInfo>,
-    pub total_files: u32,
-    pub total_repositories: u32,
 }
 
 impl WorkspaceManager {
@@ -123,7 +136,7 @@ impl WorkspaceManager {
     pub fn register_workspace_folder(
         &self,
         workspace_folder_path: &Path,
-    ) -> Result<DiscoveryResult> {
+    ) -> Result<WorkspaceFolderInfo> {
         let canonical_workspace_folder_path = workspace_folder_path
             .canonicalize()
             .map_err(WorkspaceManagerError::Io)?;
@@ -159,6 +172,8 @@ impl WorkspaceManager {
             workspace_metadata.add_project(project_path.clone(), project_metadata);
         }
 
+        workspace_metadata.update_status_from_projects();
+
         self.state_service.add_workspace_folder(
             workspace_folder_path_str.clone(),
             workspace_metadata.clone(),
@@ -185,14 +200,19 @@ impl WorkspaceManager {
 
         {
             let mut workspaces = self.gitalisk_workspaces.write().unwrap();
-            workspaces.insert(workspace_folder_path_str.clone(), gitalisk_workspace);
+            workspaces.insert(
+                workspace_folder_path_str.clone(),
+                gitalisk_workspace.clone(),
+            );
         }
 
-        Ok(DiscoveryResult {
+        Ok(WorkspaceFolderInfo {
             workspace_folder_path: workspace_folder_path_str,
-            projects_found,
-            total_files: stats.file_count,
-            total_repositories: stats.repo_count,
+            data_directory_name: workspace_metadata.data_directory_name.clone(),
+            status: workspace_metadata.status.clone(),
+            last_indexed_at: workspace_metadata.last_indexed_at,
+            project_count: workspace_metadata.project_count(),
+            gitalisk_workspace: Some(gitalisk_workspace),
         })
     }
 
@@ -309,6 +329,12 @@ impl WorkspaceManager {
                 status: metadata.status.clone(),
                 last_indexed_at: metadata.last_indexed_at,
                 project_count: metadata.project_count(),
+                gitalisk_workspace: self
+                    .gitalisk_workspaces
+                    .read()
+                    .unwrap()
+                    .get(workspace_folder_path)
+                    .cloned(),
             })
     }
 
@@ -359,6 +385,12 @@ impl WorkspaceManager {
                     status: metadata.status.clone(),
                     last_indexed_at: metadata.last_indexed_at,
                     project_count: metadata.project_count(),
+                    gitalisk_workspace: self
+                        .gitalisk_workspaces
+                        .read()
+                        .unwrap()
+                        .get(workspace_folder_path)
+                        .cloned(),
                 })
                 .collect()
         })
@@ -431,10 +463,18 @@ impl WorkspaceManager {
         &self,
         workspace_folder_path: &str,
         project_path: &str,
-    ) -> Result<bool> {
+    ) -> Result<ProjectInfo> {
         self.state_service
             .update_project(workspace_folder_path, project_path, |project| {
                 *project = project.clone().mark_indexing();
+            })?;
+
+        self.get_project_info(workspace_folder_path, project_path)
+            .ok_or_else(|| {
+                WorkspaceManagerError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Project not found",
+                ))
             })
     }
 
@@ -442,10 +482,18 @@ impl WorkspaceManager {
         &self,
         workspace_folder_path: &str,
         project_path: &str,
-    ) -> Result<bool> {
+    ) -> Result<ProjectInfo> {
         self.state_service
             .update_project(workspace_folder_path, project_path, |project| {
                 *project = project.clone().mark_indexed();
+            })?;
+
+        self.get_project_info(workspace_folder_path, project_path)
+            .ok_or_else(|| {
+                WorkspaceManagerError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Project not found",
+                ))
             })
     }
 
@@ -454,10 +502,18 @@ impl WorkspaceManager {
         workspace_folder_path: &str,
         project_path: &str,
         error_message: String,
-    ) -> Result<bool> {
+    ) -> Result<ProjectInfo> {
         self.state_service
             .update_project(workspace_folder_path, project_path, |project| {
                 *project = project.clone().with_error(error_message);
+            })?;
+
+        self.get_project_info(workspace_folder_path, project_path)
+            .ok_or_else(|| {
+                WorkspaceManagerError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Project not found",
+                ))
             })
     }
 
@@ -513,12 +569,32 @@ impl WorkspaceManager {
             .state_service
             .remove_project(workspace_folder_path, project_path)?;
 
+        self.update_workspace_folder_status(workspace_folder_path)?;
+
         if removed.is_some() {
             info!("Removed project: {project_path} from workspace: {workspace_folder_path}");
             Ok(true)
         } else {
             Ok(false)
         }
+    }
+
+    pub fn update_workspace_folder_status(
+        &self,
+        workspace_folder_path: &str,
+    ) -> Result<WorkspaceFolderInfo> {
+        self.state_service
+            .update_workspace_folder(workspace_folder_path, |workspace_folder| {
+                workspace_folder.update_status_from_projects();
+            })?;
+
+        self.get_workspace_folder_info(workspace_folder_path)
+            .ok_or_else(|| {
+                WorkspaceManagerError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Workspace not found",
+                ))
+            })
     }
 
     pub fn get_workspace_folder_size(&self, workspace_folder_path: &str) -> Result<u64> {
@@ -660,8 +736,10 @@ mod tests {
             .register_workspace_folder(&workspace_folder_path)
             .unwrap();
 
-        assert_eq!(result.total_repositories, 2);
-        assert_eq!(result.projects_found.len(), 2);
+        assert_eq!(result.project_count, 2);
+
+        let projects = manager.list_projects_in_workspace(&result.workspace_folder_path);
+        assert_eq!(projects.len(), 2);
 
         let workspace_info = manager.get_workspace_folder_info(&result.workspace_folder_path);
         assert!(workspace_info.is_some());
@@ -685,27 +763,28 @@ mod tests {
             .unwrap();
         let workspace_folder_path_str = result.workspace_folder_path;
 
-        assert!(!result.projects_found.is_empty());
-        let project_path_str = result.projects_found[0].project_path.clone();
+        let projects = manager.list_projects_in_workspace(&workspace_folder_path_str);
+        assert!(!projects.is_empty());
+        let project_path_str = projects[0].project_path.clone();
 
         let project_info = manager.get_project_info(&workspace_folder_path_str, &project_path_str);
         assert!(project_info.is_some());
         assert_eq!(project_info.as_ref().unwrap().status, Status::Pending);
 
-        let updated = manager
+        let updated_project = manager
             .mark_project_indexing(&workspace_folder_path_str, &project_path_str)
             .unwrap();
-        assert!(updated);
+        assert_eq!(updated_project.status, Status::Indexing);
 
         let project_info = manager
             .get_project_info(&workspace_folder_path_str, &project_path_str)
             .unwrap();
         assert_eq!(project_info.status, Status::Indexing);
 
-        let updated = manager
+        let updated_project = manager
             .mark_project_indexed(&workspace_folder_path_str, &project_path_str)
             .unwrap();
-        assert!(updated);
+        assert_eq!(updated_project.status, Status::Indexed);
 
         let project_info = manager
             .get_project_info(&workspace_folder_path_str, &project_path_str)
@@ -713,14 +792,18 @@ mod tests {
         assert_eq!(project_info.status, Status::Indexed);
         assert!(project_info.last_indexed_at.is_some());
 
-        let updated = manager
+        let updated_project = manager
             .mark_project_error(
                 &workspace_folder_path_str,
                 &project_path_str,
                 "Test error".to_string(),
             )
             .unwrap();
-        assert!(updated);
+        assert_eq!(updated_project.status, Status::Error);
+        assert_eq!(
+            updated_project.error_message,
+            Some("Test error".to_string())
+        );
 
         let project_info = manager
             .get_project_info(&workspace_folder_path_str, &project_path_str)
@@ -776,8 +859,9 @@ mod tests {
             .unwrap();
         let workspace_folder_path_str = result.workspace_folder_path;
 
-        assert!(!result.projects_found.is_empty());
-        let project_path_str = result.projects_found[0].project_path.clone();
+        let projects = manager.list_projects_in_workspace(&workspace_folder_path_str);
+        assert!(!projects.is_empty());
+        let project_path_str = projects[0].project_path.clone();
 
         let removed = manager
             .remove_project(&workspace_folder_path_str, &project_path_str)
@@ -816,11 +900,8 @@ mod tests {
             .register_workspace_folder(&workspace_folder_path)
             .unwrap();
         let workspace_path = result.workspace_folder_path.clone();
-        let project_paths: Vec<String> = result
-            .projects_found
-            .iter()
-            .map(|p| p.project_path.clone())
-            .collect();
+        let projects = manager.list_projects_in_workspace(&workspace_path);
+        let project_paths: Vec<String> = projects.iter().map(|p| p.project_path.clone()).collect();
 
         // Test 1: Concurrent reads + writes (simulates tokio server load)
         let handles: Vec<std::thread::JoinHandle<()>> = (0..20)
@@ -901,5 +982,82 @@ mod tests {
         // Verify workspace is still loaded correctly
         let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
         assert_eq!(workspace_info.project_count, 2);
+    }
+
+    #[test]
+    fn test_workspace_status_aggregation_integration() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_folder_path = temp_dir.path().join("test_workspace");
+        fs::create_dir_all(&workspace_folder_path).unwrap();
+
+        let repo1_path = workspace_folder_path.join("repo1");
+        let repo2_path = workspace_folder_path.join("repo2");
+        create_test_git_repo(&repo1_path);
+        create_test_git_repo(&repo2_path);
+
+        let data_dir = TempDir::new().unwrap();
+        let manager = WorkspaceManager::new_with_directory(data_dir.path().to_path_buf()).unwrap();
+
+        // Initial registration - workspace should be pending with no timestamp
+        let result = manager
+            .register_workspace_folder(&workspace_folder_path)
+            .unwrap();
+        let workspace_path = result.workspace_folder_path.clone();
+        let projects = manager.list_projects_in_workspace(&workspace_path);
+        let project_paths: Vec<String> = projects.iter().map(|p| p.project_path.clone()).collect();
+
+        // Verify initial state
+        let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
+        assert_eq!(workspace_info.status, Status::Pending);
+        assert!(workspace_info.last_indexed_at.is_none());
+
+        // Mark first project as indexing
+        manager
+            .mark_project_indexing(&workspace_path, &project_paths[0])
+            .unwrap();
+
+        let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
+        assert_eq!(workspace_info.status, Status::Indexing);
+        assert!(workspace_info.last_indexed_at.is_none());
+
+        // Mark first project as indexed
+        manager
+            .mark_project_indexed(&workspace_path, &project_paths[0])
+            .unwrap();
+
+        let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
+        assert_eq!(workspace_info.status, Status::Pending); // Still pending because project2 is pending
+        assert!(workspace_info.last_indexed_at.is_some()); // Should have timestamp from project1
+
+        // Mark second project as indexed
+        manager
+            .mark_project_indexed(&workspace_path, &project_paths[1])
+            .unwrap();
+
+        let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
+        assert_eq!(workspace_info.status, Status::Indexed); // Now all indexed
+        assert!(workspace_info.last_indexed_at.is_some()); // Should have latest timestamp
+
+        // Mark one project as error
+        manager
+            .mark_project_error(&workspace_path, &project_paths[0], "Test error".to_string())
+            .unwrap();
+
+        let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
+        assert_eq!(workspace_info.status, Status::Error); // Should be error now
+        assert!(workspace_info.last_indexed_at.is_some()); // Should keep timestamp
+
+        // Verify projects have correct individual states
+        let project1 = manager
+            .get_project_info(&workspace_path, &project_paths[0])
+            .unwrap();
+        assert_eq!(project1.status, Status::Error);
+        assert_eq!(project1.error_message, Some("Test error".to_string()));
+
+        let project2 = manager
+            .get_project_info(&workspace_path, &project_paths[1])
+            .unwrap();
+        assert_eq!(project2.status, Status::Indexed);
+        assert!(project2.last_indexed_at.is_some());
     }
 }
