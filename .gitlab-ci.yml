@@ -67,10 +67,12 @@ xtask-version-check:
     - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
   extends: .rust-job-template
   
-lint:mr-title:
+mr-title-check:
   image: ${GITLAB_DEPENDENCY_PROXY}node:lts-alpine
   stage: lint
   needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   before_script:
     - npm install -g @commitlint/cli @commitlint/config-conventional
   script:
