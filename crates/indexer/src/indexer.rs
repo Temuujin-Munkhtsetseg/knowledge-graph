@@ -125,8 +125,13 @@ impl RepositoryIndexer {
             });
         }
 
+        let num_cores: usize = num_cpus::get();
         let worker_count = if config.worker_threads == 0 {
-            std::cmp::min(num_cpus::get(), DEFAULT_WORKER_THREADS)
+            if files.len() < num_cores && !files.is_empty() {
+                files.len()
+            } else {
+                std::cmp::max(num_cores, DEFAULT_WORKER_THREADS)
+            }
         } else {
             config.worker_threads
         };
