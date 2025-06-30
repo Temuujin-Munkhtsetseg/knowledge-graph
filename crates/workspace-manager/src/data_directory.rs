@@ -56,7 +56,7 @@ impl DataDirectory {
         Ok(data_dir)
     }
 
-    fn get_system_data_directory() -> Result<PathBuf> {
+    pub fn get_system_data_directory() -> Result<PathBuf> {
         dirs::data_dir()
             .map(|data_dir| data_dir.join(GKG_DATA_DIR_NAME))
             .ok_or(WorkspaceManagerError::SystemDataDirectoryNotFound)

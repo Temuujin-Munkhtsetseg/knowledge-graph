@@ -226,6 +226,9 @@ pub fn find_unused_port() -> Result<u16> {
             let port = listener.local_addr()?.port();
             Ok(port)
         }
-        Err(e) => Err(e.into()),
+        Err(e) => {
+            tracing::error!("Error finding unused port: {e}");
+            Err(e.into())
+        }
     }
 }

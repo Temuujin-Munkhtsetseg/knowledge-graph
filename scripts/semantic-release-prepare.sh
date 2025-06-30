@@ -80,6 +80,14 @@ if [ -f "Cargo.toml" ]; then
         echo "✅ Updated xtask to version $NEW_VERSION"
     fi
     
+    # Update logging
+    if [ -f "crates/logging/Cargo.toml" ]; then
+        echo "📦 Updating logging version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/logging/Cargo.toml"
+        rm -f "crates/logging/Cargo.toml.bak"
+        echo "✅ Updated logging to version $NEW_VERSION"
+    fi
+
     # Update Cargo.lock with new workspace versions
     echo "🔄 Updating Cargo.lock..."
     cargo update --workspace
