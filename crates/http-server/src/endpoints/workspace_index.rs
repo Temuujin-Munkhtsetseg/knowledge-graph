@@ -1,17 +1,20 @@
-use crate::WORKSPACE_MANAGER;
+use crate::AppState;
 use crate::contract::{EmptyRequest, EndpointConfigTypes};
 use crate::define_endpoint;
 use crate::endpoints::shared::StatusResponse;
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Sse, sse::Event};
 use indexer::runner::run_client_indexer;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use ts_rs::TS;
+use workspace_manager::WorkspaceManager;
 use workspace_manager::manifest::Status;
 
 #[derive(Deserialize, Serialize, TS, Default)]
@@ -71,7 +74,10 @@ impl WorkspaceIndexEndpoint {
 
 /// Handler for workspace indexing
 /// Validates workspace, checks status, and starts indexing with SSE progress updates
-pub async fn index_handler(Json(payload): Json<WorkspaceIndexBodyRequest>) -> impl IntoResponse {
+pub async fn index_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<WorkspaceIndexBodyRequest>,
+) -> impl IntoResponse {
     let path = std::path::Path::new(&payload.workspace);
     if !path.is_dir() {
         return (
@@ -86,7 +92,10 @@ pub async fn index_handler(Json(payload): Json<WorkspaceIndexBodyRequest>) -> im
             .into_response();
     }
 
-    match WORKSPACE_MANAGER.get_workspace_folder_info(&payload.workspace) {
+    match state
+        .workspace_manager
+        .get_workspace_folder_info(&payload.workspace)
+    {
         Some(info) => {
             if matches!(info.status, Status::Indexing) {
                 return (
@@ -117,7 +126,11 @@ pub async fn index_handler(Json(payload): Json<WorkspaceIndexBodyRequest>) -> im
     }
 
     let (tx, rx) = broadcast::channel(100);
-    spawn_indexing_task(payload.workspace, Some(tx));
+    spawn_indexing_task(
+        Arc::clone(&state.workspace_manager),
+        payload.workspace,
+        Some(tx),
+    );
 
     let stream = BroadcastStream::new(rx)
         .map(|result: Result<String, BroadcastStreamRecvError>| {
@@ -139,13 +152,17 @@ pub async fn index_handler(Json(payload): Json<WorkspaceIndexBodyRequest>) -> im
 
 /// Spawns an indexing task for the given workspace
 /// Optionally sends progress updates via the provided broadcast channel
-pub fn spawn_indexing_task(workspace_path: String, progress_tx: Option<broadcast::Sender<String>>) {
+pub fn spawn_indexing_task(
+    workspace_manager: Arc<WorkspaceManager>,
+    workspace_path: String,
+    progress_tx: Option<broadcast::Sender<String>>,
+) {
     tokio::spawn(async move {
         let workspace_path_buf = PathBuf::from(workspace_path);
         let progress_tx_clone = progress_tx.clone();
 
         let task_result = tokio::task::spawn_blocking(move || {
-            run_client_indexer(workspace_path_buf, 0, move |msg| {
+            run_client_indexer(workspace_manager, workspace_path_buf, 0, move |msg| {
                 if let Some(tx) = &progress_tx_clone {
                     if tx.send(msg.to_string()).is_err() {
                         tracing::warn!("SSE client disconnected.");

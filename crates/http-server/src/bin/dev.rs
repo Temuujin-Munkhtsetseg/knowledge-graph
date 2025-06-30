@@ -2,6 +2,8 @@ use anyhow::Result;
 use http_server::{find_unused_port, run};
 use logging::{LogMode, init};
 use std::env;
+use std::sync::Arc;
+use workspace_manager::WorkspaceManager;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -14,5 +16,7 @@ async fn main() -> Result<()> {
 
     println!("🚀 Development server starting on port {port}");
 
-    run(port).await
+    let workspace_manager = Arc::new(WorkspaceManager::new_system_default().unwrap());
+
+    run(port, workspace_manager).await
 }

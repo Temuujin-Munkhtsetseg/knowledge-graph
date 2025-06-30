@@ -19,13 +19,15 @@ use mcp::{
     handlers::{handle_mcp_batch, handle_mcp_request},
     health_status,
 };
-use once_cell::sync::Lazy;
 use std::net::{SocketAddr, TcpListener};
+use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use workspace_manager::WorkspaceManager;
 
-pub static WORKSPACE_MANAGER: Lazy<WorkspaceManager> =
-    Lazy::new(|| WorkspaceManager::new_system_default().unwrap());
+#[derive(Clone)]
+pub struct AppState {
+    pub workspace_manager: Arc<WorkspaceManager>,
+}
 
 async fn mcp_handler(Json(payload): Json<McpRequest>) -> Json<McpResponse<serde_json::Value>> {
     Json(handle_mcp_request(payload))
@@ -39,7 +41,7 @@ async fn mcp_health_handler() -> Json<serde_json::Value> {
     Json(health_status())
 }
 
-pub async fn run(port: u16) -> Result<()> {
+pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<()> {
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
         |origin: &HeaderValue, _| {
             if let Ok(origin_str) = origin.to_str() {
@@ -50,6 +52,8 @@ pub async fn run(port: u16) -> Result<()> {
             false
         },
     ));
+
+    let state = AppState { workspace_manager };
 
     let app = Router::new()
         .route(
@@ -63,6 +67,7 @@ pub async fn run(port: u16) -> Result<()> {
         .route("/mcp", post(mcp_handler))
         .route("/mcp/batch", post(mcp_batch_handler))
         .route("/mcp/health", get(mcp_health_handler))
+        .with_state(state)
         .layer(cors_layer);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
