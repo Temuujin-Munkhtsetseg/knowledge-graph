@@ -2,23 +2,21 @@ pub mod api;
 pub mod contract;
 pub mod endpoints;
 
-use crate::contract::EndpointContract;
-use crate::endpoints::{
-    root::{RootEndpoint, root_handler},
-    workspace_index::{WorkspaceIndexEndpoint, index_handler},
+use crate::{
+    contract::EndpointContract,
+    endpoints::{
+        mcp::{mcp_batch_handler, mcp_handler},
+        root::{RootEndpoint, root_handler},
+        workspace_index::{WorkspaceIndexEndpoint, index_handler},
+    },
 };
 use anyhow::Result;
 use axum::http::HeaderValue;
 use axum::{
     Router,
-    response::Json,
     routing::{get, post},
 };
-use mcp::types::{McpBatchResponse, McpRequest, McpResponse};
-use mcp::{
-    handlers::{handle_mcp_batch, handle_mcp_request},
-    health_status,
-};
+use mcp::McpService;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
@@ -27,18 +25,6 @@ use workspace_manager::WorkspaceManager;
 #[derive(Clone)]
 pub struct AppState {
     pub workspace_manager: Arc<WorkspaceManager>,
-}
-
-async fn mcp_handler(Json(payload): Json<McpRequest>) -> Json<McpResponse<serde_json::Value>> {
-    Json(handle_mcp_request(payload))
-}
-
-async fn mcp_batch_handler(Json(requests): Json<Vec<McpRequest>>) -> Json<McpBatchResponse> {
-    Json(handle_mcp_batch(requests))
-}
-
-async fn mcp_health_handler() -> Json<serde_json::Value> {
-    Json(health_status())
 }
 
 pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<()> {
@@ -53,6 +39,11 @@ pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<
         },
     ));
 
+    let mcp_router = Router::new()
+        .route("/", post(mcp_handler))
+        .route("/batch", post(mcp_batch_handler))
+        .with_state(Arc::new(McpService));
+
     let state = AppState { workspace_manager };
 
     let app = Router::new()
@@ -64,9 +55,7 @@ pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<
             }),
         )
         .route(WorkspaceIndexEndpoint::PATH, post(index_handler))
-        .route("/mcp", post(mcp_handler))
-        .route("/mcp/batch", post(mcp_batch_handler))
-        .route("/mcp/health", get(mcp_health_handler))
+        .nest("/mcp", mcp_router)
         .with_state(state)
         .layer(cors_layer);
 

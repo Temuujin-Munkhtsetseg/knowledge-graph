@@ -1,12 +1,11 @@
 pub mod configuration;
-pub mod handlers;
+pub mod http_handlers;
+pub mod service;
 pub mod tools;
-pub mod types;
 
-// Re-export commonly used items for easier importing
 pub use configuration::*;
-pub use handlers::*;
-pub use types::*;
+pub use http_handlers::*;
+pub use service::*;
 
 pub const MCP_NAME: &str = "knowledge-graph";
 pub const MCP_LOCAL_FILE: &str = "mcp.json";

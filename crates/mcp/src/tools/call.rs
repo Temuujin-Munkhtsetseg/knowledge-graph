@@ -1,70 +1,36 @@
 // TODO: This is placeholder code for future implementation
 // The tool call handlers will be replaced with actual knowledge graph queries
-use crate::types::*;
 
-pub fn handle_tool_call_internal(payload: McpRequest) -> McpResponse<serde_json::Value> {
-    if let Some(params) = payload.params {
-        if let (Some(name), Some(arguments)) = (
-            params.get("name").and_then(|v| v.as_str()),
-            params.get("arguments"),
-        ) {
-            let result = match name {
-                "knowledge-graph-neighbours" => handle_neighbours_tool(arguments),
-                "knowledge-graph-search" => handle_search_tool(arguments),
-                "knowledge-graph-entity-details" => handle_entity_details_tool(arguments),
-                "knowledge-graph-dependency-path" => handle_dependency_path_tool(arguments),
-                _ => None,
-            };
+use rmcp::model::{CallToolRequestParam, CallToolResult, Content, JsonObject};
+use serde_json::Value;
 
-            match result {
-                Some(result_value) => McpResponse {
-                    jsonrpc: "2.0".to_string(),
-                    id: payload.id,
-                    result: Some(result_value),
-                    error: None,
-                },
-                None => McpResponse {
-                    jsonrpc: "2.0".to_string(),
-                    id: payload.id,
-                    result: None,
-                    error: Some(McpError {
-                        code: -32601,
-                        message: format!("Method not found: {name}"),
-                        data: None,
-                    }),
-                },
+pub fn handle_tool_call_internal(payload: CallToolRequestParam) -> CallToolResult {
+    if let (name, Some(arguments)) = (payload.name.as_ref(), payload.arguments.as_ref()) {
+        let result = match name {
+            "knowledge-graph-neighbours" => handle_neighbours_tool(arguments),
+            "knowledge-graph-search" => handle_search_tool(arguments),
+            "knowledge-graph-entity-details" => handle_entity_details_tool(arguments),
+            "knowledge-graph-dependency-path" => handle_dependency_path_tool(arguments),
+            _ => None,
+        };
+
+        match result {
+            Some(result_value) => {
+                CallToolResult::success(vec![Content::text(result_value.to_string())])
             }
-        } else {
-            McpResponse {
-                jsonrpc: "2.0".to_string(),
-                id: payload.id,
-                result: None,
-                error: Some(McpError {
-                    code: -32602,
-                    message: "Invalid params".to_string(),
-                    data: None,
-                }),
-            }
+            None => CallToolResult::error(vec![Content::text(format!("Method not found: {name}"))]),
         }
     } else {
-        McpResponse {
-            jsonrpc: "2.0".to_string(),
-            id: payload.id,
-            result: None,
-            error: Some(McpError {
-                code: -32602,
-                message: "Missing params".to_string(),
-                data: None,
-            }),
-        }
+        CallToolResult::error(vec![Content::text("Missing params".to_string())])
     }
 }
 
-fn handle_neighbours_tool(arguments: &serde_json::Value) -> Option<serde_json::Value> {
+fn handle_neighbours_tool(arguments: &JsonObject) -> Option<Value> {
     let fqn = arguments
         .get("fqn")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
+
     let max_results = arguments
         .get("max_results")
         .and_then(|v| v.as_u64())
@@ -82,15 +48,17 @@ fn handle_neighbours_tool(arguments: &serde_json::Value) -> Option<serde_json::V
     }))
 }
 
-fn handle_search_tool(arguments: &serde_json::Value) -> Option<serde_json::Value> {
+fn handle_search_tool(arguments: &JsonObject) -> Option<Value> {
     let query = arguments
         .get("query")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
+
     let entity_type = arguments
         .get("type")
         .and_then(|v| v.as_str())
         .unwrap_or("all");
+
     let max_results = arguments
         .get("max_results")
         .and_then(|v| v.as_u64())
@@ -108,7 +76,7 @@ fn handle_search_tool(arguments: &serde_json::Value) -> Option<serde_json::Value
     }))
 }
 
-fn handle_entity_details_tool(arguments: &serde_json::Value) -> Option<serde_json::Value> {
+fn handle_entity_details_tool(arguments: &JsonObject) -> Option<Value> {
     let fqn = arguments
         .get("fqn")
         .and_then(|v| v.as_str())
@@ -139,15 +107,17 @@ fn handle_entity_details_tool(arguments: &serde_json::Value) -> Option<serde_jso
     }))
 }
 
-fn handle_dependency_path_tool(arguments: &serde_json::Value) -> Option<serde_json::Value> {
+fn handle_dependency_path_tool(arguments: &JsonObject) -> Option<Value> {
     let source = arguments
         .get("source")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
+
     let target = arguments
         .get("target")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
+
     let max_path_length = arguments
         .get("max_path_length")
         .and_then(|v| v.as_u64())
@@ -156,6 +126,7 @@ fn handle_dependency_path_tool(arguments: &serde_json::Value) -> Option<serde_js
     let path = (1..=max_path_length.min(3))
         .map(|i| format!("intermediate.node.{i}"))
         .collect::<Vec<_>>();
+
     let full_path = vec![source.to_string()]
         .into_iter()
         .chain(path)
