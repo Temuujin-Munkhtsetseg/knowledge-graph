@@ -1,32 +1,11 @@
-use serde::{Deserialize, Serialize};
+use crate::endpoints::{root::RootEndpointDef, workspace_index::WorkspaceIndexEndpointDef};
+use serde::Serialize;
+use ts_rs::TS;
 
-#[derive(Serialize)]
-pub struct ServerInfoResponse {
-    pub port: u16,
-}
-
-#[derive(Deserialize)]
-pub struct WorkspacePathRequest {
-    pub workspace: String,
-}
-
-#[derive(Serialize)]
-pub struct WorkspaceResponse {
-    /// The path to the workspace.
-    pub path: String,
-}
-
-#[derive(Serialize)]
-pub struct StatusResponse {
-    pub status: String,
-}
-
-#[derive(Serialize)]
-pub struct IndexingProgressResponse {
-    pub message: String,
-}
-
-#[derive(Deserialize)]
-pub struct IndexRequest {
-    pub workspace: String,
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "api.ts")]
+#[derive(Default)]
+pub struct ApiContract {
+    pub root: RootEndpointDef,
+    pub workspace_index: WorkspaceIndexEndpointDef,
 }
