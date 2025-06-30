@@ -63,15 +63,20 @@ impl McpConfig {
 
 // Helper function that adds the local HTTP server to the MCP configuration.
 pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) -> Result<()> {
-    let server = McpServer::Url {
-        url: format!("http://localhost:{port}/mcp"),
-    };
-
     let expanded_path = naively_expand_shell_path(mcp_config_path)?;
+    let config = McpConfig::get_or_create(expanded_path)?;
 
-    McpConfig::get_or_create(expanded_path)?
-        .add_server(MCP_NAME.to_string(), server)
-        .save()
+    let server_url = format!("http://localhost:{port}/mcp");
+    if let Some(McpServer::Url { url }) = config.mcp_servers.get(MCP_NAME) {
+        if url.as_str() == server_url {
+            return Ok(());
+        }
+    }
+
+    let server = McpServer::Url { url: server_url };
+    config.add_server(MCP_NAME.to_string(), server).save()?;
+
+    Ok(())
 }
 
 // Helper function that expands the shell variables in the path.
@@ -221,6 +226,31 @@ mod tests {
         check_http_server_is_added_to_existing_config(
             config.mcp_servers.get(MCP_NAME).unwrap(),
             port,
+        );
+
+        temp_dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_does_not_update_file_if_server_url_has_not_changed() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mcp_config_path = temp_dir.path().join("mcp.json");
+        let port = 8080;
+
+        // Create an existing config file with non-pretty json formatting
+        fs::write(
+            mcp_config_path.clone(),
+            "{\"mcpServers\":{\"knowledge-graph\":{\"url\":\"http://localhost:8080/mcp\"}}}",
+        )
+        .unwrap();
+
+        add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
+
+        // Validate the file has not been saved by checking the content is not changed
+        let content = fs::read_to_string(mcp_config_path.clone()).unwrap();
+        assert_eq!(
+            content,
+            "{\"mcpServers\":{\"knowledge-graph\":{\"url\":\"http://localhost:8080/mcp\"}}}"
         );
 
         temp_dir.close().unwrap();
