@@ -6,8 +6,6 @@ export type EmptyRequest = null;
 
 export type HttpMethod = "GET" | "POST";
 
-export type IndexingProgressResponse = { message: string, };
-
 export type RootEndpointDef = { method: HttpMethod, path: "/", path_request: EmptyRequest, body_request: EmptyRequest, query_request: EmptyRequest, responses: RootResponses, };
 
 export type RootResponses = { "200": ServerInfoResponse, };
@@ -20,4 +18,6 @@ export type WorkspaceIndexBodyRequest = { workspace: string, };
 
 export type WorkspaceIndexEndpointDef = { method: HttpMethod, path: "/workspace/index", path_request: EmptyRequest, body_request: WorkspaceIndexBodyRequest, query_request: EmptyRequest, responses: WorkspaceIndexResponses, };
 
-export type WorkspaceIndexResponses = { "200": IndexingProgressResponse | null, "400": StatusResponse | null, "409": StatusResponse | null, };
+export type WorkspaceIndexResponses = { ok: WorkspaceIndexSuccessResponse | null, bad_request: StatusResponse | null, internal_server_error: StatusResponse | null, };
+
+export type WorkspaceIndexSuccessResponse = { workspace_folder_path: string, data_directory_name: string, status: string, last_indexed_at: string | null, project_count: number, };
