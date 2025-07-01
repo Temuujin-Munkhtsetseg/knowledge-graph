@@ -358,3 +358,62 @@ impl std::fmt::Display for DirectoryNodeFromKuzu {
         )
     }
 }
+
+/// Trait to determine if a value needs to be quoted in SQL
+pub trait QuoteEscape {
+    fn needs_quotes(&self) -> bool;
+}
+
+macro_rules! impl_quote_escape {
+    ($($t:ty: $v:expr),*) => {
+        $(
+            impl QuoteEscape for $t {
+                fn needs_quotes(&self) -> bool { $v }
+            }
+        )*
+    }
+}
+
+impl_quote_escape!(
+    // Strings need quotes
+    String: true, &str: true,
+    // Numeric types don't need quotes
+    i8: false, i16: false, i32: false, i64: false, i128: false, isize: false,
+    u8: false, u16: false, u32: false, u64: false, u128: false, usize: false,
+    f32: false, f64: false
+);
+
+pub trait FromKuzuNode: Sized {
+    fn from_kuzu_node(node: &Value) -> Self;
+    fn name() -> &'static str;
+}
+
+impl FromKuzuNode for DefinitionNodeFromKuzu {
+    fn from_kuzu_node(node: &Value) -> Self {
+        Self::from_kuzu_node(node)
+    }
+
+    fn name() -> &'static str {
+        KuzuNodeType::DefinitionNode.as_str()
+    }
+}
+
+impl FromKuzuNode for FileNodeFromKuzu {
+    fn from_kuzu_node(node: &Value) -> Self {
+        Self::from_kuzu_node(node)
+    }
+
+    fn name() -> &'static str {
+        KuzuNodeType::FileNode.as_str()
+    }
+}
+
+impl FromKuzuNode for DirectoryNodeFromKuzu {
+    fn from_kuzu_node(node: &Value) -> Self {
+        Self::from_kuzu_node(node)
+    }
+
+    fn name() -> &'static str {
+        KuzuNodeType::DirectoryNode.as_str()
+    }
+}

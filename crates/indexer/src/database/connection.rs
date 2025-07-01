@@ -393,87 +393,230 @@ impl<'db> KuzuConnection<'db> {
 
     // Knowledge graph specific methods
 
-    pub fn get_all_definition_nodes(&self) -> DbResult<Vec<DefinitionNodeFromKuzu>> {
-        let query = "MATCH (n:DefinitionNode) RETURN n";
-        let result = self.query(query)?;
+    pub fn count_all<R: FromKuzuNode>(&self) -> DbResult<i64> {
+        let query = format!("MATCH (n:{}) RETURN COUNT(n)", R::name());
+        let result = self.query(&query)?;
+        let mut count = 0;
+
+        for row in result {
+            if let Some(_node_value) = row.first() {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    pub fn get_all<R: FromKuzuNode>(&self, kuzu_node_type: KuzuNodeType) -> DbResult<Vec<R>> {
+        let query = format!("MATCH (n:{}) RETURN n", kuzu_node_type.as_str());
+        let result = self.query(&query)?;
         let mut nodes = Vec::new();
 
         for row in result {
             if let Some(node_value) = row.first() {
-                let node = DefinitionNodeFromKuzu::from_kuzu_node(node_value);
-                nodes.push(node);
+                nodes.push(R::from_kuzu_node(node_value));
             }
         }
         Ok(nodes)
     }
 
-    pub fn get_all_file_nodes(&self) -> DbResult<Vec<FileNodeFromKuzu>> {
-        let query = "MATCH (n:FileNode) RETURN n";
-        let result = self.query(query)?;
-        let mut nodes = Vec::new();
-
-        for row in result {
-            if let Some(node_value) = row.first() {
-                let node = FileNodeFromKuzu::from_kuzu_node(node_value);
-                nodes.push(node);
-            }
-        }
-        Ok(nodes)
-    }
-
-    pub fn get_all_directory_nodes(&self) -> DbResult<Vec<DirectoryNodeFromKuzu>> {
-        let query = "MATCH (n:DirectoryNode) RETURN n";
-        let result = self.query(query)?;
-        let mut nodes = Vec::new();
-
-        for row in result {
-            if let Some(node_value) = row.first() {
-                let node = DirectoryNodeFromKuzu::from_kuzu_node(node_value);
-                nodes.push(node);
-            }
-        }
-        Ok(nodes)
-    }
-
-    pub fn delete_definition_nodes_by_paths(&self, paths: &[String]) -> DbResult<()> {
-        let paths_str = paths
+    /// Get nodes from a table by a column value
+    pub fn get_by<T: std::fmt::Display + QuoteEscape, R: FromKuzuNode>(
+        &self,
+        node_type: KuzuNodeType,
+        column: &str,
+        values: &[T],
+    ) -> DbResult<Vec<R>> {
+        let values_str = values
             .iter()
-            .map(|path| format!("'{path}'"))
+            .map(|val| {
+                if val.needs_quotes() {
+                    format!("'{val}'")
+                } else {
+                    format!("{val}")
+                }
+            })
             .collect::<Vec<_>>()
             .join(", ");
 
         let query = format!(
-            "MATCH (n:DefinitionNode) WHERE n.primary_file_path IN [{paths_str}] DETACH DELETE n"
+            "MATCH (n:{}) WHERE n.{column} IN [{values_str}] RETURN n",
+            node_type.as_str()
+        );
+        let result = self.query(&query)?;
+        let mut nodes = Vec::new();
+
+        for row in result {
+            if let Some(node_value) = row.first() {
+                nodes.push(R::from_kuzu_node(node_value));
+            }
+        }
+        Ok(nodes)
+    }
+
+    pub fn agg_node_by(
+        &self,
+        node_type: KuzuNodeType,
+        agg_func: &str,
+        field: &str,
+    ) -> DbResult<u32> {
+        let query = format!(
+            "MATCH (n:{}) RETURN {}(n.{})",
+            node_type.as_str(),
+            agg_func,
+            field
+        );
+
+        let mut result = self.query(&query)?;
+        if let Some(row) = result.next() {
+            if let Some(kuzu::Value::UInt32(count)) = row.first() {
+                return Ok(*count);
+            }
+        }
+
+        Ok(0)
+    }
+
+    pub fn count_node_by<T: std::fmt::Display + QuoteEscape>(
+        &self,
+        node_type: KuzuNodeType,
+        field: &str,
+        values: &[T],
+    ) -> DbResult<i64> {
+        let values_str = values
+            .iter()
+            .map(|val| {
+                if val.needs_quotes() {
+                    format!("'{val}'")
+                } else {
+                    format!("{val}")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let query = format!(
+            "MATCH (n:{}) WHERE n.{} IN [{values_str}] RETURN COUNT(n)",
+            node_type.as_str(),
+            field,
+        );
+        let mut result = self.query(&query)?;
+
+        if let Some(row) = result.next() {
+            if let Some(kuzu::Value::Int64(count)) = row.first() {
+                return Ok(*count);
+            }
+        }
+
+        Ok(0)
+    }
+
+    /// Delete nodes from a table by a column value
+    pub fn delete_by<T: std::fmt::Display + QuoteEscape>(
+        &self,
+        node_type: KuzuNodeType,
+        column: &str,
+        values: &[T],
+    ) -> DbResult<()> {
+        let values_str = values
+            .iter()
+            .map(|val| {
+                if val.needs_quotes() {
+                    format!("'{val}'")
+                } else {
+                    format!("{val}")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let query = format!(
+            "MATCH (n:{}) WHERE n.{column} IN [{values_str}] DETACH DELETE n",
+            node_type.as_str()
+        );
+        self.execute_ddl(&query)?;
+        Ok(())
+    }
+
+    /// Delete nodes that match compound conditions
+    /// Each row in values represents a set of values that should match together
+    /// e.g. columns = ["fqn", "path"], values = [("foo", "/bar"), ("baz", "/qux")]
+    /// will generate: WHERE (n.fqn = "foo" AND n.path = "/bar") OR (n.fqn = "baz" AND n.path = "/qux")
+    pub fn delete_by_compound<T: std::fmt::Display + QuoteEscape>(
+        &self,
+        node_type: KuzuNodeType,
+        columns: &[&str],
+        values: &[&[T]],
+    ) -> DbResult<()> {
+        // Validate that all value rows have the same length as columns
+        if values.iter().any(|row| row.len() != columns.len()) {
+            return Err(DatabaseError::PreparedStatementError(
+                "Each value row must have the same number of values as columns".to_string(),
+            ));
+        }
+
+        // Build compound conditions for each row
+        let conditions: Vec<String> = values
+            .iter()
+            .map(|row| {
+                let row_conditions: Vec<String> = row
+                    .iter()
+                    .zip(columns)
+                    .map(|(val, col)| {
+                        let val_str = if val.needs_quotes() {
+                            format!("'{val}'")
+                        } else {
+                            format!("{val}")
+                        };
+                        format!("n.{col} = {val_str}")
+                    })
+                    .collect();
+                format!("({})", row_conditions.join(" AND "))
+            })
+            .collect();
+
+        let where_clause = conditions.join(" OR ");
+        let query = format!(
+            "MATCH (n:{}) WHERE {} DETACH DELETE n",
+            node_type.as_str(),
+            where_clause
         );
 
         self.execute_ddl(&query)?;
         Ok(())
     }
 
-    pub fn delete_file_nodes_by_path(&self, paths: &[String]) -> DbResult<()> {
-        let paths_str = paths
-            .iter()
-            .map(|path| format!("'{path}'"))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let query = format!("MATCH (n:FileNode) WHERE n.path IN [{paths_str}] DETACH DELETE n");
-
-        self.execute_ddl(&query)?;
-        Ok(())
+    pub fn get_all_definition_nodes(&self) -> DbResult<Vec<DefinitionNodeFromKuzu>> {
+        self.get_all(KuzuNodeType::DefinitionNode)
     }
 
-    pub fn delete_directory_nodes_by_path(&self, paths: &[String]) -> DbResult<()> {
-        let paths_str = paths
-            .iter()
-            .map(|path| format!("'{path}'"))
-            .collect::<Vec<_>>()
-            .join(", ");
+    pub fn get_all_file_nodes(&self) -> DbResult<Vec<FileNodeFromKuzu>> {
+        self.get_all(KuzuNodeType::FileNode)
+    }
 
-        let query =
-            format!("MATCH (n:DirectoryNode) WHERE n.path IN [{paths_str}] DETACH DELETE n");
-        self.execute_ddl(&query)?;
-        Ok(())
+    pub fn get_all_directory_nodes(&self) -> DbResult<Vec<DirectoryNodeFromKuzu>> {
+        self.get_all(KuzuNodeType::DirectoryNode)
+    }
+
+    pub fn get_definition_nodes_by_paths(
+        &self,
+        paths: &[String],
+    ) -> DbResult<Vec<DefinitionNodeFromKuzu>> {
+        self.get_by::<String, DefinitionNodeFromKuzu>(
+            KuzuNodeType::DefinitionNode,
+            "primary_file_path",
+            paths,
+        )
+    }
+
+    pub fn get_file_nodes_by_paths(&self, paths: &[String]) -> DbResult<Vec<FileNodeFromKuzu>> {
+        self.get_by::<String, FileNodeFromKuzu>(KuzuNodeType::FileNode, "path", paths)
+    }
+
+    pub fn get_directory_nodes_by_paths(
+        &self,
+        paths: &[String],
+    ) -> DbResult<Vec<DirectoryNodeFromKuzu>> {
+        self.get_by::<String, DirectoryNodeFromKuzu>(KuzuNodeType::DirectoryNode, "path", paths)
     }
 
     /// Get all nodes count by type

@@ -72,6 +72,12 @@ impl Default for SchemaManager {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum SchemaManagerImportMode {
+    Indexing,
+    Reindexing,
+}
+
 impl SchemaManager {
     pub fn new() -> Self {
         Self
@@ -386,6 +392,7 @@ impl SchemaManager {
         &self,
         connection: &KuzuConnection,
         parquet_dir: &str,
+        mode: SchemaManagerImportMode,
     ) -> DbResult<()> {
         info!(
             "Importing graph data from Parquet files in: {}",
@@ -404,7 +411,7 @@ impl SchemaManager {
         self.import_nodes(connection, parquet_dir)?;
 
         // Import relationship data (try consolidated format first, fall back to legacy)
-        match self.import_consolidated_relationships(connection, parquet_dir) {
+        match self.import_consolidated_relationships(connection, parquet_dir, mode) {
             Ok(_) => {
                 info!("Successfully imported consolidated relationships");
             }
@@ -449,6 +456,7 @@ impl SchemaManager {
         &self,
         connection: &KuzuConnection,
         parquet_dir: &str,
+        mode: SchemaManagerImportMode,
     ) -> DbResult<()> {
         // Import directory-to-directory relationships
         let dir_to_dir_file =
@@ -523,6 +531,11 @@ impl SchemaManager {
                         return Err(e);
                     }
                 }
+            } else if mode == SchemaManagerImportMode::Reindexing {
+                info!(
+                    "Relationship file not found: {}, skipping import",
+                    file_path.display()
+                );
             } else {
                 let error_msg = format!("Relationship file not found: {}", file_path.display());
                 warn!("{}", error_msg);

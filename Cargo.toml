@@ -36,7 +36,6 @@ chrono = { version = "0.4.41", features = ["serde"] }
 sha2 = "0.10.9"
 hex = "0.4.3"
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
-walkdir = "2.5.0"
 tokio = { version = "1.45.1", features = ["full"] }
 ctrlc = "3.4.7"
 single-instance = "0.3.3"
