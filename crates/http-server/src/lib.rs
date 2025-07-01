@@ -5,8 +5,8 @@ pub mod endpoints;
 use crate::{
     contract::EndpointContract,
     endpoints::{
+        info::{InfoEndpoint, info_handler},
         mcp::{mcp_batch_handler, mcp_handler},
-        root::{RootEndpoint, root_handler},
         workspace_index::{WorkspaceIndexEndpoint, index_handler},
     },
 };
@@ -16,9 +16,12 @@ use axum::{
     Router,
     routing::{get, post},
 };
+use axum_embed::ServeEmbed;
 use mcp::McpService;
+use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
+use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use workspace_manager::WorkspaceManager;
 
@@ -26,6 +29,10 @@ use workspace_manager::WorkspaceManager;
 pub struct AppState {
     pub workspace_manager: Arc<WorkspaceManager>,
 }
+
+#[derive(Embed, Clone)]
+#[folder = "../../packages/frontend/dist"]
+struct Assets;
 
 pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<()> {
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
@@ -45,19 +52,24 @@ pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<
         .with_state(Arc::new(McpService));
 
     let state = AppState { workspace_manager };
+    let serve_assets = ServeEmbed::<Assets>::new();
 
-    let app = Router::new()
+    let api_router = Router::new()
         .route(
-            RootEndpoint::PATH,
+            InfoEndpoint::PATH,
             get({
                 let shared_port = port;
-                move || root_handler(shared_port)
+                move || info_handler(shared_port)
             }),
         )
         .route(WorkspaceIndexEndpoint::PATH, post(index_handler))
+        .with_state(state);
+
+    let app = Router::new()
+        .nest("/api", api_router)
         .nest("/mcp", mcp_router)
-        .with_state(state)
-        .layer(cors_layer);
+        .fallback_service(serve_assets)
+        .layer(ServiceBuilder::new().layer(cors_layer));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     tracing::info!("HTTP server listening on {}", addr);

@@ -54,7 +54,7 @@ define_endpoint! {
     WorkspaceIndexEndpointDef,
     Post,
     "/workspace/index",
-    ts_path_type = "\"/workspace/index\"",
+    ts_path_type = "\"/api/workspace/index\"",
     config = WorkspaceIndexEndpointConfig,
     export_to = "api.ts"
 }

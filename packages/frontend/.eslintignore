@@ -1,0 +1,7 @@
+dist/
+dist-ssr/
+coverage/
+node_modules/
+*.d.ts
+vite.config.ts
+postcss.config.mjs 
