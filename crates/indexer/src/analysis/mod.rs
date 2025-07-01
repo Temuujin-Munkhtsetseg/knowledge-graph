@@ -138,6 +138,10 @@ pub struct FileDefinitionRelationship {
 /// Represents a hierarchical relationship between definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefinitionRelationship {
+    // /// Parent definition file path (foreign key to FileNode.path)
+    // pub from_file_path: String,
+    // /// Child definition file path (foreign key to FileNode.path)
+    // pub to_file_path: String,
     /// Parent definition FQN (foreign key to DefinitionNode.fqn)
     pub from_definition_fqn: String,
     /// Child definition FQN (foreign key to DefinitionNode.fqn)

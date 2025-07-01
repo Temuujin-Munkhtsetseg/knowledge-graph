@@ -1,3 +1,4 @@
+pub mod changes;
 pub mod connection;
 pub mod schema;
 pub mod types;

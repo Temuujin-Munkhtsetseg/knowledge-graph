@@ -1,6 +1,8 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use crate::indexer::IndexingConfig;
+use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
 use parser_core::parser::get_supported_extensions;
 
@@ -59,6 +61,7 @@ impl FileSource for PathFileSource {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GitaliskFileSource {
     pub repository: gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository,
     pub supported_extensions: HashSet<String>,
@@ -97,6 +100,46 @@ impl FileSource for GitaliskFileSource {
             .collect();
 
         Ok(filtered_files)
+    }
+}
+
+pub struct ChangesFileSource {
+    pub changes: FileChanges,
+    pub repository_path: String,
+    pub supported_extensions: HashSet<String>,
+}
+
+impl ChangesFileSource {
+    pub fn new(changes: &FileChanges, repository_path: String) -> Self {
+        let supported_extensions: HashSet<String> = get_supported_extensions()
+            .iter()
+            .map(|ext| ext.to_string())
+            .collect();
+
+        Self {
+            changes: changes.clone(),
+            repository_path,
+            supported_extensions,
+        }
+    }
+}
+
+impl FileSource for ChangesFileSource {
+    type Error = std::io::Error;
+
+    fn get_files(&self, _config: &IndexingConfig) -> Result<Vec<FileInfo>, Self::Error> {
+        let mut files = Vec::new();
+
+        // Convert changed files to FileInfo
+        for file_path in &self.changes.changed_files {
+            let path = PathBuf::from(&self.repository_path).join(file_path);
+            let file_info = FileInfo::from_path(path);
+            if should_process_file_info(&file_info, &self.supported_extensions) {
+                files.push(file_info);
+            }
+        }
+
+        Ok(files)
     }
 }
 

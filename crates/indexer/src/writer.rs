@@ -1,5 +1,7 @@
 use crate::analysis::{DefinitionNode, DirectoryNode, FileNode, GraphData};
-use crate::database::utils::{NodeIdGenerator, RelationshipTypeMapping};
+use crate::database::utils::{
+    ConsolidatedRelationship, GraphMapper, NodeIdGenerator, RelationshipTypeMapping,
+};
 use anyhow::{Context, Result};
 use arrow::{
     array::{Int32Array, Int64Array, StringArray, UInt8Array, UInt32Array},
@@ -14,23 +16,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-/// Consolidated relationship data for efficient storage
-#[derive(Debug, Clone)]
-pub struct ConsolidatedRelationship {
-    pub source_id: u32,
-    pub target_id: u32,
-    pub relationship_type: u8,
-}
-
-/// Container for different types of consolidated relationships
-#[derive(Default)]
-pub struct ConsolidatedRelationships {
-    pub directory_to_directory: Vec<ConsolidatedRelationship>,
-    pub directory_to_file: Vec<ConsolidatedRelationship>,
-    pub file_to_definition: Vec<ConsolidatedRelationship>,
-    pub definition_to_definition: Vec<ConsolidatedRelationship>,
-}
 
 /// Writer service for creating Parquet files from graph data
 pub struct WriterService {
@@ -77,6 +62,14 @@ impl WriterService {
         Ok(Self { output_directory })
     }
 
+    pub fn flush_output_directory(&self) {
+        if let Ok(entries) = std::fs::read_dir(&self.output_directory) {
+            for entry in entries.flatten() {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+
     /// Write graph data to Parquet files with consolidated relationship schema
     pub fn write_graph_data(
         &self,
@@ -92,8 +85,9 @@ impl WriterService {
         let mut files_written = Vec::new();
         let mut relationship_mapping = RelationshipTypeMapping::new();
 
-        // Pre-assign IDs to all nodes
-        self.assign_node_ids(node_id_generator, graph_data)?;
+        let mut graph_mapper =
+            GraphMapper::new(graph_data, node_id_generator, &mut relationship_mapping);
+        let relationships = graph_mapper.map_graph_data();
 
         // Write node tables with integer IDs
         if !graph_data.directory_nodes.is_empty() {
@@ -141,13 +135,6 @@ impl WriterService {
                 file_size_bytes: self.get_file_size(&file_path)?,
             });
         }
-
-        // Write consolidated relationship tables
-        let relationships = self.consolidate_relationships(
-            graph_data,
-            node_id_generator,
-            &mut relationship_mapping,
-        )?;
 
         // Write directory-to-directory relationships
         if !relationships.directory_to_directory.is_empty() {
@@ -236,137 +223,6 @@ impl WriterService {
             total_definition_relationships: relationships.definition_to_definition.len(),
             writing_duration,
         })
-    }
-
-    /// Pre-assign integer IDs to all nodes
-    fn assign_node_ids(
-        &self,
-        id_generator: &mut NodeIdGenerator,
-        graph_data: &GraphData,
-    ) -> Result<()> {
-        // Assign directory IDs
-        for dir_node in &graph_data.directory_nodes {
-            id_generator.get_or_assign_directory_id(&dir_node.path);
-        }
-
-        // Assign file IDs
-        for file_node in &graph_data.file_nodes {
-            id_generator.get_or_assign_file_id(&file_node.path);
-        }
-
-        // Assign definition IDs
-        for def_node in &graph_data.definition_nodes {
-            id_generator.get_or_assign_definition_id(&def_node.fqn);
-        }
-
-        Ok(())
-    }
-
-    /// Consolidate all relationships into four categories with integer IDs and types
-    fn consolidate_relationships(
-        &self,
-        graph_data: &GraphData,
-        id_generator: &NodeIdGenerator,
-        relationship_mapping: &mut RelationshipTypeMapping,
-    ) -> Result<ConsolidatedRelationships> {
-        let mut relationships = ConsolidatedRelationships::default();
-
-        // Process directory relationships
-        for dir_rel in &graph_data.directory_relationships {
-            let source_id = id_generator
-                .get_directory_id(&dir_rel.from_path)
-                .ok_or_else(|| {
-                    anyhow::anyhow!("Source directory ID not found: {}", dir_rel.from_path)
-                })?;
-
-            let relationship_type = relationship_mapping.register_type(&dir_rel.relationship_type);
-
-            if dir_rel.relationship_type == "DIR_CONTAINS_DIR" {
-                let target_id =
-                    id_generator
-                        .get_directory_id(&dir_rel.to_path)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("Target directory ID not found: {}", dir_rel.to_path)
-                        })?;
-
-                relationships
-                    .directory_to_directory
-                    .push(ConsolidatedRelationship {
-                        source_id,
-                        target_id,
-                        relationship_type,
-                    });
-            } else if dir_rel.relationship_type == "DIR_CONTAINS_FILE" {
-                let target_id = id_generator.get_file_id(&dir_rel.to_path).ok_or_else(|| {
-                    anyhow::anyhow!("Target file ID not found: {}", dir_rel.to_path)
-                })?;
-
-                relationships
-                    .directory_to_file
-                    .push(ConsolidatedRelationship {
-                        source_id,
-                        target_id,
-                        relationship_type,
-                    });
-            }
-        }
-
-        // Process file-definition relationships
-        for file_rel in &graph_data.file_definition_relationships {
-            let source_id = id_generator
-                .get_file_id(&file_rel.file_path)
-                .ok_or_else(|| {
-                    anyhow::anyhow!("Source file ID not found: {}", file_rel.file_path)
-                })?;
-            let target_id = id_generator
-                .get_definition_id(&file_rel.definition_fqn)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Target definition ID not found: {}",
-                        file_rel.definition_fqn
-                    )
-                })?;
-            let relationship_type = relationship_mapping.register_type(&file_rel.relationship_type);
-
-            relationships
-                .file_to_definition
-                .push(ConsolidatedRelationship {
-                    source_id,
-                    target_id,
-                    relationship_type,
-                });
-        }
-
-        // Process definition relationships
-        for def_rel in &graph_data.definition_relationships {
-            let source_id = id_generator
-                .get_definition_id(&def_rel.from_definition_fqn)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Source definition ID not found: {}",
-                        def_rel.from_definition_fqn
-                    )
-                })?;
-            let target_id = id_generator
-                .get_definition_id(&def_rel.to_definition_fqn)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Target definition ID not found: {}",
-                        def_rel.to_definition_fqn
-                    )
-                })?;
-            let relationship_type = relationship_mapping.register_type(&def_rel.relationship_type);
-
-            relationships
-                .definition_to_definition
-                .push(ConsolidatedRelationship {
-                    source_id,
-                    target_id,
-                    relationship_type,
-                });
-        }
-
-        Ok(relationships)
     }
 
     /// Write directory nodes with integer IDs

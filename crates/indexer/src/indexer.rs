@@ -12,21 +12,28 @@
 // ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║
 //  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
+use gitalisk_core::repository::gitalisk_repository::FileInfo;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+// Simplified imports - file processing is now handled by the File module
 use crate::analysis::{AnalysisService, GraphData};
+use crate::database::changes::KuzuChanges;
 use crate::database::{DatabaseConfig, KuzuConnection, SchemaManager};
+
 use crate::parsing::processor::process_file_info;
-use crate::project::file_info::FileInfo;
 use crate::project::source::FileSource;
 use crate::stats::IndexingStats;
 use crate::writer::{WriterResult, WriterService};
+use kuzu::{Database, SystemConfig};
 
+use crate::database::schema::SchemaManagerImportMode;
 use crate::database::utils::NodeIdGenerator;
+pub use crate::parsing::changes::{FileChanges, FileChangesPathType};
 pub use crate::parsing::processor::{FileProcessingResult, ProcessingStats};
+use crate::project::source::ChangesFileSource;
 
 const DEFAULT_WORKER_THREADS: usize = 8;
 const WORK_QUEUE_CAPACITY: usize = 10000;
@@ -52,6 +59,21 @@ impl Default for IndexingConfig {
 }
 
 pub struct RepositoryIndexingResult {
+    pub repository_name: String,
+    pub repository_path: String,
+    pub file_results: Vec<FileProcessingResult>,
+    pub total_files_processed: usize,
+    pub total_files_skipped: usize,
+    pub total_files_errored: usize,
+    pub total_processing_time: Duration,
+    pub errors: Vec<(String, String)>,
+    pub graph_data: Option<GraphData>,
+    pub writer_result: Option<WriterResult>,
+    pub database_path: Option<String>,
+    pub database_loaded: bool,
+}
+
+pub struct RepositoryReindexingResult {
     pub repository_name: String,
     pub repository_path: String,
     pub file_results: Vec<FileProcessingResult>,
@@ -409,6 +431,82 @@ impl RepositoryIndexer {
         Ok(indexing_result)
     }
 
+    pub fn reindex_repository(
+        &mut self,
+        file_changes: FileChanges,
+        config: &IndexingConfig,
+        database_path: &str,
+        output_path: &str,
+    ) -> Result<RepositoryReindexingResult, String> {
+        if !file_changes.has_changes() {
+            warn!("No files to process in repository: {}", self.name);
+            return Ok(RepositoryReindexingResult {
+                repository_name: self.name.clone(),
+                repository_path: self.path.clone(),
+                file_results: Vec::new(),
+                total_files_processed: 0,
+                total_files_skipped: 0,
+                total_files_errored: 0,
+                total_processing_time: Duration::from_secs(0),
+                errors: Vec::new(),
+                graph_data: None,
+                writer_result: None,
+                database_path: Some(database_path.to_string()),
+                database_loaded: false,
+            });
+        }
+
+        // Run the full processing pipeline
+        let file_source = ChangesFileSource::new(&file_changes, self.path.clone());
+        let result = self
+            .process_files_full(file_source, config, output_path)
+            .expect("Failed to process repository");
+
+        for file in &result.file_results {
+            println!("reindex file: {:?}", file.file_path);
+        }
+
+        // Create analysis service
+        let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
+
+        // Analyze the file processing results to create graph data
+        let graph_data = analysis_service
+            .analyze_results(&result.file_results)
+            .map_err(|e| format!("Analysis failed: {e}"))?;
+
+        let db_path = database_path;
+        let database =
+            Database::new(db_path, SystemConfig::default()).expect("Failed to create database");
+        let connection = KuzuConnection::new(&database, db_path.to_string())
+            .expect("Failed to create connection");
+
+        // Sync diff changes to kuzu
+        let mut kuzu_syncer = KuzuChanges::new(
+            connection,
+            file_changes,
+            graph_data,
+            &self.path,
+            output_path,
+        );
+        let writer_result = kuzu_syncer.sync_changes();
+
+        Ok(RepositoryReindexingResult {
+            repository_name: self.name.clone(),
+            repository_path: self.path.clone(),
+            file_results: result.file_results,
+            total_files_processed: result.total_files_processed,
+            total_files_skipped: result.total_files_skipped,
+            total_files_errored: result.total_files_errored,
+            total_processing_time: result.total_processing_time,
+            errors: result.errors,
+            graph_data: None,
+            writer_result: Some(writer_result),
+            database_path: Some(database_path.to_string()),
+            database_loaded: true,
+        })
+    }
+
+    /// Load Parquet data into Kuzu database
     fn load_into_database(
         &self,
         parquet_directory: &str,
@@ -432,7 +530,11 @@ impl RepositoryIndexer {
             .map_err(|e| format!("Failed to initialize database schema: {e:?}"))?;
 
         schema_manager
-            .import_graph_data(&connection_manager, parquet_directory)
+            .import_graph_data(
+                &connection_manager,
+                parquet_directory,
+                SchemaManagerImportMode::Indexing,
+            )
             .map_err(|e| format!("Failed to import graph data: {e:?}"))?;
 
         match schema_manager.get_schema_stats(&connection_manager) {

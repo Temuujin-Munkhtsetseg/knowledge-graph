@@ -24,6 +24,12 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+miette = "7.6.0"
 tempfile = { workspace = true }
-walkdir = { workspace = true }
+tokio = { workspace = true }
+walkdir = "2.5.0"
+watchexec = "8.0.1"
+watchexec-events = "6.0.0"
+watchexec-filterer-ignore = "7.0.0"
+watchexec-signals = "5.0.0"
 
