@@ -1,6 +1,6 @@
 {
   "name": "@gitlab-org/knowledge-graph",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A framework to create a structured, queryable graph database from code repositories to power AI features and enhance developer productivity.",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
