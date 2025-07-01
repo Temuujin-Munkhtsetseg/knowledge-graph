@@ -12,32 +12,32 @@ pub struct ServerInfoResponse {
 
 #[derive(Serialize, TS, Default)]
 #[ts(export, export_to = "api.ts")]
-pub struct RootResponses {
+pub struct InfoResponses {
     #[serde(rename = "200")]
     pub ok: ServerInfoResponse,
 }
 
-pub struct RootEndpointConfig;
+pub struct InfoEndpointConfig;
 
-impl EndpointConfigTypes for RootEndpointConfig {
+impl EndpointConfigTypes for InfoEndpointConfig {
     type PathRequest = EmptyRequest;
     type BodyRequest = EmptyRequest;
     type QueryRequest = EmptyRequest;
-    type Response = RootResponses;
+    type Response = InfoResponses;
 }
 
 define_endpoint! {
-    RootEndpoint,
-    RootEndpointDef,
+    InfoEndpoint,
+    InfoEndpointDef,
     Get,
-    "/",
-    ts_path_type = "\"/\"",
-    config = RootEndpointConfig,
+    "/info",
+    ts_path_type = "\"/api/info\"",
+    config = InfoEndpointConfig,
     export_to = "api.ts"
 }
 
-/// Handler for the root endpoint
+/// Handler for the info endpoint
 /// Returns basic server information including the port number
-pub async fn root_handler(port: u16) -> Json<ServerInfoResponse> {
+pub async fn info_handler(port: u16) -> Json<ServerInfoResponse> {
     Json(ServerInfoResponse { port })
 }

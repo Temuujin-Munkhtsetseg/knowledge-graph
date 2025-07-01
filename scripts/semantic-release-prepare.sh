@@ -13,6 +13,13 @@ fi
 
 echo "📝 Updating version to: $NEW_VERSION"
 
+# Update workspace packages using npm version with workspace flags
+echo "📦 Updating npm workspace packages..."
+
+echo "📦 Updating @gitlab-org/frontend..."
+npm version "$NEW_VERSION" --workspace=@gitlab-org/frontend --git-tag-version=false
+echo "✅ Updated @gitlab-org/frontend to version $NEW_VERSION"
+
 # Update the VERSION file
 echo "$NEW_VERSION" > VERSION
 echo "✅ Updated VERSION file"

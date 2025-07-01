@@ -2,6 +2,9 @@
   "name": "@gitlab-org/knowledge-graph",
   "version": "0.3.0",
   "description": "A framework to create a structured, queryable graph database from code repositories to power AI features and enhance developer productivity.",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "semantic-release": "semantic-release"

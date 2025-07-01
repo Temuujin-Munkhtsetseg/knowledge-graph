@@ -1,0 +1,56 @@
+{
+  "env": {
+    "browser": true,
+    "es2022": true,
+    "node": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "project": ["./tsconfig.*.json"]
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:vue/vue3-essential",
+    "plugin:@gitlab/typescript",
+    "@vue/eslint-config-typescript",
+    "prettier"
+  ],
+  "plugins": ["vue", "@typescript-eslint", "import"],
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/test_examples/**/*"],
+      "rules": {
+        "import/no-extraneous-dependencies": "off",
+        "func-names": "off",
+        "no-empty-function": "off"
+      }
+    },
+    {
+      "files": ["**/*.ts"],
+      "rules": {
+        "import/no-default-export": "warn",
+        "@typescript-eslint/array-type": ["error", { "default": "array" }],
+        "@typescript-eslint/explicit-member-accessibility": [
+          "error",
+          { "accessibility": "no-public" }
+        ],
+        "@typescript-eslint/parameter-properties": ["error", { "prefer": "class-property" }],
+        "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
+      "files": ["**/*.vue"],
+      "parser": "vue-eslint-parser",
+      "parserOptions": {
+        "parser": "@typescript-eslint/parser"
+      },
+      "rules": {
+        "vue/multi-word-component-names": "off",
+        "import/no-default-export": "off",
+        "unicorn/filename-case": "off"
+      }
+    }
+  ]
+} 

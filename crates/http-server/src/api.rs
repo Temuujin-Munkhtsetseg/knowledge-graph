@@ -1,4 +1,4 @@
-use crate::endpoints::{root::RootEndpointDef, workspace_index::WorkspaceIndexEndpointDef};
+use crate::endpoints::{info::InfoEndpointDef, workspace_index::WorkspaceIndexEndpointDef};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -6,6 +6,6 @@ use ts_rs::TS;
 #[ts(export, export_to = "api.ts")]
 #[derive(Default)]
 pub struct ApiContract {
-    pub root: RootEndpointDef,
+    pub info: InfoEndpointDef,
     pub workspace_index: WorkspaceIndexEndpointDef,
 }
