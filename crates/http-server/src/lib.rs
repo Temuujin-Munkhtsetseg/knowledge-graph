@@ -9,6 +9,7 @@ use crate::{
         info::{InfoEndpoint, info_handler},
         mcp::{mcp_batch_handler, mcp_handler},
         workspace_index::{WorkspaceIndexEndpoint, index_handler},
+        workspace_list::{WorkspaceListEndpoint, workspace_list_handler},
     },
 };
 use anyhow::Result;
@@ -82,6 +83,7 @@ pub async fn run(
         )
         .route(WorkspaceIndexEndpoint::PATH, post(index_handler))
         .route(EventsEndpoint::PATH, get(events_handler))
+        .route(WorkspaceListEndpoint::PATH, get(workspace_list_handler))
         .with_state(state);
 
     let app = Router::new()

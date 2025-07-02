@@ -21,7 +21,7 @@ use workspace_manager::WorkspaceManager;
 #[derive(Deserialize, Serialize, TS, Default, Clone)]
 #[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct WorkspaceIndexBodyRequest {
-    pub workspace: String,
+    pub workspace_folder_path: String,
 }
 
 #[derive(Serialize, Deserialize, TS, Default)]
@@ -68,9 +68,9 @@ pub async fn index_handler(
     State(state): State<AppState>,
     Json(payload): Json<WorkspaceIndexBodyRequest>,
 ) -> impl IntoResponse {
-    let workspace_path = PathBuf::from(&payload.workspace);
+    let workspace_folder_path = PathBuf::from(&payload.workspace_folder_path);
 
-    if !workspace_path.exists() {
+    if !workspace_folder_path.exists() {
         return (
             StatusCode::BAD_REQUEST,
             Json(WorkspaceIndexResponses {
@@ -85,13 +85,13 @@ pub async fn index_handler(
 
     let workspace_info = match state
         .workspace_manager
-        .get_workspace_folder_info(&payload.workspace)
+        .get_workspace_folder_info(&payload.workspace_folder_path)
     {
         Some(info) => info,
         None => {
             match state
                 .workspace_manager
-                .register_workspace_folder(&workspace_path)
+                .register_workspace_folder(&workspace_folder_path)
             {
                 Ok(info) => info,
                 Err(e) => {
@@ -128,7 +128,7 @@ pub async fn index_handler(
     spawn_indexing_task(
         Arc::clone(&state.workspace_manager),
         Arc::clone(&state.event_bus),
-        payload.workspace,
+        payload.workspace_folder_path,
     );
 
     (
@@ -146,10 +146,10 @@ pub async fn index_handler(
 pub fn spawn_indexing_task(
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
-    workspace_path: String,
+    workspace_folder_path: String,
 ) {
     tokio::spawn(async move {
-        let workspace_path_buf = PathBuf::from(workspace_path.clone());
+        let workspace_path_buf = PathBuf::from(workspace_folder_path.clone());
         let threads = num_cpus::get();
         let config = IndexingConfigBuilder::build(threads);
         let mut executor = IndexingExecutor::new(workspace_manager, event_bus, config);
@@ -161,14 +161,18 @@ pub fn spawn_indexing_task(
         match result {
             Ok(Ok(())) => tracing::info!(
                 "Indexing completed successfully for workspace '{}'",
-                workspace_path
+                workspace_folder_path
             ),
             Ok(Err(e)) => {
-                tracing::error!("Indexing failed for workspace '{}': {}", workspace_path, e)
+                tracing::error!(
+                    "Indexing failed for workspace '{}': {}",
+                    workspace_folder_path,
+                    e
+                )
             }
             Err(e) => tracing::error!(
                 "Indexing task panicked for workspace '{}': {}",
-                workspace_path,
+                workspace_folder_path,
                 e
             ),
         }
@@ -239,7 +243,7 @@ mod tests {
         let (server, _temp_dir) = create_test_app().await;
 
         let request_body = WorkspaceIndexBodyRequest {
-            workspace: "/nonexistent/path".to_string(),
+            workspace_folder_path: "/nonexistent/path".to_string(),
         };
 
         let response = server.post("/workspace/index").json(&request_body).await;
@@ -256,7 +260,7 @@ mod tests {
         let (server, _temp_data_dir) = create_test_app().await;
 
         let request_body = WorkspaceIndexBodyRequest {
-            workspace: temp_dir.path().to_string_lossy().to_string(),
+            workspace_folder_path: temp_dir.path().to_string_lossy().to_string(),
         };
 
         let response = server.post("/workspace/index").json(&request_body).await;
@@ -280,7 +284,7 @@ mod tests {
         let (server, _temp_data_dir) = create_test_app().await;
 
         let request_body = WorkspaceIndexBodyRequest {
-            workspace: temp_workspace.path().to_string_lossy().to_string(),
+            workspace_folder_path: temp_workspace.path().to_string_lossy().to_string(),
         };
 
         let response = server.post("/workspace/index").json(&request_body).await;
@@ -309,9 +313,9 @@ mod tests {
         let temp_workspace = create_test_workspace();
         let (server, _temp_data_dir) = create_test_app().await;
 
-        let workspace_path = temp_workspace.path().to_string_lossy().to_string();
+        let workspace_folder_path = temp_workspace.path().to_string_lossy().to_string();
         let request_body = WorkspaceIndexBodyRequest {
-            workspace: workspace_path,
+            workspace_folder_path,
         };
 
         let start_time = std::time::Instant::now();
