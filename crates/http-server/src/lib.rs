@@ -22,7 +22,7 @@ use axum_embed::ServeEmbed;
 use database::kuzu::connection::KuzuDatabaseConnection;
 use event_bus::EventBus;
 use mcp::DefaultMcpService;
-use querying::QueryingService;
+use querying::service::DefaultQueryingService;
 use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
@@ -57,7 +57,7 @@ pub async fn run(
     ));
 
     let database_connection = Box::new(KuzuDatabaseConnection::new());
-    let query_service = Arc::new(QueryingService::new(
+    let query_service = Arc::new(DefaultQueryingService::new(
         database_connection,
         workspace_manager.clone(),
     ));

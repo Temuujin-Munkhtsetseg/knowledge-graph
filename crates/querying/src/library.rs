@@ -1,3 +1,6 @@
+use serde_json::Value;
+use std::collections::HashMap;
+
 pub struct QueryLibrary;
 
 #[derive(Debug, Clone)]
@@ -6,7 +9,27 @@ pub struct Query {
     pub slug: &'static str,
     pub description: &'static str,
     pub query: &'static str,
-    pub parameters: serde_json::Value,
+    pub parameters: HashMap<&'static str, QueryParameter>,
+}
+
+#[derive(Debug, Clone)]
+pub struct QueryParameter {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub required: bool,
+    pub kind: QueryParameterKind,
+    pub default: Option<Value>,
+}
+
+#[derive(Debug, Clone)]
+pub enum QueryParameterKind {
+    String,
+    Int,
+    Float,
+    Boolean,
+    StringList,
+    IntList,
+    FloatList,
 }
 
 impl QueryLibrary {
@@ -32,18 +55,28 @@ impl QueryLibrary {
                     neighbor.primary_line_number as neighbor_line
                 LIMIT $limit
             "#,
-            parameters: serde_json::json!({
-                "fqn": {
-                    "type": "string",
-                    "description": "The FQN of the definition to get neighbours for.",
-                    "required": true
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "The maximum number of neighbours to return, defaults to 10.",
-                    "required": true
-                }
-            }),
+            parameters: HashMap::from([
+                (
+                    "fqn",
+                    QueryParameter {
+                        name: "fqn",
+                        description: "The FQN of the definition to get neighbours for.",
+                        required: true,
+                        kind: QueryParameterKind::String,
+                        default: None,
+                    },
+                ),
+                (
+                    "limit",
+                    QueryParameter {
+                        name: "limit",
+                        description: "The maximum number of neighbours to return, defaults to 10.",
+                        required: false,
+                        kind: QueryParameterKind::Int,
+                        default: Some(Value::Number(10.into())),
+                    },
+                ),
+            ]),
         }
     }
 

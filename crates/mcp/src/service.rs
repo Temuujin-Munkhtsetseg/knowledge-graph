@@ -24,7 +24,7 @@ pub struct DefaultMcpService {
 }
 
 impl DefaultMcpService {
-    pub fn new(query_service: Arc<QueryingService>) -> Self {
+    pub fn new(query_service: Arc<dyn QueryingService>) -> Self {
         Self {
             available_tools_service: AvailableToolsService::new(query_service),
         }
@@ -65,6 +65,6 @@ impl McpService for DefaultMcpService {
         request: rmcp::model::CallToolRequestParam,
     ) -> Result<rmcp::model::CallToolResult, rmcp::Error> {
         self.available_tools_service
-            .call_tool(request.name.as_ref(), request.arguments.clone())
+            .call_tool(request.name.as_ref(), request.arguments.unwrap_or_default())
     }
 }
