@@ -5,6 +5,7 @@ pub mod endpoints;
 use crate::{
     contract::EndpointContract,
     endpoints::{
+        events::{EventsEndpoint, events_handler},
         info::{InfoEndpoint, info_handler},
         mcp::{mcp_batch_handler, mcp_handler},
         workspace_index::{WorkspaceIndexEndpoint, index_handler},
@@ -72,6 +73,7 @@ pub async fn run(
             }),
         )
         .route(WorkspaceIndexEndpoint::PATH, post(index_handler))
+        .route(EventsEndpoint::PATH, get(events_handler))
         .with_state(state);
 
     let app = Router::new()

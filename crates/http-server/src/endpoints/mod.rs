@@ -1,3 +1,4 @@
+pub mod events;
 pub mod info;
 pub mod mcp;
 pub mod shared;
