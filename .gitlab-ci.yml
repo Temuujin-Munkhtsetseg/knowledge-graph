@@ -27,18 +27,12 @@ frontend-build:
 .rust-job-template:
   tags:
     - saas-linux-large-amd64
-  image: rust:latest
+  image: registry.gitlab.com/gitlab-org/rust/build-images:1.88.0-0.10.1-linux-x86_64
   needs: 
     - frontend-build
-  before_script:
-    - apt update && apt install -y build-essential cmake
-    - rustc --version && cargo --version
-    - export PATH=$PATH:$CARGO_HOME/bin
   only:
     - main
     - merge_requests
-  variables:
-    CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
 
 rust-unit-tests:
   stage: test
@@ -51,7 +45,6 @@ rust-unit-test-report:
   needs:
     - frontend-build
   before_script:
-    - apt update && apt install -y build-essential cmake
     - rustup toolchain install nightly
     - cargo install --root . cargo2junit
   script:
