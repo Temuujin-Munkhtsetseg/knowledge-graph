@@ -18,8 +18,10 @@ use axum::{
     routing::{get, post},
 };
 use axum_embed::ServeEmbed;
+use database::kuzu::connection::KuzuDatabaseConnection;
 use event_bus::EventBus;
-use mcp::McpService;
+use mcp::DefaultMcpService;
+use querying::QueryingService;
 use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
@@ -53,10 +55,16 @@ pub async fn run(
         },
     ));
 
+    let database_connection = Box::new(KuzuDatabaseConnection::new());
+    let query_service = Arc::new(QueryingService::new(
+        database_connection,
+        workspace_manager.clone(),
+    ));
+
     let mcp_router = Router::new()
         .route("/", post(mcp_handler))
         .route("/batch", post(mcp_batch_handler))
-        .with_state(Arc::new(McpService));
+        .with_state(Arc::new(DefaultMcpService::new(query_service)));
 
     let state = AppState {
         workspace_manager,

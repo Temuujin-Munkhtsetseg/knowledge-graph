@@ -1138,6 +1138,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "database"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "indexer",
+ "kuzu",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
 name = "deranged"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1921,6 +1934,7 @@ dependencies = [
  "axum-test",
  "chrono",
  "dashmap",
+ "database",
  "event-bus",
  "futures-util",
  "http",
@@ -1929,6 +1943,7 @@ dependencies = [
  "mcp",
  "num_cpus",
  "once_cell",
+ "querying",
  "reqwest",
  "rust-embed",
  "serde",
@@ -2594,6 +2609,7 @@ name = "mcp"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "querying",
  "rmcp",
  "serde",
  "serde_json",
@@ -3188,6 +3204,16 @@ dependencies = [
  "futures",
  "tokio",
  "tokio-stream",
+]
+
+[[package]]
+name = "querying"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "database",
+ "serde_json",
+ "workspace-manager",
 ]
 
 [[package]]

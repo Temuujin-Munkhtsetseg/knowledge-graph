@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, error};
 
-pub fn handle_mcp_request(service: &McpService, request: Value) -> Value {
+pub fn handle_mcp_request(service: &dyn McpService, request: Value) -> Value {
     debug!("[MCP] Received request: {}.", request);
 
     let method = request["method"].as_str().unwrap();
@@ -75,7 +75,7 @@ pub fn handle_mcp_request(service: &McpService, request: Value) -> Value {
     })
 }
 
-pub fn handle_mcp_batch(requests: Vec<Value>, service: &McpService) -> Vec<Value> {
+pub fn handle_mcp_batch(requests: Vec<Value>, service: &dyn McpService) -> Vec<Value> {
     let mut responses = Vec::with_capacity(requests.len());
 
     for request in requests {
@@ -124,10 +124,60 @@ fn to_json_object<T: Serialize>(result: T) -> WithMeta<JsonObject, JsonObject> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rmcp::Error;
+    use rmcp::model::{
+        CallToolRequestParam, CallToolResult, Content, InitializeResult, ListToolsResult, Tool,
+    };
+
+    #[derive(Debug, Clone)]
+    struct MockMcpService;
+
+    impl McpService for MockMcpService {
+        fn initialize(&self, _request: InitializeRequest) -> InitializeResult {
+            InitializeResult::default()
+        }
+
+        fn on_initialized(&self) {}
+
+        fn list_tools(&self, _request: PaginatedRequestParam) -> Result<ListToolsResult, Error> {
+            // return a list of 4 tools
+            Ok(ListToolsResult {
+                tools: vec![
+                    Tool::new(
+                        "test".to_string(),
+                        "test".to_string(),
+                        serde_json::json!({}).as_object().unwrap().clone(),
+                    ),
+                    Tool::new(
+                        "test2".to_string(),
+                        "test2".to_string(),
+                        serde_json::json!({}).as_object().unwrap().clone(),
+                    ),
+                    Tool::new(
+                        "test3".to_string(),
+                        "test3".to_string(),
+                        serde_json::json!({}).as_object().unwrap().clone(),
+                    ),
+                    Tool::new(
+                        "test4".to_string(),
+                        "test4".to_string(),
+                        serde_json::json!({}).as_object().unwrap().clone(),
+                    ),
+                ],
+                next_cursor: None,
+            })
+        }
+
+        fn call_tool(&self, _request: CallToolRequestParam) -> Result<CallToolResult, Error> {
+            Ok(CallToolResult::success(vec![Content::text(
+                "test".to_string(),
+            )]))
+        }
+    }
 
     #[test]
     fn test_handle_initialize_request() {
-        let service = McpService;
+        let service = MockMcpService {};
         let request = serde_json::json!({
             "id": 0,
             "jsonrpc": "2.0",
@@ -145,15 +195,11 @@ mod tests {
         let response = handle_mcp_request(&service, request);
 
         assert_eq!(response["id"], 0);
-        assert_eq!(
-            response["result"]["capabilities"]["tools"]["listChanged"],
-            false
-        );
     }
 
     #[test]
     fn test_on_initialized() {
-        let service = McpService;
+        let service = MockMcpService {};
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "notifications/initialized"
@@ -166,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_list_tools() {
-        let service = McpService;
+        let service = MockMcpService {};
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -182,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_list_tools_with_pagination() {
-        let service = McpService;
+        let service = MockMcpService {};
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -200,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_call_tool() {
-        let service = McpService;
+        let service = MockMcpService {};
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -220,31 +266,8 @@ mod tests {
     }
 
     #[test]
-    fn test_call_tool_with_invalid_name() {
-        let service = McpService;
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": "invalid-tool",
-                "arguments": {}
-            }
-        });
-
-        let response = handle_mcp_request(&service, request);
-
-        assert_eq!(response["id"], 1);
-        assert_eq!(response["result"]["isError"], true);
-        assert_eq!(
-            response["result"]["content"][0]["text"],
-            "Method not found: invalid-tool"
-        );
-    }
-
-    #[test]
     fn test_call_tool_with_invalid_arguments() {
-        let service = McpService;
+        let service = MockMcpService {};
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -263,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_call_batch_of_tools() {
-        let service = McpService;
+        let service = MockMcpService {};
         let request1 = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,

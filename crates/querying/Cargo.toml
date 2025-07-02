@@ -1,0 +1,12 @@
+[package]
+name = "querying"
+version = "0.3.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+database = { path = "../database" }
+workspace-manager = { path = "../workspace-manager" }
+
+[dev-dependencies]

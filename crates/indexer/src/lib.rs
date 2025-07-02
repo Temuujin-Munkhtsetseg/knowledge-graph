@@ -7,5 +7,7 @@ pub mod project;
 pub mod stats;
 pub mod writer;
 
+pub use database::*;
+
 #[cfg(test)]
 mod tests;
