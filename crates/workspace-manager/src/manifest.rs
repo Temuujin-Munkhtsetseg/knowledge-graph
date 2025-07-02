@@ -65,16 +65,14 @@ impl ProjectMetadata {
         self
     }
 
-    pub fn mark_indexed(mut self) -> Self {
-        self.status = Status::Indexed;
-        self.last_indexed_at = Some(Utc::now());
-        self.error_message = None;
-        self
-    }
-
-    pub fn mark_indexing(mut self) -> Self {
-        self.status = Status::Indexing;
-        self.error_message = None;
+    pub fn mark_status(mut self, status: Status, error_message: Option<String>) -> Self {
+        self.status = status.clone();
+        self.error_message = error_message;
+        if status == Status::Indexed {
+            self.last_indexed_at = Some(Utc::now());
+        } else {
+            self.last_indexed_at = None;
+        }
         self
     }
 }
@@ -306,10 +304,10 @@ mod tests {
         assert_eq!(project.status, Status::Pending);
         assert_eq!(project.project_hash, "test_hash");
 
-        project = project.mark_indexing();
+        project = project.mark_status(Status::Indexing, None);
         assert_eq!(project.status, Status::Indexing);
 
-        project = project.mark_indexed();
+        project = project.mark_status(Status::Indexed, None);
         assert_eq!(project.status, Status::Indexed);
         assert!(project.last_indexed_at.is_some());
 
@@ -359,7 +357,8 @@ mod tests {
         assert_eq!(workspace.last_indexed_at, Some(later)); // Still latest
 
         // Test 2: Add indexing project - should change workspace status
-        let project4 = ProjectMetadata::new("project4_hash".to_string()).mark_indexing();
+        let project4 =
+            ProjectMetadata::new("project4_hash".to_string()).mark_status(Status::Indexing, None);
         workspace.add_project("/path/to/project4".to_string(), project4);
         workspace.update_status_from_projects();
 
@@ -419,7 +418,8 @@ mod tests {
     fn test_workspace_folder_metadata() {
         let mut workspace = WorkspaceFolderMetadata::new("workspace_hash".to_string());
 
-        let project1 = ProjectMetadata::new("project1_hash".to_string()).mark_indexed();
+        let project1 =
+            ProjectMetadata::new("project1_hash".to_string()).mark_status(Status::Indexed, None);
         let project2 =
             ProjectMetadata::new("project2_hash".to_string()).with_error("Test error".to_string());
 

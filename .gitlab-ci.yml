@@ -14,7 +14,8 @@ frontend-build:
   before_script:
     - npm ci
   script:
-    - npm run build --workspace=frontend
+    - npm run build --workspace=@gitlab-org/gkg-frontend
+    - npm run build --workspace=@gitlab-org/gkg
   artifacts:
     paths:
       - packages/frontend/dist/

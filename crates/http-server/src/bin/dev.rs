@@ -1,4 +1,5 @@
 use anyhow::Result;
+use event_bus::EventBus;
 use http_server::{find_unused_port, run};
 use logging::{LogMode, init};
 use std::env;
@@ -17,6 +18,7 @@ async fn main() -> Result<()> {
     println!("🚀 Development server starting on port {port}");
 
     let workspace_manager = Arc::new(WorkspaceManager::new_system_default().unwrap());
+    let event_bus = Arc::new(EventBus::new());
 
-    run(port, workspace_manager).await
+    run(port, workspace_manager, event_bus).await
 }

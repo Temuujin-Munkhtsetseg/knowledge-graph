@@ -17,6 +17,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_embed::ServeEmbed;
+use event_bus::EventBus;
 use mcp::McpService;
 use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
@@ -28,13 +29,18 @@ use workspace_manager::WorkspaceManager;
 #[derive(Clone)]
 pub struct AppState {
     pub workspace_manager: Arc<WorkspaceManager>,
+    pub event_bus: Arc<EventBus>,
 }
 
 #[derive(Embed, Clone)]
 #[folder = "../../packages/frontend/dist"]
 struct Assets;
 
-pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<()> {
+pub async fn run(
+    port: u16,
+    workspace_manager: Arc<WorkspaceManager>,
+    event_bus: Arc<EventBus>,
+) -> Result<()> {
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
         |origin: &HeaderValue, _| {
             if let Ok(origin_str) = origin.to_str() {
@@ -51,7 +57,10 @@ pub async fn run(port: u16, workspace_manager: Arc<WorkspaceManager>) -> Result<
         .route("/batch", post(mcp_batch_handler))
         .with_state(Arc::new(McpService));
 
-    let state = AppState { workspace_manager };
+    let state = AppState {
+        workspace_manager,
+        event_bus,
+    };
     let serve_assets = ServeEmbed::<Assets>::new();
 
     let api_router = Router::new()

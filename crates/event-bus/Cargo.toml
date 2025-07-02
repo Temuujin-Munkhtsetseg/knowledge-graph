@@ -1,0 +1,13 @@
+[package]
+name = "event-bus"
+edition = "2024"
+version = "0.3.0"
+description = "Event bus for the GitLab Knowledge Graph"
+
+[dependencies]
+workspace-manager =  { path = "../workspace-manager" }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["sync", "rt"] }
+ts-rs = { workspace = true, features = ["chrono-impl"] }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }

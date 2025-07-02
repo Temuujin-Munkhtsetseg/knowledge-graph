@@ -22,14 +22,19 @@ kuzu = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
+tokio-util = "0.7.15"
+event-bus = { path = "../event-bus" }
+chrono = { workspace = true }
 
 [dev-dependencies]
-miette = "7.6.0"
+miette = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
-walkdir = "2.5.0"
-watchexec = "8.0.1"
-watchexec-events = "6.0.0"
-watchexec-filterer-ignore = "7.0.0"
-watchexec-signals = "5.0.0"
+walkdir = { workspace = true }
+watchexec = { workspace = true }
+watchexec-events = { workspace = true }
+watchexec-filterer-ignore = { workspace = true }
+watchexec-signals = { workspace = true }
+criterion = { workspace = true }
 

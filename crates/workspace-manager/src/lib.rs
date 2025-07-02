@@ -15,7 +15,7 @@
 //! ### Simple Usage with Factory Methods
 //!
 //! ```rust,no_run
-//! use workspace_manager::WorkspaceManager;
+//! use workspace_manager::{WorkspaceManager, Status};
 //! use std::path::Path;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,7 +37,8 @@
 //! // Get projects in the workspace and mark one as being indexed
 //! let workspace_projects = manager.list_projects_in_workspace(&workspace_info.workspace_folder_path);
 //! if let Some(project) = workspace_projects.first() {
-//!     manager.mark_project_indexing(&workspace_info.workspace_folder_path, &project.project_path)?;
+//!     let error_message = None;
+//!     manager.update_project_indexing_status(&workspace_info.workspace_folder_path, &project.project_path, Status::Indexing, error_message)?;
 //!
 //!     // Access Gitalisk repository for a project
 //!     let project_info = manager.get_project_info(&workspace_info.workspace_folder_path, &project.project_path)

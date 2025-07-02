@@ -5,7 +5,12 @@ use crate::endpoints::shared::StatusResponse;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
-use indexer::runner::run_client_indexer;
+use event_bus::{
+    EventBus,
+    types::workspace_folder::{TSWorkspaceFolderInfo, to_ts_workspace_folder_info},
+};
+use indexer::execution::{config::IndexingConfigBuilder, executor::IndexingExecutor};
+use num_cpus;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,26 +19,16 @@ use workspace_manager::WorkspaceFolderInfo;
 use workspace_manager::WorkspaceManager;
 
 #[derive(Deserialize, Serialize, TS, Default, Clone)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct WorkspaceIndexBodyRequest {
     pub workspace: String,
 }
 
 #[derive(Serialize, Deserialize, TS, Default)]
-#[ts(export, export_to = "api.ts")]
-pub struct WorkspaceIndexSuccessResponse {
-    pub workspace_folder_path: String,
-    pub data_directory_name: String,
-    pub status: String,
-    pub last_indexed_at: Option<String>,
-    pub project_count: usize,
-}
-
-#[derive(Serialize, Deserialize, TS, Default)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct WorkspaceIndexResponses {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ok: Option<WorkspaceIndexSuccessResponse>,
+    pub ok: Option<TSWorkspaceFolderInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bad_request: Option<StatusResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,20 +51,12 @@ define_endpoint! {
     "/workspace/index",
     ts_path_type = "\"/api/workspace/index\"",
     config = WorkspaceIndexEndpointConfig,
-    export_to = "api.ts"
+    export_to = "../../../packages/gkg/src/api.ts"
 }
 
 impl WorkspaceIndexEndpoint {
-    pub fn create_success_response(
-        workspace_info: &WorkspaceFolderInfo,
-    ) -> WorkspaceIndexSuccessResponse {
-        WorkspaceIndexSuccessResponse {
-            workspace_folder_path: workspace_info.workspace_folder_path.clone(),
-            data_directory_name: workspace_info.data_directory_name.clone(),
-            status: workspace_info.status.to_string(),
-            last_indexed_at: workspace_info.last_indexed_at.map(|dt| dt.to_rfc3339()),
-            project_count: workspace_info.project_count,
-        }
+    pub fn create_success_response(workspace_info: &WorkspaceFolderInfo) -> TSWorkspaceFolderInfo {
+        to_ts_workspace_folder_info(workspace_info)
     }
 
     pub fn create_error_response(status: String) -> StatusResponse {
@@ -138,7 +125,11 @@ pub async fn index_handler(
             .into_response();
     }
 
-    spawn_indexing_task(Arc::clone(&state.workspace_manager), payload.workspace);
+    spawn_indexing_task(
+        Arc::clone(&state.workspace_manager),
+        Arc::clone(&state.event_bus),
+        payload.workspace,
+    );
 
     (
         StatusCode::OK,
@@ -152,13 +143,18 @@ pub async fn index_handler(
         .into_response()
 }
 
-pub fn spawn_indexing_task(workspace_manager: Arc<WorkspaceManager>, workspace_path: String) {
+pub fn spawn_indexing_task(
+    workspace_manager: Arc<WorkspaceManager>,
+    event_bus: Arc<EventBus>,
+    workspace_path: String,
+) {
     tokio::spawn(async move {
         let workspace_path_buf = PathBuf::from(workspace_path.clone());
+        let threads = num_cpus::get();
+        let config = IndexingConfigBuilder::build(threads);
+        let mut executor = IndexingExecutor::new(workspace_manager, event_bus, config);
         let result = tokio::task::spawn_blocking(move || {
-            run_client_indexer(workspace_manager, workspace_path_buf, 0, |msg| {
-                tracing::info!("Indexing progress: {}", msg);
-            })
+            executor.execute_workspace_indexing(workspace_path_buf, None)
         })
         .await;
 
@@ -227,7 +223,11 @@ mod tests {
         let workspace_manager = Arc::new(
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
-        let state = crate::AppState { workspace_manager };
+        let event_bus = Arc::new(EventBus::new());
+        let state = crate::AppState {
+            workspace_manager,
+            event_bus,
+        };
         let app = Router::new()
             .route("/workspace/index", post(index_handler))
             .with_state(state);

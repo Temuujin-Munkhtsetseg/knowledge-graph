@@ -5,13 +5,13 @@ use serde::Serialize;
 use ts_rs::TS;
 
 #[derive(Serialize, TS, Default)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct ServerInfoResponse {
     pub port: u16,
 }
 
 #[derive(Serialize, TS, Default)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct InfoResponses {
     #[serde(rename = "200")]
     pub ok: ServerInfoResponse,
@@ -33,7 +33,7 @@ define_endpoint! {
     "/info",
     ts_path_type = "\"/api/info\"",
     config = InfoEndpointConfig,
-    export_to = "api.ts"
+    export_to = "../../../packages/gkg/src/api.ts"
 }
 
 /// Handler for the info endpoint

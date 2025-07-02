@@ -194,7 +194,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[derive(Serialize, Deserialize, TS, Clone, Debug, PartialEq)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub enum HttpMethod {
     #[serde(rename = "GET")]
     Get,
@@ -212,7 +212,7 @@ impl<T> ApiRequest for T where
 }
 
 #[derive(Serialize, Deserialize, TS, Default, Debug, Clone, PartialEq)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct EmptyRequest;
 
 pub trait ApiResponse: Serialize + TS + Default + Send + Sync + 'static {}
@@ -253,7 +253,7 @@ macro_rules! define_endpoint {
             $path,
             ts_path_type = $ts_path_type,
             config = $config_type,
-            export_to = "api.ts"
+            export_to = "../../../packages/gkg/src/api.ts"
         }
     };
     (

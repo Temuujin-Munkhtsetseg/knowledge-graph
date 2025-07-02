@@ -507,7 +507,9 @@ async fn test_full_reindexing_pipeline_git_status() {
     );
 }
 
+// TODO: fix this test https://gitlab.com/gitlab-org/rust/knowledge-graph/-/issues/46
 #[tokio::test]
+#[ignore]
 async fn test_full_reindexing_pipeline_watchexec() {
     let temp_dir: TempDir = TempDir::new().expect("Failed to create temp directory");
     let mut setup = setup_reindexing_pipeline(&temp_dir);

@@ -16,9 +16,14 @@ echo "📝 Updating version to: $NEW_VERSION"
 # Update workspace packages using npm version with workspace flags
 echo "📦 Updating npm workspace packages..."
 
-echo "📦 Updating @gitlab-org/frontend..."
-npm version "$NEW_VERSION" --workspace=@gitlab-org/frontend --git-tag-version=false
-echo "✅ Updated @gitlab-org/frontend to version $NEW_VERSION"
+echo "📦 Updating @gitlab-org/gkg-frontend..."
+npm version "$NEW_VERSION" --workspace=@gitlab-org/gkg-frontend --git-tag-version=false
+echo "✅ Updated @gitlab-org/gkg-frontend to version $NEW_VERSION"
+
+# Update @gitlab-org/gkg
+echo "📦 Updating @gitlab-org/gkg..."
+npm version "$NEW_VERSION" --workspace=@gitlab-org/gkg --git-tag-version=false
+echo "✅ Updated @gitlab-org/gkg to version $NEW_VERSION"
 
 # Update the VERSION file
 echo "$NEW_VERSION" > VERSION
@@ -93,6 +98,15 @@ if [ -f "Cargo.toml" ]; then
         sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/logging/Cargo.toml"
         rm -f "crates/logging/Cargo.toml.bak"
         echo "✅ Updated logging to version $NEW_VERSION"
+    fi
+
+    # Update event-bus
+
+    if [ -f "crates/event-bus/Cargo.toml" ]; then
+        echo "📦 Updating event-bus version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/event-bus/Cargo.toml"
+        rm -f "crates/event-bus/Cargo.toml.bak"
+        echo "✅ Updated event-bus to version $NEW_VERSION"
     fi
 
     # Update Cargo.lock with new workspace versions
