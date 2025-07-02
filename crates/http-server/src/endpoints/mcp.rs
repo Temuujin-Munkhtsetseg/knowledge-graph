@@ -12,15 +12,15 @@ use mcp::{
 };
 
 pub async fn mcp_handler(
-    State(mcp_service): State<Arc<McpService>>,
+    State(mcp_service): State<Arc<dyn McpService>>,
     Json(payload): Json<Value>,
 ) -> Json<Value> {
-    Json(handle_mcp_request(&mcp_service, payload))
+    Json(handle_mcp_request(&*mcp_service, payload))
 }
 
 pub async fn mcp_batch_handler(
-    State(mcp_service): State<Arc<McpService>>,
+    State(mcp_service): State<Arc<dyn McpService>>,
     Json(requests): Json<Vec<Value>>,
 ) -> Json<Vec<Value>> {
-    Json(handle_mcp_batch(requests, &mcp_service))
+    Json(handle_mcp_batch(requests, &*mcp_service))
 }

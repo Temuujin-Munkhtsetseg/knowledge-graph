@@ -25,6 +25,8 @@ tower = { workspace = true }
 tower-http = { workspace = true, features = ["cors"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
+querying = { path = "../querying" }
+database = { path = "../database" }
 ts-rs = { workspace = true, features = ["chrono-impl"] }
 event-bus = { path = "../event-bus" }
 num_cpus = { workspace = true }

@@ -109,6 +109,22 @@ if [ -f "Cargo.toml" ]; then
         echo "✅ Updated event-bus to version $NEW_VERSION"
     fi
 
+    # Update querying
+    if [ -f "crates/querying/Cargo.toml" ]; then
+        echo "📦 Updating querying version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/querying/Cargo.toml"
+        rm -f "crates/querying/Cargo.toml.bak"
+        echo "✅ Updated querying to version $NEW_VERSION"
+    fi
+
+    # Update database
+    if [ -f "crates/database/Cargo.toml" ]; then
+        echo "📦 Updating database version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/database/Cargo.toml"
+        rm -f "crates/database/Cargo.toml.bak"
+        echo "✅ Updated database to version $NEW_VERSION"
+    fi
+
     # Update Cargo.lock with new workspace versions
     echo "🔄 Updating Cargo.lock..."
     cargo update --workspace
