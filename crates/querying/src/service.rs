@@ -1,17 +1,18 @@
+use crate::{QueryResult, QueryingService};
 use anyhow::{Error, Result};
-use database::{DatabaseConnection, DatabaseResult};
+use database::DatabaseConnection;
 use serde_json::Map;
 use std::sync::Arc;
 use workspace_manager::WorkspaceManager;
 
-pub struct QueryingService {
+pub struct DefaultQueryingService {
     connection: Box<dyn DatabaseConnection>,
     workspace_manager: Arc<WorkspaceManager>,
 }
 
 // This service should only be used for uncontrolled query execution (e.g., MCP, Playground, API endpoints).
 // For controlled query execution with strict typing for arguments and return types, a proper service should be created instead.
-impl QueryingService {
+impl DefaultQueryingService {
     pub fn new(
         connection: Box<dyn DatabaseConnection>,
         workspace_manager: Arc<WorkspaceManager>,
@@ -21,13 +22,15 @@ impl QueryingService {
             workspace_manager,
         }
     }
+}
 
-    pub fn execute_query(
+impl QueryingService for DefaultQueryingService {
+    fn execute_query(
         &self,
         project_path: &str,
         query: &str,
         params: Map<String, serde_json::Value>,
-    ) -> Result<Box<dyn DatabaseResult>, Error> {
+    ) -> Result<QueryResult, Error> {
         let project = self.workspace_manager.get_project_for_path(project_path);
 
         if project.is_none() {
