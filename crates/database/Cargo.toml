@@ -1,0 +1,16 @@
+[package]
+name = "database"
+version = "0.3.0"
+edition = "2024"
+
+[dependencies]
+kuzu = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+# TODO: remove this once we have a proper database crate.
+indexer = { path = "../indexer" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
