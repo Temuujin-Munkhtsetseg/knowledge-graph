@@ -459,53 +459,16 @@ impl WorkspaceManager {
         project_infos
     }
 
-    pub fn mark_project_indexing(
+    pub fn update_project_indexing_status(
         &self,
         workspace_folder_path: &str,
         project_path: &str,
+        status: Status,
+        status_error_message: Option<String>,
     ) -> Result<ProjectInfo> {
         self.state_service
             .update_project(workspace_folder_path, project_path, |project| {
-                *project = project.clone().mark_indexing();
-            })?;
-
-        self.get_project_info(workspace_folder_path, project_path)
-            .ok_or_else(|| {
-                WorkspaceManagerError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Project not found",
-                ))
-            })
-    }
-
-    pub fn mark_project_indexed(
-        &self,
-        workspace_folder_path: &str,
-        project_path: &str,
-    ) -> Result<ProjectInfo> {
-        self.state_service
-            .update_project(workspace_folder_path, project_path, |project| {
-                *project = project.clone().mark_indexed();
-            })?;
-
-        self.get_project_info(workspace_folder_path, project_path)
-            .ok_or_else(|| {
-                WorkspaceManagerError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Project not found",
-                ))
-            })
-    }
-
-    pub fn mark_project_error(
-        &self,
-        workspace_folder_path: &str,
-        project_path: &str,
-        error_message: String,
-    ) -> Result<ProjectInfo> {
-        self.state_service
-            .update_project(workspace_folder_path, project_path, |project| {
-                *project = project.clone().with_error(error_message);
+                *project = project.clone().mark_status(status, status_error_message);
             })?;
 
         self.get_project_info(workspace_folder_path, project_path)
@@ -569,7 +532,7 @@ impl WorkspaceManager {
             .state_service
             .remove_project(workspace_folder_path, project_path)?;
 
-        self.update_workspace_folder_status(workspace_folder_path)?;
+        self.update_workspace_folder_status(workspace_folder_path, None)?;
 
         if removed.is_some() {
             info!("Removed project: {project_path} from workspace: {workspace_folder_path}");
@@ -582,10 +545,15 @@ impl WorkspaceManager {
     pub fn update_workspace_folder_status(
         &self,
         workspace_folder_path: &str,
+        status: Option<Status>,
     ) -> Result<WorkspaceFolderInfo> {
         self.state_service
             .update_workspace_folder(workspace_folder_path, |workspace_folder| {
-                workspace_folder.update_status_from_projects();
+                if let Some(status) = status {
+                    workspace_folder.status = status;
+                } else {
+                    workspace_folder.update_status_from_projects();
+                }
             })?;
 
         self.get_workspace_folder_info(workspace_folder_path)
@@ -772,7 +740,12 @@ mod tests {
         assert_eq!(project_info.as_ref().unwrap().status, Status::Pending);
 
         let updated_project = manager
-            .mark_project_indexing(&workspace_folder_path_str, &project_path_str)
+            .update_project_indexing_status(
+                &workspace_folder_path_str,
+                &project_path_str,
+                Status::Indexing,
+                None,
+            )
             .unwrap();
         assert_eq!(updated_project.status, Status::Indexing);
 
@@ -782,7 +755,12 @@ mod tests {
         assert_eq!(project_info.status, Status::Indexing);
 
         let updated_project = manager
-            .mark_project_indexed(&workspace_folder_path_str, &project_path_str)
+            .update_project_indexing_status(
+                &workspace_folder_path_str,
+                &project_path_str,
+                Status::Indexed,
+                None,
+            )
             .unwrap();
         assert_eq!(updated_project.status, Status::Indexed);
 
@@ -793,10 +771,11 @@ mod tests {
         assert!(project_info.last_indexed_at.is_some());
 
         let updated_project = manager
-            .mark_project_error(
+            .update_project_indexing_status(
                 &workspace_folder_path_str,
                 &project_path_str,
-                "Test error".to_string(),
+                Status::Error,
+                Some("Test error".to_string()),
             )
             .unwrap();
         assert_eq!(updated_project.status, Status::Error);
@@ -920,8 +899,12 @@ mod tests {
                         }
                         1 => {
                             // Status updates
-                            let _ =
-                                manager_clone.mark_project_indexing(&workspace_path, &project_path);
+                            let _ = manager_clone.update_project_indexing_status(
+                                &workspace_path,
+                                &project_path,
+                                Status::Indexing,
+                                None,
+                            );
                         }
                         2 => {
                             // Repository access
@@ -1013,7 +996,12 @@ mod tests {
 
         // Mark first project as indexing
         manager
-            .mark_project_indexing(&workspace_path, &project_paths[0])
+            .update_project_indexing_status(
+                &workspace_path,
+                &project_paths[0],
+                Status::Indexing,
+                None,
+            )
             .unwrap();
 
         let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
@@ -1022,7 +1010,12 @@ mod tests {
 
         // Mark first project as indexed
         manager
-            .mark_project_indexed(&workspace_path, &project_paths[0])
+            .update_project_indexing_status(
+                &workspace_path,
+                &project_paths[0],
+                Status::Indexed,
+                None,
+            )
             .unwrap();
 
         let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
@@ -1031,7 +1024,12 @@ mod tests {
 
         // Mark second project as indexed
         manager
-            .mark_project_indexed(&workspace_path, &project_paths[1])
+            .update_project_indexing_status(
+                &workspace_path,
+                &project_paths[1],
+                Status::Indexed,
+                None,
+            )
             .unwrap();
 
         let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();
@@ -1040,7 +1038,12 @@ mod tests {
 
         // Mark one project as error
         manager
-            .mark_project_error(&workspace_path, &project_paths[0], "Test error".to_string())
+            .update_project_indexing_status(
+                &workspace_path,
+                &project_paths[0],
+                Status::Error,
+                Some("Test error".to_string()),
+            )
             .unwrap();
 
         let workspace_info = manager.get_workspace_folder_info(&workspace_path).unwrap();

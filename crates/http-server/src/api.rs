@@ -3,7 +3,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 #[derive(Default)]
 pub struct ApiContract {
     pub info: InfoEndpointDef,

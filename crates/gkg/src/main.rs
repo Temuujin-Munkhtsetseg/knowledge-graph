@@ -2,8 +2,10 @@ mod cli;
 
 use crate::cli::{Commands, GkgCli};
 use anyhow::Result;
+use event_bus::EventBus;
 use home::home_dir;
-use indexer::runner::run_client_indexer;
+use indexer::execution::config::IndexingConfigBuilder;
+use indexer::execution::executor::IndexingExecutor;
 use logging::LogMode;
 use mcp::configuration::add_local_http_server_to_mcp_config;
 use serde::{Deserialize, Serialize};
@@ -80,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
     let _guard = logging::init(mode, verbose)?;
 
     let workspace_manager = Arc::new(WorkspaceManager::new_system_default()?);
+    let event_bus = Arc::new(EventBus::new());
 
     match cli.command {
         Commands::Index {
@@ -93,12 +96,19 @@ async fn main() -> anyhow::Result<()> {
                 );
                 process::exit(1);
             }
-            run_client_indexer(
-                Arc::clone(&workspace_manager),
-                workspace_path,
-                threads,
-                |msg| println!("{msg}"),
-            )
+
+            let mut rx = event_bus.subscribe();
+            tokio::spawn(async move {
+                while let Ok(event) = rx.recv().await {
+                    // TODO: Add a CLI frontend consumer for this.
+                    println!("[EVENT] {event:?}");
+                }
+            });
+
+            let config = IndexingConfigBuilder::build(threads);
+            let mut executor = IndexingExecutor::new(workspace_manager, event_bus, config);
+
+            executor.execute_workspace_indexing(workspace_path, None)
         }
         Commands::Server { register_mcp } => {
             let instance = SingleInstance::new(GKG_HTTP_SERVER)?;
@@ -122,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
                     process::exit(0);
                 })?;
 
-                http_server::run(port, Arc::clone(&workspace_manager)).await
+                http_server::run(port, Arc::clone(&workspace_manager), Arc::clone(&event_bus)).await
             } else if let Some(port) = is_server_running()? {
                 if let Some(mcp_config_path) = register_mcp {
                     add_local_http_server_to_mcp_config(mcp_config_path, port)?;

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-manager", "crates/http-server", "crates/mcp", "crates/logging"]
+members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-manager", "crates/http-server", "crates/mcp", "crates/logging", "crates/event-bus"]
 resolver = "2"
 
 [workspace.package]
@@ -53,6 +53,15 @@ ts-rs = "11.0.1"
 tracing-appender = "0.2.3"
 file-rotate = "0.8.0"
 rmcp = { version = "0.1", features = ["server"] }
+dashmap = "6.1.0"
+tokio-util = "0.7.15"
+miette = "7.6.0"
+walkdir = "2.5.0"
+watchexec = "8.0.1"
+watchexec-events = "6.0.0"
+watchexec-filterer-ignore = "7.0.0"
+watchexec-signals = "5.0.0"
+criterion = "0.6.0"
 
 # Test dependencies
 axum-test = "17.3.0"
