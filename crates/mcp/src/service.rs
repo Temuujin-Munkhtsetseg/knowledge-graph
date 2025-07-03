@@ -1,5 +1,5 @@
 use crate::tools::AvailableToolsService;
-use querying::QueryingService;
+use database::querying::types::QueryingService;
 use rmcp::model::{
     Implementation, InitializeRequest, InitializeResult, ServerCapabilities, ToolsCapability,
 };

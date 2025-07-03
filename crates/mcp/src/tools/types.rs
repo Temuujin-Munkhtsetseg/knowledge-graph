@@ -1,5 +1,5 @@
 use anyhow::Error;
-use querying::QueryParameterKind;
+use database::querying::QueryParameterKind;
 use rmcp::model::CallToolResult;
 use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;

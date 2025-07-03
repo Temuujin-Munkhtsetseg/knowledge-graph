@@ -1,5 +1,5 @@
 use crate::tools::types::{KnowledgeGraphTool, ToolParameter, ToolParameterKind};
-use querying::{Query, QueryParameter, QueryingService};
+use database::querying::{Query, QueryParameter, QueryingService};
 use rmcp::model::{CallToolResult, Content, JsonObject, Tool};
 use serde_json;
 use std::borrow::Cow;
@@ -158,7 +158,10 @@ fn extract_parameters(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use querying::{Query, QueryParameter, QueryParameterKind, testing::MockQueryingService};
+    use database::{
+        querying::library::{Query, QueryParameter, QueryParameterKind},
+        querying::testing::MockQueryingService,
+    };
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;

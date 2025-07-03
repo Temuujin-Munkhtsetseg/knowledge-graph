@@ -1,6 +1,5 @@
-use crate::{QueryResult, QueryingService};
+use crate::{querying::QueryResult, querying::QueryResultRow, querying::QueryingService};
 use anyhow::{Error, anyhow};
-use database::testing::MockDatabaseResult;
 use serde_json::{Map, Value};
 
 pub struct MockQueryingService {
@@ -60,7 +59,7 @@ impl QueryingService for MockQueryingService {
         project_path: &str,
         query: &str,
         params: Map<String, Value>,
-    ) -> Result<QueryResult, Error> {
+    ) -> Result<Box<dyn QueryResult>, Error> {
         if self.should_fail {
             return Err(anyhow!("Mock query service failure"));
         }
@@ -76,9 +75,55 @@ impl QueryingService for MockQueryingService {
             assert_eq!(&params, expected_params, "Parameters mismatch");
         }
 
-        Ok(Box::new(MockDatabaseResult::new(
+        Ok(Box::new(MockQueryResult::new(
             self.column_names.clone(),
             self.return_data.clone(),
         )))
+    }
+}
+
+pub struct MockQueryResultRow {
+    pub values: Vec<String>,
+}
+
+impl QueryResultRow for MockQueryResultRow {
+    fn get_string_value(&self, index: usize) -> Result<String, Error> {
+        self.values
+            .get(index)
+            .cloned()
+            .ok_or_else(|| anyhow!("Index {} out of bounds", index))
+    }
+
+    fn count(&self) -> usize {
+        self.values.len()
+    }
+}
+
+pub struct MockQueryResult {
+    pub column_names: Vec<String>,
+    pub rows: std::vec::IntoIter<Box<dyn QueryResultRow>>,
+}
+
+impl MockQueryResult {
+    pub fn new(column_names: Vec<String>, data: Vec<Vec<String>>) -> Self {
+        let rows: Vec<Box<dyn QueryResultRow>> = data
+            .into_iter()
+            .map(|values| Box::new(MockQueryResultRow { values }) as Box<dyn QueryResultRow>)
+            .collect();
+
+        Self {
+            column_names,
+            rows: rows.into_iter(),
+        }
+    }
+}
+
+impl QueryResult for MockQueryResult {
+    fn get_column_names(&self) -> &Vec<String> {
+        &self.column_names
+    }
+
+    fn next(&mut self) -> Option<Box<dyn QueryResultRow>> {
+        self.rows.next()
     }
 }
