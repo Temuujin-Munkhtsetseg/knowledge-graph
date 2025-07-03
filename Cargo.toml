@@ -3,7 +3,7 @@ members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-man
 resolver = "2"
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 license = "MIT"
 authors = ["GitLab Inc."]
 description = "A framework to create a structured, queryable graph database from code repositories to power AI features and enhance developer productivity."

@@ -1,3 +1,20 @@
+## [0.4.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.3.0...v0.4.0) (2025-07-03)
+
+### :sparkles: Features
+
+* **ci:** use prebuilt docker images ([22913bf](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/22913bfad6e2b1bca2fa2bba5da45a5a7c422fd5)) by Bohdan Parkhomchuk
+* **http-server:** events endpoint ([877f03a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/877f03aa69e1074c91837b4dd644f7220c672c19)) by Michael Angelo Rivera
+* **http-server:** serve assets ([c526260](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c52626096b4cc855159d04fc32a4f15ccb9dcf02)) by Michael Angelo Rivera
+* **http-server:** workspace list endpoint ([ec9e730](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ec9e73097bcd066738910f0da8a065122fe962dc)) by Michael Angelo Rivera
+* **indexer, http-server, cli:** introduce event bus ([4af98fc](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4af98fcd0cc35c39f34ac7c2450e8161ca418783)) by Michael Angelo Rivera
+* **indexer:** incremental re-indexing for repositories mvp ([041e3c1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/041e3c1a3a3df472fe8ee1ec177e327be69473d1)) by Michael Usachenko
+* **mcp:** layout extensible tools architecture ([95b8b58](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/95b8b5844d328c7d276dae9c66ce7a4afb6b187d)) by Jean-Gabriel Doyon
+* **querying:** create multi-purpose querying service ([0a085aa](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/0a085aab69576ddb412a01c73218c1a59bd941e7)) by Jean-Gabriel Doyon
+
+### :repeat: Chore
+
+* **deps:** bump gitalisk to 0.3.0, gitlab-code-parser to 0.5.0 ([4003cca](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4003ccaeee52f4eae8c3e85725aa80751a58e606)) by Michael Usachenko
+
 ## [0.3.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.2.0...v0.3.0) (2025-06-30)
 
 ### :sparkles: Features
