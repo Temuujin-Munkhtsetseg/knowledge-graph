@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::tools::query_tools::QueryKnowledgeGraphTool;
 use crate::tools::types::KnowledgeGraphTool;
-use querying::{Query, QueryLibrary, QueryingService};
+use database::querying::{Query, QueryLibrary, QueryingService};
 use rmcp::model::CallToolResult;
 use rmcp::model::JsonObject;
 use rmcp::model::Tool;

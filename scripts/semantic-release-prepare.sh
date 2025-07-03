@@ -101,20 +101,11 @@ if [ -f "Cargo.toml" ]; then
     fi
 
     # Update event-bus
-
     if [ -f "crates/event-bus/Cargo.toml" ]; then
         echo "📦 Updating event-bus version..."
         sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/event-bus/Cargo.toml"
         rm -f "crates/event-bus/Cargo.toml.bak"
         echo "✅ Updated event-bus to version $NEW_VERSION"
-    fi
-
-    # Update querying
-    if [ -f "crates/querying/Cargo.toml" ]; then
-        echo "📦 Updating querying version..."
-        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/querying/Cargo.toml"
-        rm -f "crates/querying/Cargo.toml.bak"
-        echo "✅ Updated querying to version $NEW_VERSION"
     fi
 
     # Update database

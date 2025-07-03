@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-manager", "crates/http-server", "crates/mcp", "crates/logging", "crates/querying", "crates/database", "crates/event-bus"]
+members = ["crates/indexer", "crates/gkg", "crates/xtask", "crates/workspace-manager", "crates/http-server", "crates/mcp", "crates/logging", "crates/database", "crates/event-bus"]
 resolver = "2"
 
 [workspace.package]

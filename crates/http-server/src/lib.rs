@@ -21,10 +21,10 @@ use axum::{
     routing::{get, post},
 };
 use axum_embed::ServeEmbed;
-use database::kuzu::connection::KuzuDatabaseConnection;
+use database::kuzu::database::KuzuDatabase;
+use database::querying::service::DatabaseQueryingService;
 use event_bus::EventBus;
 use mcp::DefaultMcpService;
-use querying::service::DefaultQueryingService;
 use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
@@ -59,9 +59,9 @@ pub async fn run(
         },
     ));
 
-    let database_connection = Box::new(KuzuDatabaseConnection::new());
-    let query_service = Arc::new(DefaultQueryingService::new(
-        database_connection,
+    let database = KuzuDatabase::new();
+    let query_service = Arc::new(DatabaseQueryingService::new(
+        database,
         workspace_manager.clone(),
     ));
 

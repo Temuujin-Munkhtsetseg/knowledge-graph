@@ -9,7 +9,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 rmcp = { workspace = true, features = ["server"] }
 tracing = { workspace = true }
-querying = { path = "../querying" }
+database = { path = "../database" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

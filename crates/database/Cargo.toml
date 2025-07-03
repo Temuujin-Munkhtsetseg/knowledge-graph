@@ -11,6 +11,7 @@ serde = { workspace = true }
 tracing = { workspace = true }
 # TODO: remove this once we have a proper database crate.
 indexer = { path = "../indexer" }
+workspace-manager = { path = "../workspace-manager" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
