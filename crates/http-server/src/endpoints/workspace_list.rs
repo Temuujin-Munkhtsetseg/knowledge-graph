@@ -131,9 +131,14 @@ mod tests {
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
         let event_bus = Arc::new(EventBus::new());
+        let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
+            workspace_manager.clone(),
+            event_bus.clone(),
+        ));
         let state = AppState {
             workspace_manager,
             event_bus,
+            job_dispatcher,
         };
         let app = Router::new()
             .route("/workspace/list", get(workspace_list_handler))
@@ -163,9 +168,14 @@ mod tests {
             .register_workspace_folder(temp_workspace2.path())
             .unwrap();
 
+        let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
+            workspace_manager.clone(),
+            event_bus.clone(),
+        ));
         let state = AppState {
             workspace_manager: Arc::clone(&workspace_manager),
             event_bus,
+            job_dispatcher,
         };
         let app = Router::new()
             .route("/workspace/list", get(workspace_list_handler))

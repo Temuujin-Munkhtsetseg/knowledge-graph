@@ -12,6 +12,26 @@ export type InfoEndpointDef = { method: HttpMethod, path: "/api/info", path_requ
 
 export type InfoResponses = { "200": ServerInfoResponse, };
 
+/**
+ * Job types that can be processed by the queue system.
+ *
+ * Each job variant represents a different type of work that can be performed.
+ * Jobs are routed to workspace-specific queues for sequential processing.
+ */
+export type Job = { "type": "IndexWorkspaceFolder", "data": { workspace_folder_path: string, priority: JobPriority, } };
+
+export type JobInfo = { id: string, job: Job, created_at: string, started_at: string | null, completed_at: string | null, status: JobStatus, error: string | null, };
+
+/**
+ * Priority levels for job processing.
+ *
+ * Higher priority jobs can cancel existing lower priority jobs for the same workspace.
+ * This ensures user-triggered or high-priority operations take precedence over background tasks.
+ */
+export type JobPriority = "Low" | "Normal" | "High";
+
+export type JobStatus = "Pending" | "Running" | "Completed" | "Failed" | "Cancelled";
+
 export type ServerInfoResponse = { port: number, };
 
 export type StatusResponse = { status: string, };

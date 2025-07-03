@@ -1,6 +1,7 @@
 pub mod api;
 pub mod contract;
 pub mod endpoints;
+pub mod queue;
 
 use crate::{
     contract::EndpointContract,
@@ -11,6 +12,7 @@ use crate::{
         workspace_index::{WorkspaceIndexEndpoint, index_handler},
         workspace_list::{WorkspaceListEndpoint, workspace_list_handler},
     },
+    queue::dispatch::JobDispatcher,
 };
 use anyhow::Result;
 use axum::http::HeaderValue;
@@ -34,6 +36,7 @@ use workspace_manager::WorkspaceManager;
 pub struct AppState {
     pub workspace_manager: Arc<WorkspaceManager>,
     pub event_bus: Arc<EventBus>,
+    pub job_dispatcher: Arc<JobDispatcher>,
 }
 
 #[derive(Embed, Clone)]
@@ -67,9 +70,15 @@ pub async fn run(
         .route("/batch", post(mcp_batch_handler))
         .with_state(Arc::new(DefaultMcpService::new(query_service)));
 
+    let job_dispatcher = Arc::new(JobDispatcher::new(
+        workspace_manager.clone(),
+        event_bus.clone(),
+    ));
+
     let state = AppState {
         workspace_manager,
         event_bus,
+        job_dispatcher,
     };
     let serve_assets = ServeEmbed::<Assets>::new();
 
