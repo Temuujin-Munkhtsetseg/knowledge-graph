@@ -13,3 +13,4 @@ database = { path = "../database" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+database = { path = "../database", features = ["test-utils"] }
