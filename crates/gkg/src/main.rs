@@ -2,6 +2,7 @@ mod cli;
 
 use crate::cli::{Commands, GkgCli};
 use anyhow::Result;
+use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use home::home_dir;
 use indexer::execution::config::IndexingConfigBuilder;
@@ -83,6 +84,7 @@ async fn main() -> anyhow::Result<()> {
 
     let workspace_manager = Arc::new(WorkspaceManager::new_system_default()?);
     let event_bus = Arc::new(EventBus::new());
+    let database = Arc::new(KuzuDatabase::new());
 
     match cli.command {
         Commands::Index {
@@ -106,7 +108,8 @@ async fn main() -> anyhow::Result<()> {
             });
 
             let config = IndexingConfigBuilder::build(threads);
-            let mut executor = IndexingExecutor::new(workspace_manager, event_bus, config);
+            let mut executor =
+                IndexingExecutor::new(database, workspace_manager, event_bus, config);
 
             executor.execute_workspace_indexing(workspace_path, None)
         }
@@ -132,7 +135,13 @@ async fn main() -> anyhow::Result<()> {
                     process::exit(0);
                 })?;
 
-                http_server::run(port, Arc::clone(&workspace_manager), Arc::clone(&event_bus)).await
+                http_server::run(
+                    port,
+                    Arc::clone(&database),
+                    Arc::clone(&workspace_manager),
+                    Arc::clone(&event_bus),
+                )
+                .await
             } else if let Some(port) = is_server_running()? {
                 if let Some(mcp_config_path) = register_mcp {
                     add_local_http_server_to_mcp_config(mcp_config_path, port)?;

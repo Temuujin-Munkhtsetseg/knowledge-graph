@@ -1,4 +1,4 @@
-use crate::database::{DatabaseError, DbResult, KuzuConnection};
+use crate::kuzu::{connection::KuzuConnection, types::DatabaseError};
 use tracing::{info, warn};
 
 /// Represents a Kuzu node table definition
@@ -84,10 +84,9 @@ impl SchemaManager {
     }
 
     /// Initialize the complete schema for the knowledge graph
-    pub fn initialize_schema(&self, connection: &KuzuConnection) -> DbResult<()> {
+    pub fn initialize_schema(&self, connection: &KuzuConnection) -> Result<(), DatabaseError> {
         info!("Initializing knowledge graph schema...");
 
-        // Check if schema already exists
         if self.schema_exists(connection)? {
             info!("Schema already exists, skipping creation");
             return Ok(());
@@ -104,7 +103,7 @@ impl SchemaManager {
     }
 
     /// Check if the schema already exists by looking for key tables
-    fn schema_exists(&self, connection: &KuzuConnection) -> DbResult<bool> {
+    fn schema_exists(&self, connection: &KuzuConnection) -> Result<bool, DatabaseError> {
         let required_tables = vec!["DirectoryNode", "FileNode", "DefinitionNode"];
 
         for table in required_tables {
@@ -117,7 +116,7 @@ impl SchemaManager {
     }
 
     /// Create all node tables
-    fn create_node_tables(&self, connection: &KuzuConnection) -> DbResult<()> {
+    fn create_node_tables(&self, connection: &KuzuConnection) -> Result<(), DatabaseError> {
         info!("Creating node tables...");
 
         // Directory nodes
@@ -259,7 +258,7 @@ impl SchemaManager {
     }
 
     /// Create all relationship tables with consolidated schema
-    fn create_relationship_tables(&self, connection: &KuzuConnection) -> DbResult<()> {
+    fn create_relationship_tables(&self, connection: &KuzuConnection) -> Result<(), DatabaseError> {
         info!("Creating consolidated relationship tables...");
 
         // Directory relationships (DIR_CONTAINS_DIR + DIR_CONTAINS_FILE)
@@ -316,7 +315,11 @@ impl SchemaManager {
     }
 
     /// Create a single node table
-    fn create_node_table(&self, connection: &KuzuConnection, table: &NodeTable) -> DbResult<()> {
+    fn create_node_table(
+        &self,
+        connection: &KuzuConnection,
+        table: &NodeTable,
+    ) -> Result<(), DatabaseError> {
         let columns_str = table
             .columns
             .iter()
@@ -347,7 +350,7 @@ impl SchemaManager {
         &self,
         connection: &KuzuConnection,
         table: &RelationshipTable,
-    ) -> DbResult<()> {
+    ) -> Result<(), DatabaseError> {
         let mut query = format!("CREATE REL TABLE IF NOT EXISTS {} (", table.name);
 
         // Handle multiple FROM-TO pairs if specified
@@ -393,7 +396,7 @@ impl SchemaManager {
         connection: &KuzuConnection,
         parquet_dir: &str,
         mode: SchemaManagerImportMode,
-    ) -> DbResult<()> {
+    ) -> Result<(), DatabaseError> {
         info!(
             "Importing graph data from Parquet files in: {}",
             parquet_dir
@@ -428,7 +431,11 @@ impl SchemaManager {
     }
 
     /// Import node data from Parquet files
-    fn import_nodes(&self, connection: &KuzuConnection, parquet_dir: &str) -> DbResult<()> {
+    fn import_nodes(
+        &self,
+        connection: &KuzuConnection,
+        parquet_dir: &str,
+    ) -> Result<(), DatabaseError> {
         let node_files = vec![
             ("DirectoryNode", "directories.parquet"),
             ("FileNode", "files.parquet"),
@@ -457,7 +464,7 @@ impl SchemaManager {
         connection: &KuzuConnection,
         parquet_dir: &str,
         mode: SchemaManagerImportMode,
-    ) -> DbResult<()> {
+    ) -> Result<(), DatabaseError> {
         // Import directory-to-directory relationships
         let dir_to_dir_file =
             std::path::Path::new(parquet_dir).join("directory_to_directory_relationships.parquet");
@@ -551,7 +558,10 @@ impl SchemaManager {
     }
 
     /// Get schema statistics
-    pub fn get_schema_stats(&self, connection: &KuzuConnection) -> DbResult<SchemaStats> {
+    pub fn get_schema_stats(
+        &self,
+        connection: KuzuConnection,
+    ) -> Result<SchemaStats, DatabaseError> {
         let db_stats = connection.get_database_stats()?;
         let table_names = connection.get_table_names()?;
 
@@ -563,26 +573,6 @@ impl SchemaManager {
             total_relationships: db_stats.total_relationships,
             table_names,
         })
-    }
-
-    /// Run a custom query for analysis
-    pub fn query<'a>(
-        &self,
-        connection: &'a KuzuConnection<'a>,
-        query: &str,
-    ) -> DbResult<kuzu::QueryResult<'a>> {
-        connection.query(query)
-    }
-
-    /// Execute a parameterized query
-    pub fn execute_query<'a>(
-        &self,
-        connection: &'a KuzuConnection<'a>,
-        query: &str,
-        params: Vec<(&str, kuzu::Value)>,
-    ) -> DbResult<kuzu::QueryResult<'a>> {
-        let mut prepared = connection.prepare(query)?;
-        connection.execute(&mut prepared, params)
     }
 }
 

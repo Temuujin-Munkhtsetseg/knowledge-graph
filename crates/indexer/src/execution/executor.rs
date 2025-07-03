@@ -2,6 +2,7 @@ use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::project::source::GitaliskFileSource;
 use anyhow::Result;
 use chrono::Utc;
+use database::kuzu::database::KuzuDatabase;
 use event_bus::types::project_info::to_ts_project_info;
 use event_bus::types::workspace_folder::to_ts_workspace_folder_info;
 use event_bus::{
@@ -16,6 +17,7 @@ use tracing::error;
 use workspace_manager::{Status, WorkspaceManager};
 
 pub struct IndexingExecutor {
+    database: Arc<KuzuDatabase>,
     event_bus: Arc<EventBus>,
     workspace_manager: Arc<WorkspaceManager>,
     config: IndexingConfig,
@@ -23,11 +25,13 @@ pub struct IndexingExecutor {
 
 impl IndexingExecutor {
     pub fn new(
+        database: Arc<KuzuDatabase>,
         workspace_manager: Arc<WorkspaceManager>,
         event_bus: Arc<EventBus>,
         config: IndexingConfig,
     ) -> Self {
         Self {
+            database,
             workspace_manager,
             event_bus,
             config,
@@ -156,6 +160,7 @@ impl IndexingExecutor {
         let file_source = GitaliskFileSource::new(project_info.repository.clone());
 
         match indexer.process_files_full_with_database(
+            &self.database,
             file_source,
             &self.config,
             &parquet_directory,
@@ -327,7 +332,10 @@ mod tests {
     async fn test_run_workspace_indexing_empty_workspace() {
         let (workspace_manager, temp_dir) = create_test_workspace_manager();
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
+
         let mut execution = IndexingExecutor::new(
+            database,
             workspace_manager,
             event_bus,
             IndexingConfigBuilder::build(4),
@@ -345,7 +353,9 @@ mod tests {
     async fn test_run_workspace_indexing_successful() {
         let (workspace_manager, _temp_dir, workspace_path) = create_test_workspace_with_projects(1);
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let mut execution = IndexingExecutor::new(
+            database,
             Arc::clone(&workspace_manager),
             Arc::clone(&event_bus),
             IndexingConfigBuilder::build(4),
@@ -398,7 +408,9 @@ mod tests {
     async fn test_run_workspace_indexing_with_projects_events() {
         let (workspace_manager, _temp_dir, workspace_path) = create_test_workspace_with_projects(2);
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let mut execution = IndexingExecutor::new(
+            database,
             Arc::clone(&workspace_manager),
             Arc::clone(&event_bus),
             IndexingConfigBuilder::build(4),
@@ -476,7 +488,9 @@ mod tests {
     async fn test_run_project_indexing_successful() {
         let (workspace_manager, _temp_dir, workspace_path) = create_test_workspace_with_projects(1);
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let mut execution = IndexingExecutor::new(
+            database,
             Arc::clone(&workspace_manager),
             Arc::clone(&event_bus),
             IndexingConfigBuilder::build(4),
@@ -554,7 +568,9 @@ mod tests {
     async fn test_run_project_indexing_project_not_found() {
         let (workspace_manager, _temp_dir) = create_test_workspace_manager();
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let mut execution = IndexingExecutor::new(
+            database,
             workspace_manager,
             Arc::clone(&event_bus),
             IndexingConfigBuilder::build(4),
@@ -590,7 +606,9 @@ mod tests {
     async fn test_workspace_indexing_event_sequence() {
         let (workspace_manager, _temp_dir, workspace_path) = create_test_workspace_with_projects(2);
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let mut execution = IndexingExecutor::new(
+            database,
             Arc::clone(&workspace_manager),
             Arc::clone(&event_bus),
             IndexingConfigBuilder::build(4),
@@ -678,7 +696,9 @@ mod tests {
     async fn test_run_workspace_indexing_cancellation_early() {
         let (workspace_manager, _temp_dir, workspace_path) = create_test_workspace();
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let mut execution = IndexingExecutor::new(
+            database,
             workspace_manager,
             event_bus,
             IndexingConfigBuilder::build(4),
@@ -702,7 +722,9 @@ mod tests {
     async fn test_run_project_indexing_cancellation_early() {
         let (workspace_manager, _temp_dir, _workspace_path) = create_test_workspace();
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let mut execution = IndexingExecutor::new(
+            database,
             workspace_manager,
             Arc::clone(&event_bus),
             IndexingConfigBuilder::build(4),
@@ -727,7 +749,9 @@ mod tests {
     async fn test_mark_status_invalid_workspace() {
         let (workspace_manager, _temp_dir) = create_test_workspace_manager();
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let execution = IndexingExecutor::new(
+            database,
             workspace_manager,
             event_bus,
             IndexingConfigBuilder::build(4),
@@ -745,7 +769,9 @@ mod tests {
     async fn test_check_cancellation_not_cancelled() {
         let (workspace_manager, _temp_dir) = create_test_workspace_manager();
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let execution = IndexingExecutor::new(
+            database,
             workspace_manager,
             event_bus,
             IndexingConfigBuilder::build(4),
@@ -763,7 +789,9 @@ mod tests {
     async fn test_check_cancellation_cancelled() {
         let (workspace_manager, _temp_dir) = create_test_workspace_manager();
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let execution = IndexingExecutor::new(
+            database,
             workspace_manager,
             event_bus,
             IndexingConfigBuilder::build(4),

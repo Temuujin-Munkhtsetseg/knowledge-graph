@@ -5,6 +5,7 @@ use crate::endpoints::shared::StatusResponse;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
+use database::kuzu::database::KuzuDatabase;
 use event_bus::{
     EventBus,
     types::workspace_folder::{TSWorkspaceFolderInfo, to_ts_workspace_folder_info},
@@ -158,6 +159,7 @@ pub async fn index_handler(
 }
 
 pub fn spawn_indexing_task(
+    database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
     workspace_folder_path: String,
@@ -166,7 +168,7 @@ pub fn spawn_indexing_task(
         let workspace_path_buf = PathBuf::from(workspace_folder_path.clone());
         let threads = num_cpus::get();
         let config = IndexingConfigBuilder::build(threads);
-        let mut executor = IndexingExecutor::new(workspace_manager, event_bus, config);
+        let mut executor = IndexingExecutor::new(database, workspace_manager, event_bus, config);
         let result = tokio::task::spawn_blocking(move || {
             executor.execute_workspace_indexing(workspace_path_buf, None)
         })
@@ -242,11 +244,16 @@ mod tests {
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
+
         let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
             workspace_manager.clone(),
             event_bus.clone(),
+            Arc::clone(&database),
         ));
+
         let state = crate::AppState {
+            database: Arc::clone(&database),
             workspace_manager,
             event_bus,
             job_dispatcher,

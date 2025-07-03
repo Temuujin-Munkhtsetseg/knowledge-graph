@@ -72,6 +72,7 @@ mod tests {
     use axum::{Router, routing::get};
     use axum_test::TestServer;
     use chrono::Utc;
+    use database::kuzu::database::KuzuDatabase;
     use event_bus::types::workspace_folder::to_ts_workspace_folder_info;
     use event_bus::{EventBus, GkgEvent, WorkspaceIndexingEvent, WorkspaceIndexingStarted};
     use std::sync::Arc;
@@ -86,15 +87,21 @@ mod tests {
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
+
         let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
             workspace_manager.clone(),
             Arc::clone(&event_bus),
+            Arc::clone(&database),
         ));
+
         let state = AppState {
+            database: Arc::clone(&database),
             workspace_manager,
             event_bus: Arc::clone(&event_bus),
             job_dispatcher,
         };
+
         let app = Router::new()
             .route("/events", get(events_handler))
             .with_state(state);

@@ -104,6 +104,7 @@ mod tests {
     use super::*;
     use axum::{Router, routing::get};
     use axum_test::TestServer;
+    use database::kuzu::database::KuzuDatabase;
     use event_bus::EventBus;
     use std::fs;
     use std::sync::Arc;
@@ -131,15 +132,21 @@ mod tests {
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
         let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
             workspace_manager.clone(),
             event_bus.clone(),
+            database.clone(),
         ));
+        let database = Arc::new(KuzuDatabase::new());
+
         let state = AppState {
+            database,
             workspace_manager,
             event_bus,
             job_dispatcher,
         };
+
         let app = Router::new()
             .route("/workspace/list", get(workspace_list_handler))
             .with_state(state);
@@ -152,6 +159,7 @@ mod tests {
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
         let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
 
         // Create and register test workspaces
         let temp_workspace1 = TempDir::new().unwrap();
@@ -171,8 +179,11 @@ mod tests {
         let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
             workspace_manager.clone(),
             event_bus.clone(),
+            database.clone(),
         ));
+        let database = Arc::new(KuzuDatabase::new());
         let state = AppState {
+            database,
             workspace_manager: Arc::clone(&workspace_manager),
             event_bus,
             job_dispatcher,

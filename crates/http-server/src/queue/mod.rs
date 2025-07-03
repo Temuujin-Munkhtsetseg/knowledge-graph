@@ -62,24 +62,31 @@ pub use worker::WorkspaceWorker;
 #[cfg(test)]
 mod integration_tests {
     use super::*;
+    use database::kuzu::database::KuzuDatabase;
     use event_bus::EventBus;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::time::{Duration, sleep};
     use workspace_manager::WorkspaceManager;
 
-    fn create_test_setup() -> (Arc<WorkspaceManager>, Arc<EventBus>, TempDir) {
+    fn create_test_setup() -> (
+        Arc<WorkspaceManager>,
+        Arc<EventBus>,
+        Arc<KuzuDatabase>,
+        TempDir,
+    ) {
         let temp_dir = TempDir::new().unwrap();
         let workspace_manager =
             Arc::new(WorkspaceManager::new_with_directory(temp_dir.path().to_path_buf()).unwrap());
         let event_bus = Arc::new(EventBus::new());
-        (workspace_manager, event_bus, temp_dir)
+        let database = Arc::new(KuzuDatabase::new());
+        (workspace_manager, event_bus, database, temp_dir)
     }
 
     #[tokio::test]
     async fn test_end_to_end_job_processing() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let job = Job::IndexWorkspaceFolder {
             workspace_folder_path: "/test/workspace".to_string(),
@@ -96,8 +103,8 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_priority_based_cancellation_integration() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let normal_job = Job::IndexWorkspaceFolder {
             workspace_folder_path: "/test/workspace".to_string(),
@@ -125,8 +132,8 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_multi_workspace_parallel_processing() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let workspaces = vec!["/workspace1", "/workspace2", "/workspace3"];
 
@@ -157,8 +164,8 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_job_queue_capacity_and_resilience() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let workspace_path = "/test/workspace";
 

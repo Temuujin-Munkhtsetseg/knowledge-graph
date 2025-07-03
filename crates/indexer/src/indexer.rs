@@ -12,6 +12,9 @@
 // ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║
 //  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
+use database::kuzu::connection::KuzuConnection;
+use database::kuzu::database::KuzuDatabase;
+use database::kuzu::schema::{SchemaManager, SchemaManagerImportMode};
 use gitalisk_core::repository::gitalisk_repository::FileInfo;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -21,15 +24,13 @@ use std::time::{Duration, Instant};
 // Simplified imports - file processing is now handled by the File module
 use crate::analysis::{AnalysisService, GraphData};
 use crate::database::changes::KuzuChanges;
-use crate::database::{DatabaseConfig, KuzuConnection, SchemaManager};
+use database::kuzu::config::DatabaseConfig;
 
 use crate::parsing::processor::process_file_info;
 use crate::project::source::FileSource;
 use crate::stats::IndexingStats;
 use crate::writer::{WriterResult, WriterService};
-use kuzu::{Database, SystemConfig};
 
-use crate::database::schema::SchemaManagerImportMode;
 use crate::database::utils::NodeIdGenerator;
 pub use crate::parsing::changes::{FileChanges, FileChangesPathType};
 pub use crate::parsing::processor::{FileProcessingResult, ProcessingStats};
@@ -349,6 +350,7 @@ impl RepositoryIndexer {
     /// Analyze processed files, write graph data to Parquet files, and load into Kuzu database
     pub fn analyze_and_write_graph_data(
         &self,
+        database: &KuzuDatabase,
         indexing_result: &mut RepositoryIndexingResult,
         output_directory: &str,
         database_path: Option<&str>,
@@ -393,7 +395,7 @@ impl RepositoryIndexer {
 
         if let Some(db_path) = database_path {
             info!("Loading graph data into Kuzu database at: {db_path}");
-            match self.load_into_database(output_directory, db_path) {
+            match self.load_into_database(database, output_directory, db_path) {
                 Ok(_) => {
                     info!("✅ Successfully loaded graph data into Kuzu database");
                     indexing_result.database_path = Some(db_path.to_string());
@@ -412,27 +414,35 @@ impl RepositoryIndexer {
     /// Full repository processing pipeline: discover, index, analyze, and write
     pub fn process_files_full<F: FileSource>(
         &self,
+        database: &KuzuDatabase,
         file_source: F,
         config: &IndexingConfig,
         output_directory: &str,
     ) -> Result<RepositoryIndexingResult, String> {
-        self.process_files_full_with_database(file_source, config, output_directory, None)
+        self.process_files_full_with_database(database, file_source, config, output_directory, None)
     }
 
     pub fn process_files_full_with_database<F: FileSource>(
         &self,
+        database: &KuzuDatabase,
         file_source: F,
         config: &IndexingConfig,
         output_directory: &str,
         database_path: Option<&str>,
     ) -> Result<RepositoryIndexingResult, String> {
         let mut indexing_result = self.index_files(file_source, config)?;
-        self.analyze_and_write_graph_data(&mut indexing_result, output_directory, database_path)?;
+        self.analyze_and_write_graph_data(
+            database,
+            &mut indexing_result,
+            output_directory,
+            database_path,
+        )?;
         Ok(indexing_result)
     }
 
     pub fn reindex_repository(
         &mut self,
+        database: &KuzuDatabase,
         file_changes: FileChanges,
         config: &IndexingConfig,
         database_path: &str,
@@ -456,10 +466,19 @@ impl RepositoryIndexer {
             });
         }
 
+        let db_path = database_path;
+        let database_instance = database.get_or_create_database(db_path);
+
+        if database_instance.is_none() {
+            return Err(format!("Failed to create database: {db_path}."));
+        }
+
+        let database_instance = database_instance.unwrap();
+
         // Run the full processing pipeline
         let file_source = ChangesFileSource::new(&file_changes, self.path.clone());
         let result = self
-            .process_files_full(file_source, config, output_path)
+            .process_files_full(database, file_source, config, output_path)
             .expect("Failed to process repository");
 
         for file in &result.file_results {
@@ -474,12 +493,13 @@ impl RepositoryIndexer {
             .analyze_results(&result.file_results)
             .map_err(|e| format!("Analysis failed: {e}"))?;
 
-        let db_path = database_path;
-        let database =
-            Database::new(db_path, SystemConfig::default()).expect("Failed to create database");
-        let connection = KuzuConnection::new(&database, db_path.to_string())
-            .expect("Failed to create connection");
+        let connection = KuzuConnection::new(&database_instance);
 
+        if connection.is_err() {
+            return Err(format!("Failed to create database connection: {db_path}."));
+        }
+
+        let connection = connection.unwrap();
         // Sync diff changes to kuzu
         let mut kuzu_syncer = KuzuChanges::new(
             connection,
@@ -509,6 +529,7 @@ impl RepositoryIndexer {
     /// Load Parquet data into Kuzu database
     fn load_into_database(
         &self,
+        database: &KuzuDatabase,
         parquet_directory: &str,
         database_path: &str,
     ) -> Result<(), String> {
@@ -518,26 +539,30 @@ impl RepositoryIndexer {
             .with_buffer_size(512 * 1024 * 1024)
             .with_compression(true);
 
-        let database = KuzuConnection::create_database(config)
+        let database_instance = database
+            .create_temporary_database(config)
             .map_err(|e| format!("Failed to create database: {e:?}"))?;
 
-        let connection_manager = KuzuConnection::new(&database, database_path.to_string())
-            .map_err(|e| format!("Failed to create database connection: {e:?}"))?;
-
+        let connection = KuzuConnection::new(&database_instance)
+            .map_err(|_| format!("Failed to create database connection: {database_path}."))?;
         let schema_manager = SchemaManager::new();
         schema_manager
-            .initialize_schema(&connection_manager)
+            .initialize_schema(&connection)
             .map_err(|e| format!("Failed to initialize database schema: {e:?}"))?;
 
+        let connection = KuzuConnection::new(&database_instance)
+            .map_err(|_| format!("Failed to create database connection: {database_path}."))?;
         schema_manager
             .import_graph_data(
-                &connection_manager,
+                &connection,
                 parquet_directory,
                 SchemaManagerImportMode::Indexing,
             )
             .map_err(|e| format!("Failed to import graph data: {e:?}"))?;
 
-        match schema_manager.get_schema_stats(&connection_manager) {
+        let connection = KuzuConnection::new(&database_instance)
+            .map_err(|_| format!("Failed to create database connection: {database_path}."))?;
+        match schema_manager.get_schema_stats(connection) {
             Ok(stats) => {
                 info!("Database loading completed successfully:");
                 info!("{stats}");

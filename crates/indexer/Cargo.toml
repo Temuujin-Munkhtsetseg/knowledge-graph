@@ -26,6 +26,7 @@ tokio = { workspace = true }
 tokio-util = "0.7.15"
 event-bus = { path = "../event-bus" }
 chrono = { workspace = true }
+database = { path = "../database" }
 
 [dev-dependencies]
 miette = { workspace = true }

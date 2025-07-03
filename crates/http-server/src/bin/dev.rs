@@ -1,4 +1,5 @@
 use anyhow::Result;
+use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use http_server::{find_unused_port, run};
 use logging::{LogMode, init};
@@ -19,6 +20,7 @@ async fn main() -> Result<()> {
 
     let workspace_manager = Arc::new(WorkspaceManager::new_system_default().unwrap());
     let event_bus = Arc::new(EventBus::new());
+    let database = Arc::new(KuzuDatabase::new());
 
-    run(port, workspace_manager, event_bus).await
+    run(port, database, workspace_manager, event_bus).await
 }
