@@ -86,9 +86,14 @@ mod tests {
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
         let event_bus = Arc::new(EventBus::new());
+        let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
+            workspace_manager.clone(),
+            Arc::clone(&event_bus),
+        ));
         let state = AppState {
             workspace_manager,
             event_bus: Arc::clone(&event_bus),
+            job_dispatcher,
         };
         let app = Router::new()
             .route("/events", get(events_handler))

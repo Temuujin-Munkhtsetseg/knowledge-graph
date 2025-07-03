@@ -125,11 +125,25 @@ pub async fn index_handler(
             .into_response();
     }
 
-    spawn_indexing_task(
-        Arc::clone(&state.workspace_manager),
-        Arc::clone(&state.event_bus),
-        payload.workspace_folder_path,
-    );
+    // Dispatch indexing job to the job queue with high priority
+    let job = crate::queue::job::Job::IndexWorkspaceFolder {
+        workspace_folder_path: payload.workspace_folder_path.clone(),
+        priority: crate::queue::job::JobPriority::High,
+    };
+
+    if let Err(e) = state.job_dispatcher.dispatch(job).await {
+        tracing::error!("Failed to dispatch indexing job: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(WorkspaceIndexResponses {
+                internal_server_error: Some(WorkspaceIndexEndpoint::create_error_response(
+                    format!("Failed to schedule indexing job: {e}"),
+                )),
+                ..Default::default()
+            }),
+        )
+            .into_response();
+    }
 
     (
         StatusCode::OK,
@@ -228,9 +242,14 @@ mod tests {
             WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
         );
         let event_bus = Arc::new(EventBus::new());
+        let job_dispatcher = Arc::new(crate::queue::dispatch::JobDispatcher::new(
+            workspace_manager.clone(),
+            event_bus.clone(),
+        ));
         let state = crate::AppState {
             workspace_manager,
             event_bus,
+            job_dispatcher,
         };
         let app = Router::new()
             .route("/workspace/index", post(index_handler))
