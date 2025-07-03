@@ -1,19 +1,24 @@
-use crate::database::schema::SchemaManager;
-use crate::database::schema::SchemaManagerImportMode;
-use crate::database::types::KuzuNodeType;
-use crate::database::types::{DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu};
+use crate::database::node_database_service::NodeDatabaseService;
+use crate::database::types::{
+    DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, KuzuNodeType,
+};
 use crate::database::utils::{RelationshipType, RelationshipTypeMapping};
-use crate::database::{DatabaseConfig, KuzuConnection};
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
 use crate::project::source::{GitaliskFileSource, PathFileSource};
+use database::kuzu::config::DatabaseConfig;
+use database::kuzu::connection::KuzuConnection;
+use database::kuzu::database::KuzuDatabase;
+use database::kuzu::schema::SchemaManager;
+use database::kuzu::schema::SchemaManagerImportMode;
 use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
 use kuzu::{Database, SystemConfig};
 use miette::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use tempfile::TempDir;
 use watchexec::Watchexec;
@@ -359,7 +364,10 @@ struct ReindexingPipelineSetup {
     output_path: String,
 }
 
-fn setup_reindexing_pipeline(temp_dir: &TempDir) -> ReindexingPipelineSetup {
+fn setup_reindexing_pipeline(
+    database: &Arc<KuzuDatabase>,
+    temp_dir: &TempDir,
+) -> ReindexingPipelineSetup {
     // Create temporary repository with test files
     let repo_path = init_test_workspace_with_repo(temp_dir.path(), "test-repo");
     let repo_path_str = repo_path.to_str().unwrap();
@@ -387,6 +395,7 @@ fn setup_reindexing_pipeline(temp_dir: &TempDir) -> ReindexingPipelineSetup {
     // Run the full processing pipeline (to index the repo once)
     let indexing_result = indexer
         .process_files_full_with_database(
+            database,
             file_source.clone(),
             &config,
             output_path,
@@ -401,13 +410,15 @@ fn setup_reindexing_pipeline(temp_dir: &TempDir) -> ReindexingPipelineSetup {
     );
     assert_eq!(*database_path, indexing_result.database_path.unwrap());
 
-    // Open a database connection to verify the definition count
-    let database =
+    let database_instance =
         Database::new(&database_path, SystemConfig::default()).expect("Failed to create database");
-    let connection =
-        KuzuConnection::new(&database, database_path.clone()).expect("Failed to create connection");
 
-    let all_definition_count = connection.count_nodes(KuzuNodeType::DefinitionNode);
+    let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
+
+    let node_database_service = NodeDatabaseService;
+
+    let all_definition_count =
+        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
     println!("all_definition_count: {all_definition_count}");
     assert_eq!(
         all_definition_count, 94,
@@ -419,8 +430,9 @@ fn setup_reindexing_pipeline(temp_dir: &TempDir) -> ReindexingPipelineSetup {
         "app/models/user_model.rb".to_string(),
         "app/models/base_model.rb".to_string(),
     ];
-    let definition_count = connection
+    let definition_count = node_database_service
         .count_node_by(
+            &connection,
             KuzuNodeType::DefinitionNode,
             "primary_file_path",
             &file_paths,
@@ -450,7 +462,9 @@ fn setup_reindexing_pipeline(temp_dir: &TempDir) -> ReindexingPipelineSetup {
 #[tokio::test]
 async fn test_full_reindexing_pipeline_git_status() {
     let temp_dir: TempDir = TempDir::new().expect("Failed to create temp directory");
-    let mut setup = setup_reindexing_pipeline(&temp_dir);
+    let database = Arc::new(KuzuDatabase::new());
+
+    let mut setup = setup_reindexing_pipeline(&database, &temp_dir);
 
     // Modify the test repo, we should optionally allow
     modify_test_repo(temp_dir.path(), "test-repo")
@@ -468,6 +482,7 @@ async fn test_full_reindexing_pipeline_git_status() {
     let result = setup
         .indexer
         .reindex_repository(
+            &database,
             reindexer_file_changes,
             &setup.config,
             &setup.database_path,
@@ -477,13 +492,14 @@ async fn test_full_reindexing_pipeline_git_status() {
 
     println!("result: {:?}", result.writer_result);
 
-    // re-open a database connection to verify the definition counts
-    let database = Database::new(&setup.database_path, SystemConfig::default())
+    let database_instance = database
+        .get_or_create_database(&setup.database_path)
         .expect("Failed to create database");
-    let connection = KuzuConnection::new(&database, setup.database_path.clone())
-        .expect("Failed to create connection");
+    let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
+    let node_database_service = NodeDatabaseService;
 
-    let definition_count = connection.count_nodes(KuzuNodeType::DefinitionNode);
+    let definition_count =
+        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
     println!("definition_count: {definition_count}");
     assert_eq!(
         definition_count, 95,
@@ -494,8 +510,9 @@ async fn test_full_reindexing_pipeline_git_status() {
         "app/models/user_model.rb".to_string(),
         "app/models/base_model.rb".to_string(),
     ];
-    let definition_count = connection
+    let definition_count = node_database_service
         .count_node_by(
+            &connection,
             KuzuNodeType::DefinitionNode,
             "primary_file_path",
             &file_paths,
@@ -512,7 +529,8 @@ async fn test_full_reindexing_pipeline_git_status() {
 #[ignore]
 async fn test_full_reindexing_pipeline_watchexec() {
     let temp_dir: TempDir = TempDir::new().expect("Failed to create temp directory");
-    let mut setup = setup_reindexing_pipeline(&temp_dir);
+    let database = Arc::new(KuzuDatabase::new());
+    let mut setup = setup_reindexing_pipeline(&database, &temp_dir);
     let repo_path = setup.repo_path;
 
     // Modify the test repo, we should optionally allow
@@ -526,6 +544,7 @@ async fn test_full_reindexing_pipeline_watchexec() {
     let result = setup
         .indexer
         .reindex_repository(
+            &database,
             reindexer_file_changes,
             &setup.config,
             &setup.database_path,
@@ -536,16 +555,19 @@ async fn test_full_reindexing_pipeline_watchexec() {
     println!("result: {:?}", result.writer_result);
 
     // re-open a database connection to verify the definition counts
-    let database = Database::new(&setup.database_path, SystemConfig::default())
+    let database_instance = database
+        .get_or_create_database(&setup.database_path)
         .expect("Failed to create database");
-    let connection = KuzuConnection::new(&database, setup.database_path.clone())
-        .expect("Failed to create connection");
+    let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
 
-    let all_definition_count = connection.count_nodes(KuzuNodeType::DefinitionNode);
+    let node_database_service = NodeDatabaseService;
+
+    let all_definition_count =
+        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
     println!("all_definition_count: {all_definition_count}");
 
-    let definitions = connection
-        .get_all::<DefinitionNodeFromKuzu>(KuzuNodeType::DefinitionNode)
+    let definitions = node_database_service
+        .get_all::<DefinitionNodeFromKuzu>(&connection, KuzuNodeType::DefinitionNode)
         .unwrap();
     let ids_paths = definitions
         .iter()
@@ -586,7 +608,8 @@ async fn test_full_reindexing_pipeline_watchexec() {
 
     // Check that we have the expected number of definition nodes
     let expected_definition_count = 142;
-    let definition_count = connection.count_nodes(KuzuNodeType::DefinitionNode);
+    let definition_count =
+        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
     assert_eq!(
         definition_count, expected_definition_count,
         "Should have {expected_definition_count} definition nodes"
@@ -615,8 +638,10 @@ fn setup_end_to_end_kuzu(temp_repo: &TempDir) {
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
 
+    // Create database as done in the working example
+    let database = Arc::new(KuzuDatabase::new());
     let _result = indexer
-        .process_files_full(file_source, &config, output_path)
+        .process_files_full(&database, file_source, &config, output_path)
         .expect("Failed to process repository");
 
     // Create Kuzu database
@@ -626,9 +651,12 @@ fn setup_end_to_end_kuzu(temp_repo: &TempDir) {
         .with_buffer_size(512 * 1024 * 1024)
         .with_compression(true);
 
-    let database = KuzuConnection::create_database(config).expect("Failed to create Kuzu database");
-    let connection = KuzuConnection::new(&database, db_dir.to_string_lossy().to_string())
-        .expect("Failed to create Kuzu connection");
+    let database_instance = database
+        .create_temporary_database(config)
+        .expect("Failed to create Kuzu database");
+
+    let connection =
+        KuzuConnection::new(&database_instance).expect("Failed to create Kuzu connection");
 
     // Initialize schema
     let schema_manager = SchemaManager::new();
@@ -738,8 +766,9 @@ fn test_full_indexing_pipeline() {
     let output_path = output_dir.to_str().unwrap();
 
     // Run the full processing pipeline
+    let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(file_source, &config, output_path)
+        .process_files_full(&database, file_source, &config, output_path)
         .expect("Failed to process repository");
 
     // Verify we processed files
@@ -839,13 +868,16 @@ fn test_full_indexing_pipeline() {
         .with_buffer_size(512 * 1024 * 1024)
         .with_compression(true);
 
-    let database = KuzuConnection::create_database(config).expect("Failed to create Kuzu database");
+    let database_instance = database
+        .create_temporary_database(config)
+        .expect("Failed to create Kuzu database");
 
-    let connection = KuzuConnection::new(&database, db_dir.to_string_lossy().to_string())
-        .expect("Failed to create Kuzu connection");
+    let connection =
+        KuzuConnection::new(&database_instance).expect("Failed to create Kuzu connection");
 
     // Initialize schema
     let schema_manager = SchemaManager::new();
+
     schema_manager
         .initialize_schema(&connection)
         .expect("Failed to initialize schema");
@@ -859,8 +891,9 @@ fn test_full_indexing_pipeline() {
 
     // Verify basic node counts
     println!("\n📊 Kuzu Database Node Counts:");
-    let node_counts = connection
-        .get_node_counts()
+    let node_database_service = NodeDatabaseService;
+    let node_counts = node_database_service
+        .get_node_counts(&connection)
         .expect("Failed to get node counts");
 
     println!("  📁 Directory nodes: {}", node_counts.directory_count);
@@ -869,8 +902,8 @@ fn test_full_indexing_pipeline() {
 
     // Verify relationship counts
     println!("\n📊 Kuzu Database Relationship Counts:");
-    let rel_counts = connection
-        .get_relationship_counts()
+    let rel_counts = node_database_service
+        .get_relationship_counts(&connection)
         .expect("Failed to get relationship counts");
 
     println!(
@@ -1034,8 +1067,9 @@ fn test_inheritance_relationships() {
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
 
+    let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(file_source, &config, output_path)
+        .process_files_full(&database, file_source, &config, output_path)
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -1103,56 +1137,59 @@ fn test_simple_end_to_end_kuzu() {
     setup_end_to_end_kuzu(&temp_repo);
 
     let db_dir = temp_repo.path().join("kuzu_db");
-    let database = Database::new(
-        db_dir.to_string_lossy().to_string(),
-        SystemConfig::default(),
-    )
-    .expect("Failed to create database");
-    let connection = KuzuConnection::new(&database, db_dir.to_string_lossy().to_string())
-        .expect("Failed to create connection");
+    let database = Arc::new(KuzuDatabase::new());
+    let database_instance = database
+        .get_or_create_database(&db_dir.to_string_lossy())
+        .expect("Failed to create database");
+    let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
 
     let relationship_type_map = RelationshipTypeMapping::new();
+    let node_database_service = NodeDatabaseService;
 
     // Get definition node count
-    let defn_node_count = connection.count_nodes(KuzuNodeType::DefinitionNode);
+    let defn_node_count =
+        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
     println!("Definition node count: {defn_node_count}");
     assert_eq!(defn_node_count, 94);
 
     // Get file node count
-    let file_node_count = connection.count_nodes(KuzuNodeType::FileNode);
+    let file_node_count = node_database_service.count_nodes(&connection, KuzuNodeType::FileNode);
     println!("File node count: {file_node_count}");
     assert_eq!(file_node_count, 7);
 
     // Get module -> class relationships count
-    let module_class_rel_count =
-        connection.count_relationships_of_type(RelationshipType::ModuleToClass);
+    let module_class_rel_count = node_database_service
+        .count_relationships_of_type(&connection, RelationshipType::ModuleToClass);
     println!("Module -> class relationship count: {module_class_rel_count}");
     assert_eq!(module_class_rel_count, 7);
 
     // Get file definition relationships count
-    let file_defn_rel_count = connection.count_relationships_of_type(RelationshipType::FileDefines);
+    let file_defn_rel_count = node_database_service
+        .count_relationships_of_type(&connection, RelationshipType::FileDefines);
     println!("File defines relationship count: {file_defn_rel_count}");
     assert_eq!(file_defn_rel_count, 96);
 
     // Get directory node count
-    let dir_node_count = connection.count_nodes(KuzuNodeType::DirectoryNode);
+    let dir_node_count =
+        node_database_service.count_nodes(&connection, KuzuNodeType::DirectoryNode);
     println!("Directory node count: {dir_node_count}");
     assert_eq!(dir_node_count, 4);
 
     // get directory -> file relationships count
-    let dir_file_rel_count =
-        connection.count_relationships_of_type(RelationshipType::DirContainsFile);
+    let dir_file_rel_count = node_database_service
+        .count_relationships_of_type(&connection, RelationshipType::DirContainsFile);
     println!("Directory -> file relationship count: {dir_file_rel_count}");
     assert_eq!(dir_file_rel_count, 6);
 
     // get directory -> directory relationships count
-    let dir_dir_rel_count =
-        connection.count_relationships_of_type(RelationshipType::DirContainsDir);
+    let dir_dir_rel_count = node_database_service
+        .count_relationships_of_type(&connection, RelationshipType::DirContainsDir);
     println!("Directory -> directory relationship count: {dir_dir_rel_count}");
     assert_eq!(dir_dir_rel_count, 2);
 
     // get definition relationships count
-    let def_rel_count = connection.count_relationships_of_node_type(KuzuNodeType::DefinitionNode);
+    let def_rel_count = node_database_service
+        .count_relationships_of_node_type(&connection, KuzuNodeType::DefinitionNode);
     println!("Definition relationship count: {def_rel_count}");
     assert_eq!(def_rel_count, 88);
 
@@ -1330,8 +1367,9 @@ fn test_detailed_data_inspection() {
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
 
+    let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(file_source, &config, output_path)
+        .process_files_full(&database, file_source, &config, output_path)
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -1584,8 +1622,9 @@ fn test_parquet_file_structure() {
     let output_path = output_dir.to_str().unwrap();
 
     // Run full processing pipeline
+    let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(file_source, &config, output_path)
+        .process_files_full(&database, file_source, &config, output_path)
         .expect("Failed to process repository");
 
     let writer_result = result.writer_result.expect("Should have writer result");

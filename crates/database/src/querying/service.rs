@@ -1,5 +1,5 @@
 use crate::{
-    kuzu::database::KuzuDatabase,
+    kuzu::{connection::KuzuConnection, database::KuzuDatabase},
     querying::types::{QueryResult, QueryResultRow, QueryingService},
 };
 use anyhow::{Error, Result};
@@ -44,16 +44,16 @@ impl QueryResultRow for DatabaseQueryResultRow {
     }
 }
 pub struct DatabaseQueryingService {
-    database: KuzuDatabase,
+    database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
 }
 
 /// This service should only be used for uncontrolled query execution (e.g., MCP, Playground, API endpoints).
 /// For controlled query execution with strict typing for arguments and return types, a proper service should be created instead.
 impl DatabaseQueryingService {
-    pub fn new(connection: KuzuDatabase, workspace_manager: Arc<WorkspaceManager>) -> Self {
+    pub fn new(database: Arc<KuzuDatabase>, workspace_manager: Arc<WorkspaceManager>) -> Self {
         Self {
-            database: connection,
+            database,
             workspace_manager,
         }
     }
@@ -74,12 +74,24 @@ impl QueryingService for DatabaseQueryingService {
             )));
         }
 
-        let result = self.database.query(
-            project.unwrap().database_path.to_str().unwrap(),
-            query,
-            params,
-        )?;
+        let database = self.database.get_or_create_database(project_path);
+        if database.is_none() {
+            return Err(Error::msg(format!(
+                "Database not found for path: {project_path}"
+            )));
+        }
 
+        let database = database.unwrap();
+        let connection = KuzuConnection::new(&database);
+        if connection.is_err() {
+            return Err(Error::msg(format!(
+                "Failed to create connection to database: {project_path}"
+            )));
+        }
+
+        let connection = connection.unwrap();
+
+        let result = connection.generic_query(query, params)?;
         Ok(Box::new(DatabaseQueryResult {
             column_names: result.column_names,
             result: result.result,

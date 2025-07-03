@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::Utc;
+use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use indexer::execution::{config::IndexingConfigBuilder, executor::IndexingExecutor};
 use num_cpus;
@@ -36,6 +37,7 @@ pub struct WorkspaceWorker {
     receiver: mpsc::Receiver<WorkerMessage>,
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
+    database: Arc<KuzuDatabase>,
     cancellation_token: CancellationToken,
     job_queue: VecDeque<JobInfo>,
 }
@@ -46,6 +48,7 @@ impl WorkspaceWorker {
         receiver: mpsc::Receiver<WorkerMessage>,
         workspace_manager: Arc<WorkspaceManager>,
         event_bus: Arc<EventBus>,
+        database: Arc<KuzuDatabase>,
         cancellation_token: CancellationToken,
     ) -> Self {
         Self {
@@ -53,6 +56,7 @@ impl WorkspaceWorker {
             receiver,
             workspace_manager,
             event_bus,
+            database,
             cancellation_token,
             job_queue: VecDeque::new(),
         }
@@ -183,6 +187,7 @@ impl WorkspaceWorker {
         let threads = num_cpus::get();
         let config = IndexingConfigBuilder::build(threads);
         let mut executor = IndexingExecutor::new(
+            Arc::clone(&self.database),
             Arc::clone(&self.workspace_manager),
             Arc::clone(&self.event_bus),
             config,
@@ -231,17 +236,23 @@ mod tests {
     use tokio::time::{Duration, timeout};
     use workspace_manager::WorkspaceManager;
 
-    fn create_test_setup() -> (Arc<WorkspaceManager>, Arc<EventBus>, TempDir) {
+    fn create_test_setup() -> (
+        Arc<WorkspaceManager>,
+        Arc<EventBus>,
+        Arc<KuzuDatabase>,
+        TempDir,
+    ) {
         let temp_dir = TempDir::new().unwrap();
         let workspace_manager =
             Arc::new(WorkspaceManager::new_with_directory(temp_dir.path().to_path_buf()).unwrap());
         let event_bus = Arc::new(EventBus::new());
-        (workspace_manager, event_bus, temp_dir)
+        let database = Arc::new(KuzuDatabase::new());
+        (workspace_manager, event_bus, database, temp_dir)
     }
 
     #[tokio::test]
     async fn test_worker_creation() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
         let (_sender, receiver) = mpsc::channel::<WorkerMessage>(100);
         let cancellation_token = CancellationToken::new();
 
@@ -250,6 +261,7 @@ mod tests {
             receiver,
             workspace_manager,
             event_bus,
+            database,
             cancellation_token,
         );
 
@@ -258,7 +270,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_worker_cancellation() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
         let (_sender, receiver) = mpsc::channel::<WorkerMessage>(100);
         let cancellation_token = CancellationToken::new();
 
@@ -267,6 +279,7 @@ mod tests {
             receiver,
             workspace_manager,
             event_bus,
+            database,
             cancellation_token.clone(),
         );
 
@@ -278,7 +291,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_worker_timeout_behavior() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
         let (_sender, receiver) = mpsc::channel::<WorkerMessage>(100);
         let cancellation_token = CancellationToken::new();
 
@@ -287,6 +300,7 @@ mod tests {
             receiver,
             workspace_manager,
             event_bus,
+            database,
             cancellation_token,
         );
 
@@ -347,7 +361,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_job_type_specific_cancellation() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
         let (sender, receiver) = mpsc::channel::<WorkerMessage>(100);
         let cancellation_token = CancellationToken::new();
 
@@ -356,6 +370,7 @@ mod tests {
             receiver,
             workspace_manager,
             event_bus,
+            database,
             cancellation_token,
         );
 

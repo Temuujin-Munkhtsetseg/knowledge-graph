@@ -22,6 +22,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 ctrlc = { workspace = true }
+database = { path = "../database" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

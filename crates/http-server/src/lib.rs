@@ -34,6 +34,7 @@ use workspace_manager::WorkspaceManager;
 
 #[derive(Clone)]
 pub struct AppState {
+    pub database: Arc<KuzuDatabase>,
     pub workspace_manager: Arc<WorkspaceManager>,
     pub event_bus: Arc<EventBus>,
     pub job_dispatcher: Arc<JobDispatcher>,
@@ -45,6 +46,7 @@ struct Assets;
 
 pub async fn run(
     port: u16,
+    database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
 ) -> Result<()> {
@@ -59,27 +61,29 @@ pub async fn run(
         },
     ));
 
-    let database = KuzuDatabase::new();
+    let job_dispatcher = Arc::new(JobDispatcher::new(
+        workspace_manager.clone(),
+        event_bus.clone(),
+        Arc::clone(&database),
+    ));
+
     let query_service = Arc::new(DatabaseQueryingService::new(
-        database,
+        Arc::clone(&database),
         workspace_manager.clone(),
     ));
+
+    let state = AppState {
+        database: Arc::clone(&database),
+        workspace_manager,
+        event_bus,
+        job_dispatcher,
+    };
 
     let mcp_router = Router::new()
         .route("/", post(mcp_handler))
         .route("/batch", post(mcp_batch_handler))
         .with_state(Arc::new(DefaultMcpService::new(query_service)));
 
-    let job_dispatcher = Arc::new(JobDispatcher::new(
-        workspace_manager.clone(),
-        event_bus.clone(),
-    ));
-
-    let state = AppState {
-        workspace_manager,
-        event_bus,
-        job_dispatcher,
-    };
     let serve_assets = ServeEmbed::<Assets>::new();
 
     let api_router = Router::new()

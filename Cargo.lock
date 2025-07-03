@@ -1142,11 +1142,11 @@ name = "database"
 version = "0.4.0"
 dependencies = [
  "anyhow",
- "indexer",
  "kuzu",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.12",
  "tracing",
  "workspace-manager",
 ]
@@ -1773,6 +1773,7 @@ dependencies = [
  "anyhow",
  "clap",
  "ctrlc",
+ "database",
  "event-bus",
  "gitalisk-core",
  "home",
@@ -2227,6 +2228,7 @@ dependencies = [
  "chrono",
  "criterion",
  "crossbeam-channel",
+ "database",
  "event-bus",
  "gitalisk-core",
  "kuzu",

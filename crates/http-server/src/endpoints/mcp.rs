@@ -1,15 +1,12 @@
 // Note: This endpoint doesn't follow the normal contract pattern (contract/mod.rs)
 // because it implements the Model Context Protocol (MCP) over HTTP, which has its
 // own specific JSON-RPC message format and error handling requirements.
+use axum::{Json, extract::State};
+use mcp::McpService;
+use serde_json::Value;
 use std::sync::Arc;
 
-use axum::{Json, extract::State};
-use serde_json::Value;
-
-use mcp::{
-    McpService,
-    http_handlers::{handle_mcp_batch, handle_mcp_request},
-};
+use mcp::http_handlers::{handle_mcp_batch, handle_mcp_request};
 
 pub async fn mcp_handler(
     State(mcp_service): State<Arc<dyn McpService>>,

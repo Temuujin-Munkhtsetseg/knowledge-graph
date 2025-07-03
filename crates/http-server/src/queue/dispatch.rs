@@ -7,6 +7,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use dashmap::DashMap;
+use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -28,17 +29,23 @@ pub struct JobDispatcher {
     pub workspace_queues: Arc<DashMap<String, mpsc::Sender<WorkerMessage>>>,
     pub workspace_manager: Arc<WorkspaceManager>,
     pub event_bus: Arc<EventBus>,
+    pub database: Arc<KuzuDatabase>,
     pub worker_cancellation_tokens: Arc<DashMap<String, CancellationToken>>,
 }
 
 impl JobDispatcher {
     /// The dispatcher starts with no active workers - they are created dynamically
     /// as jobs are submitted for each workspace.
-    pub fn new(workspace_manager: Arc<WorkspaceManager>, event_bus: Arc<EventBus>) -> Self {
+    pub fn new(
+        workspace_manager: Arc<WorkspaceManager>,
+        event_bus: Arc<EventBus>,
+        database: Arc<KuzuDatabase>,
+    ) -> Self {
         Self {
             workspace_queues: Arc::new(DashMap::new()),
             workspace_manager,
             event_bus,
+            database,
             worker_cancellation_tokens: Arc::new(DashMap::new()),
         }
     }
@@ -120,6 +127,7 @@ impl JobDispatcher {
             receiver,
             Arc::clone(&self.workspace_manager),
             Arc::clone(&self.event_bus),
+            Arc::clone(&self.database),
             cancellation_token.clone(),
         );
 
@@ -197,32 +205,39 @@ impl Drop for JobDispatcher {
 mod tests {
     use super::*;
     use crate::queue::job::{Job, JobPriority};
+    use database::kuzu::database::KuzuDatabase;
     use event_bus::EventBus;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::time::{Duration, sleep};
     use workspace_manager::WorkspaceManager;
 
-    fn create_test_setup() -> (Arc<WorkspaceManager>, Arc<EventBus>, TempDir) {
+    fn create_test_setup() -> (
+        Arc<WorkspaceManager>,
+        Arc<EventBus>,
+        Arc<KuzuDatabase>,
+        TempDir,
+    ) {
         let temp_dir = TempDir::new().unwrap();
         let workspace_manager =
             Arc::new(WorkspaceManager::new_with_directory(temp_dir.path().to_path_buf()).unwrap());
         let event_bus = Arc::new(EventBus::new());
-        (workspace_manager, event_bus, temp_dir)
+        let database = Arc::new(KuzuDatabase::new());
+        (workspace_manager, event_bus, database, temp_dir)
     }
 
     #[tokio::test]
     async fn test_job_dispatcher_creation() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         assert_eq!(dispatcher.workspace_queues.len(), 0);
     }
 
     #[tokio::test]
     async fn test_dispatch_creates_worker() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let job = Job::IndexWorkspaceFolder {
             workspace_folder_path: "/nonexistent/path".to_string(),
@@ -240,8 +255,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_jobs_same_workspace() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let job1 = Job::IndexWorkspaceFolder {
             workspace_folder_path: "/test/workspace".to_string(),
@@ -263,8 +278,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_workspaces() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let job1 = Job::IndexWorkspaceFolder {
             workspace_folder_path: "/test/workspace1".to_string(),
@@ -286,8 +301,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_high_priority_job_cancellation() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let job1 = Job::IndexWorkspaceFolder {
             workspace_folder_path: "/test/workspace".to_string(),
@@ -317,8 +332,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_job_id_generation() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         let job = Job::IndexWorkspaceFolder {
             workspace_folder_path: "/test/workspace".to_string(),
@@ -335,8 +350,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_granular_job_type_cancellation() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
-        let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
+        let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
         // First, dispatch a normal priority job to create a worker
         let job1 = Job::IndexWorkspaceFolder {
@@ -387,10 +402,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_drop_trait_automatic_shutdown() {
-        let (workspace_manager, event_bus, _temp_dir) = create_test_setup();
+        let (workspace_manager, event_bus, database, _temp_dir) = create_test_setup();
 
         let (queue_arc, token_arc, tokens) = {
-            let dispatcher = JobDispatcher::new(workspace_manager, event_bus);
+            let dispatcher = JobDispatcher::new(workspace_manager, event_bus, database);
 
             let job1 = Job::IndexWorkspaceFolder {
                 workspace_folder_path: "/test/workspace1".to_string(),
