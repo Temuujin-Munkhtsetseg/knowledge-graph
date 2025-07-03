@@ -1514,8 +1514,8 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
 name = "gitalisk-core"
-version = "0.3.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.3.0#61938d453f53b476066095fd18e426ce51bb8fa5"
+version = "0.3.1"
+source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.3.1#c872ce0329ec0589e1642f98a3f1b9beac7f4954"
 dependencies = [
  "ignore",
  "serde",
