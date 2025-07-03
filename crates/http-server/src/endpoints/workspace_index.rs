@@ -85,30 +85,20 @@ pub async fn index_handler(
 
     let workspace_info = match state
         .workspace_manager
-        .get_workspace_folder_info(&payload.workspace_folder_path)
+        .get_or_register_workspace_folder(&workspace_folder_path)
     {
-        Some(info) => info,
-        None => {
-            match state
-                .workspace_manager
-                .register_workspace_folder(&workspace_folder_path)
-            {
-                Ok(info) => info,
-                Err(e) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(WorkspaceIndexResponses {
-                            internal_server_error: Some(
-                                WorkspaceIndexEndpoint::create_error_response(format!(
-                                    "Failed to register workspace: {e}"
-                                )),
-                            ),
-                            ..Default::default()
-                        }),
-                    )
-                        .into_response();
-                }
-            }
+        Ok(info) => info,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(WorkspaceIndexResponses {
+                    internal_server_error: Some(WorkspaceIndexEndpoint::create_error_response(
+                        format!("Failed to get or register workspace: {e}"),
+                    )),
+                    ..Default::default()
+                }),
+            )
+                .into_response();
         }
     };
 
