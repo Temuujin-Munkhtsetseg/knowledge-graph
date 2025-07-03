@@ -45,16 +45,15 @@ impl IndexingExecutor {
     ) -> Result<()> {
         self.check_cancellation(&cancellation_token, "before starting")?;
 
-        let workspace_folder_path_str = workspace_folder_path.to_string_lossy().to_string();
-
-        let projects = self
-            .workspace_manager
-            .list_projects_in_workspace(&workspace_folder_path_str);
-
         let workspace_folder_info = self
             .workspace_manager
-            .get_workspace_folder_info(&workspace_folder_path_str)
-            .ok_or_else(|| anyhow::anyhow!("Workspace folder not found"))?;
+            .get_or_register_workspace_folder(&workspace_folder_path)
+            .map_err(|e| anyhow::anyhow!("Failed to get or register workspace folder: {}", e))?;
+
+        let workspace_folder_path_str = &workspace_folder_info.workspace_folder_path;
+        let projects = self
+            .workspace_manager
+            .list_projects_in_workspace(workspace_folder_path_str);
 
         if projects.is_empty() {
             self.event_bus.send(&GkgEvent::WorkspaceIndexing(
@@ -78,7 +77,7 @@ impl IndexingExecutor {
             self.check_cancellation(&cancellation_token, "during project iteration")?;
 
             match self.execute_project_indexing(
-                &workspace_folder_path_str,
+                workspace_folder_path_str,
                 &project_discovery.project_path,
                 cancellation_token.clone(),
             ) {
@@ -88,7 +87,7 @@ impl IndexingExecutor {
                 Err(e) => {
                     let error_msg = format!("Failed to index repository: {e}");
                     self.mark_project_status(
-                        &workspace_folder_path_str,
+                        workspace_folder_path_str,
                         &project_discovery.project_path,
                         Status::Error,
                         Some(error_msg.clone()),
@@ -346,7 +345,7 @@ mod tests {
 
         let result = execution.execute_workspace_indexing(empty_workspace, None);
 
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 
     #[tokio::test]

@@ -617,6 +617,23 @@ impl WorkspaceManager {
             .state_service
             .with_manifest(|manifest| manifest.framework_version.clone()))
     }
+
+    pub fn get_or_register_workspace_folder(
+        &self,
+        workspace_folder_path: &Path,
+    ) -> Result<WorkspaceFolderInfo> {
+        let canonical_path = workspace_folder_path
+            .canonicalize()
+            .map_err(WorkspaceManagerError::Io)?
+            .to_string_lossy()
+            .to_string();
+
+        if let Some(info) = self.get_workspace_folder_info(&canonical_path) {
+            return Ok(info);
+        }
+
+        self.register_workspace_folder(workspace_folder_path)
+    }
 }
 
 #[cfg(test)]
