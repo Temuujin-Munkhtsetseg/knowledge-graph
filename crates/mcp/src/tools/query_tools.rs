@@ -266,7 +266,7 @@ mod tests {
             let properties = schema.get("properties").unwrap().as_object().unwrap();
 
             let limit_property = properties.get("limit").unwrap().as_object().unwrap();
-            assert_eq!(limit_property.get("type").unwrap(), "int");
+            assert_eq!(limit_property.get("type").unwrap(), "integer");
             assert_eq!(limit_property.get("default").unwrap(), &json!(10));
         }
     }
