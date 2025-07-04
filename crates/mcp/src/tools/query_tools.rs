@@ -18,7 +18,7 @@ impl QueryKnowledgeGraphTool {
     pub fn new(query_service: Arc<dyn QueryingService>, query: Query) -> Self {
         Self {
             query_service,
-            name: query.slug,
+            name: query.name,
             query: query.query,
             description: query.description,
             parameters: extract_parameters(query.parameters),
@@ -190,8 +190,8 @@ mod tests {
         );
 
         Query {
-            name: "Test Query",
-            slug: "test_query",
+            name: "test_query",
+            slug: "Test Query",
             description: "A test query for testing purposes",
             query: "MATCH (n) WHERE n.fqn = $fqn RETURN n LIMIT $limit",
             parameters,

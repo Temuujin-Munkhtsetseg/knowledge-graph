@@ -74,7 +74,14 @@ impl QueryingService for DatabaseQueryingService {
             )));
         }
 
-        let database = self.database.get_or_create_database(project_path);
+        let database = self.database.get_or_create_database(
+            project
+                .unwrap()
+                .database_path
+                .into_os_string()
+                .to_str()
+                .unwrap(),
+        );
         if database.is_none() {
             return Err(Error::msg(format!(
                 "Database not found for path: {project_path}"
