@@ -200,6 +200,8 @@ pub enum HttpMethod {
     Get,
     #[serde(rename = "POST")]
     Post,
+    #[serde(rename = "DELETE")]
+    Delete,
 }
 
 pub trait ApiRequest:
