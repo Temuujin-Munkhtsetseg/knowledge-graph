@@ -1,0 +1,11 @@
+export { default as WorkspaceManagerLayout } from './WorkspaceManagerLayout.vue';
+export { default as WorkspaceManagerSidebar } from './WorkspaceManagerSidebar.vue';
+export { default as WorkspaceList } from './WorkspaceList.vue';
+export { default as WorkspaceItem } from './WorkspaceItem.vue';
+export { default as ProjectItem } from './ProjectItem.vue';
+export { default as WorkspaceIndexer } from './WorkspaceIndexer.vue';
+export { default as RecentActivity } from './RecentActivity.vue';
+export { default as RecentActivityItem } from './RecentActivityItem.vue';
+export { default as WorkspaceIndexingProgress } from './WorkspaceIndexingProgress.vue';
+export { default as StyledPath } from './StyledPath.vue';
+export { default as WorkspaceListItemHeader } from './WorkspaceListItemHeader.vue';

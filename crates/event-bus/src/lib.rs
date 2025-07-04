@@ -68,6 +68,23 @@ pub struct WorkspaceIndexingStarted {
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct WorkspaceIndexingCompleted {
+    pub workspace_folder_info: TSWorkspaceFolderInfo,
+    pub projects_indexed: Vec<String>,
+    pub completed_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct WorkspaceIndexingFailed {
+    pub workspace_folder_info: TSWorkspaceFolderInfo,
+    pub projects_indexed: Vec<String>,
+    pub error: String,
+    pub failed_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
 #[serde(tag = "status")]
 pub enum ProjectIndexingEvent {
     Started(ProjectIndexingStarted),
@@ -93,23 +110,6 @@ pub struct ProjectIndexingCompleted {
 #[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
 pub struct ProjectIndexingFailed {
     pub project_info: TSProjectInfo,
-    pub error: String,
-    pub failed_at: DateTime<Utc>,
-}
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
-pub struct WorkspaceIndexingCompleted {
-    pub workspace_folder_info: TSWorkspaceFolderInfo,
-    pub projects_indexed: Vec<String>,
-    pub completed_at: DateTime<Utc>,
-}
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
-pub struct WorkspaceIndexingFailed {
-    pub workspace_folder_info: TSWorkspaceFolderInfo,
-    pub projects_indexed: Vec<String>,
     pub error: String,
     pub failed_at: DateTime<Utc>,
 }

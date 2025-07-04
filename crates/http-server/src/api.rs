@@ -1,4 +1,7 @@
-use crate::endpoints::{info::InfoEndpointDef, workspace_index::WorkspaceIndexEndpointDef};
+use crate::endpoints::{
+    events::EventsEndpointDef, info::InfoEndpointDef, workspace_delete::WorkspaceDeleteEndpointDef,
+    workspace_index::WorkspaceIndexEndpointDef, workspace_list::WorkspaceListEndpointDef,
+};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -8,4 +11,8 @@ use ts_rs::TS;
 pub struct ApiContract {
     pub info: InfoEndpointDef,
     pub workspace_index: WorkspaceIndexEndpointDef,
+    pub workspace_list: WorkspaceListEndpointDef,
+    pub workspace_delete: WorkspaceDeleteEndpointDef,
+    pub index: WorkspaceIndexEndpointDef,
+    pub events: EventsEndpointDef,
 }
