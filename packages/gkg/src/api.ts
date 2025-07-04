@@ -6,7 +6,7 @@ export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceInd
 
 export type EmptyRequest = null;
 
-export type HttpMethod = "GET" | "POST";
+export type HttpMethod = "GET" | "POST" | "DELETE";
 
 export type InfoEndpointDef = { method: HttpMethod, path: "/api/info", path_request: EmptyRequest, body_request: EmptyRequest, query_request: EmptyRequest, responses: InfoResponses, };
 
@@ -35,6 +35,12 @@ export type JobStatus = "Pending" | "Running" | "Completed" | "Failed" | "Cancel
 export type ServerInfoResponse = { port: number, };
 
 export type StatusResponse = { status: string, };
+
+export type WorkspaceDeleteBodyRequest = { workspace_folder_path: string, };
+
+export type WorkspaceDeleteEndpointDef = { method: HttpMethod, path: "/api/workspace/delete", path_request: EmptyRequest, body_request: WorkspaceDeleteBodyRequest, query_request: EmptyRequest, responses: WorkspaceDeleteResponses, };
+
+export type WorkspaceDeleteResponses = { workspace_folder_path: string | null, removed: boolean | null, bad_request: StatusResponse | null, not_found: StatusResponse | null, internal_server_error: StatusResponse | null, };
 
 export type WorkspaceIndexBodyRequest = { workspace_folder_path: string, };
 
