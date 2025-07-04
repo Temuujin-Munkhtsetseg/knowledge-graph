@@ -1,3 +1,50 @@
 [tools]
 node = "22"
 rust = "stable"
+
+# compiles the cli in release mode and installs it to ~/.cargo/bin
+# this is used to run the production cli from the command line
+[tasks.build-cli-release]
+run = "cargo build --release -p gkg && cargo install --path crates/gkg"
+
+# runs the http server in debug mode
+# serves at http://localhost:27495
+# useful for pairing with the frontend
+[tasks.server-dev]
+run = "cargo run --bin dev-server"
+
+# runs the http server in debug mode with auto-reload on file changes
+# serves at http://localhost:27495
+# only watches crates/* for changes
+# useful for pairing with the frontend
+[tasks.server-watch]
+run = "cargo watch -w crates -x 'run --bin dev-server'"
+
+# generates the typescript bindings from rust to
+# packages/gkg/src/**/*
+[tasks.bindings-gen]
+run = "cargo test export_bindings_"
+
+# runs the tests with regular cargo test
+[tasks.cargo-test]
+run = "cargo test"
+
+# runs the tests with nextest
+[tasks.nextest]
+run = "cargo nextest run"
+
+# compiles via tsc and builds the frontend in production mode (vite build)
+[tasks.frontend-build]
+run = "npm run build --workspace=@gitlab-org/gkg-frontend"
+
+# runs the frontend in development mode (vite dev
+[tasks.frontend-dev]
+run = "npm run dev --workspace=@gitlab-org/gkg-frontend"
+
+# runs prettier to format the frontend code
+[tasks.frontend-format]
+run = "npm run format --workspace=@gitlab-org/gkg-frontend"
+
+# runs and fixes possible eslint errors
+[tasks.frontend-lint]
+run = "npm run lint --workspace=@gitlab-org/gkg-frontend"
