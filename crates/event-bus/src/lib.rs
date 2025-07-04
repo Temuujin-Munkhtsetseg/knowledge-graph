@@ -54,7 +54,6 @@ pub enum GkgEvent {
 #[serde(tag = "status")]
 pub enum WorkspaceIndexingEvent {
     Started(WorkspaceIndexingStarted),
-    Project(ProjectIndexingEvent),
     Completed(WorkspaceIndexingCompleted),
     Failed(WorkspaceIndexingFailed),
 }
