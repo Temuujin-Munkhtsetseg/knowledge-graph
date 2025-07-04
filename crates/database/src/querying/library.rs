@@ -27,9 +27,6 @@ pub enum QueryParameterKind {
     Int,
     Float,
     Boolean,
-    StringList,
-    IntList,
-    FloatList,
 }
 
 impl QueryLibrary {

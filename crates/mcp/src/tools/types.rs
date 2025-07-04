@@ -13,11 +13,8 @@ pub trait KnowledgeGraphTool: Send + Sync {
 pub enum ToolParameterKind {
     String,
     Int,
-    Float,
+    Number,
     Boolean,
-    StringList,
-    IntList,
-    FloatList,
 }
 
 impl ToolParameterKind {
@@ -25,23 +22,17 @@ impl ToolParameterKind {
         match kind {
             QueryParameterKind::String => ToolParameterKind::String,
             QueryParameterKind::Int => ToolParameterKind::Int,
-            QueryParameterKind::Float => ToolParameterKind::Float,
+            QueryParameterKind::Float => ToolParameterKind::Number,
             QueryParameterKind::Boolean => ToolParameterKind::Boolean,
-            QueryParameterKind::StringList => ToolParameterKind::StringList,
-            QueryParameterKind::IntList => ToolParameterKind::IntList,
-            QueryParameterKind::FloatList => ToolParameterKind::FloatList,
         }
     }
 
     pub fn to_mcp_tool_type(&self) -> String {
         match self {
             ToolParameterKind::String => "string".to_string(),
-            ToolParameterKind::Int => "int".to_string(),
-            ToolParameterKind::Float => "float".to_string(),
+            ToolParameterKind::Int => "integer".to_string(),
+            ToolParameterKind::Number => "number".to_string(),
             ToolParameterKind::Boolean => "boolean".to_string(),
-            ToolParameterKind::StringList => "string[]".to_string(),
-            ToolParameterKind::IntList => "int[]".to_string(),
-            ToolParameterKind::FloatList => "float[]".to_string(),
         }
     }
 }
@@ -111,35 +102,20 @@ mod tests {
             ));
             assert!(matches!(
                 ToolParameterKind::from_query_kind(QueryParameterKind::Float),
-                ToolParameterKind::Float
+                ToolParameterKind::Number
             ));
             assert!(matches!(
                 ToolParameterKind::from_query_kind(QueryParameterKind::Boolean),
                 ToolParameterKind::Boolean
-            ));
-            assert!(matches!(
-                ToolParameterKind::from_query_kind(QueryParameterKind::StringList),
-                ToolParameterKind::StringList
-            ));
-            assert!(matches!(
-                ToolParameterKind::from_query_kind(QueryParameterKind::IntList),
-                ToolParameterKind::IntList
-            ));
-            assert!(matches!(
-                ToolParameterKind::from_query_kind(QueryParameterKind::FloatList),
-                ToolParameterKind::FloatList
             ));
         }
 
         #[test]
         fn test_to_mcp_tool_type_mapping() {
             assert_eq!(ToolParameterKind::String.to_mcp_tool_type(), "string");
-            assert_eq!(ToolParameterKind::Int.to_mcp_tool_type(), "int");
-            assert_eq!(ToolParameterKind::Float.to_mcp_tool_type(), "float");
+            assert_eq!(ToolParameterKind::Int.to_mcp_tool_type(), "integer");
+            assert_eq!(ToolParameterKind::Number.to_mcp_tool_type(), "number");
             assert_eq!(ToolParameterKind::Boolean.to_mcp_tool_type(), "boolean");
-            assert_eq!(ToolParameterKind::StringList.to_mcp_tool_type(), "string[]");
-            assert_eq!(ToolParameterKind::IntList.to_mcp_tool_type(), "int[]");
-            assert_eq!(ToolParameterKind::FloatList.to_mcp_tool_type(), "float[]");
         }
     }
 
@@ -243,12 +219,10 @@ mod tests {
         #[test]
         fn test_parameter_with_different_types() {
             let test_cases = vec![
-                (ToolParameterKind::Int, "int"),
-                (ToolParameterKind::Float, "float"),
+                (ToolParameterKind::Int, "integer"),
+                (ToolParameterKind::Number, "number"),
                 (ToolParameterKind::Boolean, "boolean"),
-                (ToolParameterKind::StringList, "string[]"),
-                (ToolParameterKind::IntList, "int[]"),
-                (ToolParameterKind::FloatList, "float[]"),
+                (ToolParameterKind::String, "string"),
             ];
 
             for (kind, expected_type) in test_cases {
