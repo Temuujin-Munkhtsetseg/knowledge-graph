@@ -18,8 +18,20 @@ impl AvailableToolsService {
 
         add_query_tool(
             &mut tools,
-            QueryLibrary::get_neighbours_query(),
-            query_service,
+            QueryLibrary::get_definition_relations_query(),
+            query_service.clone(),
+        );
+
+        add_query_tool(
+            &mut tools,
+            QueryLibrary::get_file_definitions_query(),
+            query_service.clone(),
+        );
+
+        add_query_tool(
+            &mut tools,
+            QueryLibrary::get_list_matches_query(),
+            query_service.clone(),
         );
 
         Self { tools }
@@ -51,7 +63,7 @@ fn add_query_tool(
     query_service: Arc<dyn QueryingService>,
 ) {
     tools.insert(
-        query.slug.to_string(),
+        query.name.to_string(),
         Box::new(QueryKnowledgeGraphTool::new(query_service.clone(), query)),
     );
 }
