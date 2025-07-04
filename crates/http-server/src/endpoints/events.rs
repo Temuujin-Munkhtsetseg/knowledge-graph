@@ -3,10 +3,13 @@ use crate::contract::{EmptyRequest, EndpointConfigTypes};
 use crate::define_endpoint;
 use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use futures_util::StreamExt;
+use chrono::Utc;
 use futures_util::stream::Stream;
+use futures_util::{StreamExt, stream};
 use serde::Serialize;
+use serde_json::json;
 use std::convert::Infallible;
+use std::time::Duration;
 use tokio_stream::wrappers::BroadcastStream;
 use ts_rs::TS;
 
@@ -43,7 +46,20 @@ pub async fn events_handler(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let receiver = state.event_bus.subscribe();
 
-    let stream = BroadcastStream::new(receiver).filter_map(|result| async move {
+    // Create initial connection event
+    let connection_event = json!({
+        "type": "connection-established",
+        "timestamp": Utc::now().to_rfc3339(),
+        "message": "SSE connection established"
+    });
+
+    let initial_event = stream::once(async move {
+        Ok(Event::default()
+            .event("gkg-connection")
+            .data(connection_event.to_string()))
+    });
+
+    let event_stream = BroadcastStream::new(receiver).filter_map(|result| async move {
         match result {
             Ok(event) => {
                 // Serialize the event to JSON
@@ -62,7 +78,9 @@ pub async fn events_handler(
         }
     });
 
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    let combined_stream = initial_event.chain(event_stream);
+
+    Sse::new(combined_stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)))
 }
 
 #[cfg(test)]

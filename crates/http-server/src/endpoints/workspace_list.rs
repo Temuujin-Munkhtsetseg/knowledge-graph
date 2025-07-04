@@ -89,12 +89,9 @@ pub async fn workspace_list_handler(State(state): State<AppState>) -> impl IntoR
 
     (
         StatusCode::OK,
-        Json(WorkspaceListResponses {
-            ok: Some(WorkspaceListEndpoint::create_success_response(
-                workspaces_with_projects,
-            )),
-            ..Default::default()
-        }),
+        Json(WorkspaceListEndpoint::create_success_response(
+            workspaces_with_projects,
+        )),
     )
         .into_response()
 }
@@ -205,10 +202,8 @@ mod tests {
         let response = server.get("/workspace/list").await;
 
         response.assert_status_ok();
-        let body: WorkspaceListResponses = response.json();
-        assert!(body.ok.is_some());
-        let success_response = body.ok.unwrap();
-        assert_eq!(success_response.workspaces.len(), 0);
+        let body: WorkspaceListSuccessResponse = response.json();
+        assert_eq!(body.workspaces.len(), 0);
     }
 
     #[tokio::test]
@@ -218,12 +213,10 @@ mod tests {
         let response = server.get("/workspace/list").await;
 
         response.assert_status_ok();
-        let body: WorkspaceListResponses = response.json();
-        assert!(body.ok.is_some());
-        let success_response = body.ok.unwrap();
-        assert_eq!(success_response.workspaces.len(), 2);
+        let body: WorkspaceListSuccessResponse = response.json();
+        assert_eq!(body.workspaces.len(), 2);
 
-        for workspace in &success_response.workspaces {
+        for workspace in &body.workspaces {
             assert!(!workspace.workspace_info.workspace_folder_path.is_empty());
             assert!(!workspace.workspace_info.data_directory_name.is_empty());
             assert_eq!(workspace.projects.len(), 1);
@@ -254,12 +247,10 @@ mod tests {
             "Workspace list took too long: {duration:?}"
         );
 
-        let body: WorkspaceListResponses = response.json();
-        assert!(body.ok.is_some());
-        let success_response = body.ok.unwrap();
-        assert_eq!(success_response.workspaces.len(), 2);
+        let body: WorkspaceListSuccessResponse = response.json();
+        assert_eq!(body.workspaces.len(), 2);
 
-        for workspace in &success_response.workspaces {
+        for workspace in &body.workspaces {
             assert_eq!(workspace.projects.len(), 1);
         }
     }

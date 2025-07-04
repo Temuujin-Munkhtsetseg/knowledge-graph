@@ -14,7 +14,7 @@ export type ProjectIndexingStarted = { project_info: TSProjectInfo, started_at: 
 
 export type WorkspaceIndexingCompleted = { workspace_folder_info: TSWorkspaceFolderInfo, projects_indexed: Array<string>, completed_at: string, };
 
-export type WorkspaceIndexingEvent = { "status": "Started" } & WorkspaceIndexingStarted | { "status": "Project" } & ProjectIndexingEvent | { "status": "Completed" } & WorkspaceIndexingCompleted | { "status": "Failed" } & WorkspaceIndexingFailed;
+export type WorkspaceIndexingEvent = { "status": "Started" } & WorkspaceIndexingStarted | { "status": "Completed" } & WorkspaceIndexingCompleted | { "status": "Failed" } & WorkspaceIndexingFailed;
 
 export type WorkspaceIndexingFailed = { workspace_folder_info: TSWorkspaceFolderInfo, projects_indexed: Array<string>, error: string, failed_at: string, };
 

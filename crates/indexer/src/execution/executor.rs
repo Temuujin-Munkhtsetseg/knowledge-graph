@@ -92,15 +92,14 @@ impl IndexingExecutor {
                         Status::Error,
                         Some(error_msg.clone()),
                     )?;
-                    self.event_bus.send(&GkgEvent::WorkspaceIndexing(
-                        WorkspaceIndexingEvent::Project(ProjectIndexingEvent::Failed(
+                    self.event_bus
+                        .send(&GkgEvent::ProjectIndexing(ProjectIndexingEvent::Failed(
                             ProjectIndexingFailed {
                                 project_info: to_ts_project_info(project_discovery),
                                 error: error_msg.clone(),
                                 failed_at: Utc::now(),
                             },
-                        )),
-                    ));
+                        )));
                     error!(
                         "  ❌ Failed to index repository '{}': {}",
                         &project_discovery.project_path, error_msg
@@ -139,14 +138,13 @@ impl IndexingExecutor {
             .get_project_info(workspace_folder_path, project_path)
             .ok_or_else(|| anyhow::anyhow!("Project not found"))?;
 
-        self.event_bus.send(&GkgEvent::WorkspaceIndexing(
-            WorkspaceIndexingEvent::Project(ProjectIndexingEvent::Started(
+        self.event_bus
+            .send(&GkgEvent::ProjectIndexing(ProjectIndexingEvent::Started(
                 ProjectIndexingStarted {
                     project_info: to_ts_project_info(&project_info),
                     started_at: Utc::now(),
                 },
-            )),
-        ));
+            )));
 
         let parquet_directory = project_info.parquet_directory.to_string_lossy();
         let database_path = project_info.database_path.to_string_lossy();
@@ -173,14 +171,13 @@ impl IndexingExecutor {
                     Status::Indexed,
                     None,
                 )?;
-                self.event_bus.send(&GkgEvent::WorkspaceIndexing(
-                    WorkspaceIndexingEvent::Project(ProjectIndexingEvent::Completed(
+                self.event_bus
+                    .send(&GkgEvent::ProjectIndexing(ProjectIndexingEvent::Completed(
                         ProjectIndexingCompleted {
                             project_info: to_ts_project_info(&project_info),
                             completed_at: Utc::now(),
                         },
-                    )),
-                ));
+                    )));
                 Ok(())
             }
             Err(e) => {
@@ -191,15 +188,14 @@ impl IndexingExecutor {
                     Status::Error,
                     Some(error_msg.clone()),
                 )?;
-                self.event_bus.send(&GkgEvent::WorkspaceIndexing(
-                    WorkspaceIndexingEvent::Project(ProjectIndexingEvent::Failed(
+                self.event_bus
+                    .send(&GkgEvent::ProjectIndexing(ProjectIndexingEvent::Failed(
                         ProjectIndexingFailed {
                             project_info: to_ts_project_info(&project_info),
                             error: error_msg.clone(),
                             failed_at: Utc::now(),
                         },
-                    )),
-                ));
+                    )));
                 Err(anyhow::anyhow!("Project indexing failed: {error_msg}"))
             }
         }
@@ -459,9 +455,7 @@ mod tests {
                 .filter(|e| {
                     matches!(
                         e,
-                        GkgEvent::WorkspaceIndexing(WorkspaceIndexingEvent::Project(
-                            ProjectIndexingEvent::Started(_)
-                        ))
+                        GkgEvent::ProjectIndexing(ProjectIndexingEvent::Started(_))
                     )
                 })
                 .count();
@@ -471,9 +465,7 @@ mod tests {
                 .filter(|e| {
                     matches!(
                         e,
-                        GkgEvent::WorkspaceIndexing(WorkspaceIndexingEvent::Project(
-                            ProjectIndexingEvent::Completed(_)
-                        ))
+                        GkgEvent::ProjectIndexing(ProjectIndexingEvent::Completed(_))
                     )
                 })
                 .count();
@@ -518,10 +510,7 @@ mod tests {
             let event = event_receiver.try_recv();
 
             if let Ok(event) = event {
-                if let GkgEvent::WorkspaceIndexing(WorkspaceIndexingEvent::Project(
-                    ProjectIndexingEvent::Failed(failed),
-                )) = event
-                {
+                if let GkgEvent::ProjectIndexing(ProjectIndexingEvent::Failed(failed)) = event {
                     assert_eq!(failed.project_info.project_path, "nonexistent_project");
                     assert!(failed.error.contains("Project not found"));
                 } else {
@@ -544,18 +533,14 @@ mod tests {
 
         assert!(events.len() >= 2, "Should have received at least 2 events");
 
-        if let GkgEvent::WorkspaceIndexing(WorkspaceIndexingEvent::Project(
-            ProjectIndexingEvent::Started(started),
-        )) = &events[0]
-        {
+        if let GkgEvent::ProjectIndexing(ProjectIndexingEvent::Started(started)) = &events[0] {
             assert_eq!(started.project_info.project_path, project.project_path);
         } else {
             panic!("Expected ProjectIndexingStarted event as first event");
         }
 
-        if let GkgEvent::WorkspaceIndexing(WorkspaceIndexingEvent::Project(
-            ProjectIndexingEvent::Completed(completed),
-        )) = events.last().unwrap()
+        if let GkgEvent::ProjectIndexing(ProjectIndexingEvent::Completed(completed)) =
+            events.last().unwrap()
         {
             assert_eq!(completed.project_info.project_path, project.project_path);
         } else {
