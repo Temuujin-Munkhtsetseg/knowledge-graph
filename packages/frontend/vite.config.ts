@@ -17,8 +17,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        // This targets the KG dev-server, which is typically running on port 27945
-        target: `http://localhost:${process.env.PORT || 27945}`,
+        // This targets the KG dev-server, which is typically running on port 27495
+        target: `http://localhost:${process.env.DEV_PORT || 27495}`,
         changeOrigin: true,
         secure: false,
       },
