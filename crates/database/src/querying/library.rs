@@ -1,15 +1,18 @@
-use serde_json::Value;
 use std::collections::HashMap;
+
+use crate::querying::mappers::{
+    INT_MAPPER, QueryResultMapper, RELATIONSHIP_TYPE_MAPPER, STRING_MAPPER,
+};
 
 pub struct QueryLibrary;
 
 #[derive(Debug, Clone)]
 pub struct Query {
     pub name: &'static str,
-    pub slug: &'static str,
     pub description: &'static str,
     pub query: &'static str,
     pub parameters: HashMap<&'static str, QueryParameter>,
+    pub result: HashMap<&'static str, QueryResultMapper>,
 }
 
 #[derive(Debug, Clone)]
@@ -17,23 +20,21 @@ pub struct QueryParameter {
     pub name: &'static str,
     pub description: &'static str,
     pub required: bool,
-    pub kind: QueryParameterKind,
-    pub default: Option<Value>,
+    pub definition: QueryParameterDefinition,
 }
 
 #[derive(Debug, Clone)]
-pub enum QueryParameterKind {
-    String,
-    Int,
-    Float,
-    Boolean,
+pub enum QueryParameterDefinition {
+    String(Option<String>),
+    Int(Option<i64>),
+    Float(Option<f64>),
+    Boolean(Option<bool>),
 }
 
 impl QueryLibrary {
     pub fn get_definition_relations_query() -> Query {
         Query {
             name: "list_relations",
-            slug: "List Relations",
             description: "Get all related definitions for any given definition.",
             query: r#"
                 MATCH (n:DefinitionNode)-[r]-(related:DefinitionNode)
@@ -54,8 +55,7 @@ impl QueryLibrary {
                         name: "fqn",
                         description: "The FQN of the definition to get relationships for.",
                         required: true,
-                        kind: QueryParameterKind::String,
-                        default: None,
+                        definition: QueryParameterDefinition::String(None),
                     },
                 ),
                 (
@@ -64,10 +64,17 @@ impl QueryLibrary {
                         name: "limit",
                         description: "The maximum number of relationships to return.",
                         required: false,
-                        kind: QueryParameterKind::Int,
-                        default: Some(Value::Number(100.into())),
+                        definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
+            ]),
+            result: HashMap::from([
+                ("fqn", STRING_MAPPER),
+                ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
+                ("name", STRING_MAPPER),
+                ("definition_type", STRING_MAPPER),
+                ("file_path", STRING_MAPPER),
+                ("line_number", INT_MAPPER),
             ]),
         }
     }
@@ -75,7 +82,6 @@ impl QueryLibrary {
     pub fn get_file_definitions_query() -> Query {
         Query {
             name: "list_file_definitions",
-            slug: "List File Definitions",
             description: "List all definitions inside a specific file.",
             query: r#"
                 MATCH (file:FileNode)-[r:FILE_RELATIONSHIPS]->(definition:DefinitionNode)
@@ -96,8 +102,7 @@ impl QueryLibrary {
                         name: "file_path",
                         description: "The path of the file to get definitions for.",
                         required: true,
-                        kind: QueryParameterKind::String,
-                        default: None,
+                        definition: QueryParameterDefinition::String(None),
                     },
                 ),
                 (
@@ -106,10 +111,16 @@ impl QueryLibrary {
                         name: "limit",
                         description: "The maximum number of definitions to return.",
                         required: false,
-                        kind: QueryParameterKind::Int,
-                        default: Some(Value::Number(100.into())),
+                        definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
+            ]),
+            result: HashMap::from([
+                ("fqn", STRING_MAPPER),
+                ("name", STRING_MAPPER),
+                ("definition_type", STRING_MAPPER),
+                ("line_number", INT_MAPPER),
+                ("file_path", STRING_MAPPER),
             ]),
         }
     }
@@ -117,7 +128,6 @@ impl QueryLibrary {
     pub fn get_list_matches_query() -> Query {
         Query {
             name: "list_matches",
-            slug: "List Matches",
             description: "Get all definitions with FQNs that contain the provided string (case insensitive).",
             query: r#"
                 MATCH (n:DefinitionNode)
@@ -138,8 +148,7 @@ impl QueryLibrary {
                         name: "search_string",
                         description: "The string to search for within FQNs (case insensitive).",
                         required: true,
-                        kind: QueryParameterKind::String,
-                        default: None,
+                        definition: QueryParameterDefinition::String(None),
                     },
                 ),
                 (
@@ -148,10 +157,16 @@ impl QueryLibrary {
                         name: "limit",
                         description: "The maximum number of matches to return.",
                         required: false,
-                        kind: QueryParameterKind::Int,
-                        default: Some(Value::Number(100.into())),
+                        definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
+            ]),
+            result: HashMap::from([
+                ("fqn", STRING_MAPPER),
+                ("name", STRING_MAPPER),
+                ("definition_type", STRING_MAPPER),
+                ("line_number", INT_MAPPER),
+                ("file_path", STRING_MAPPER),
             ]),
         }
     }

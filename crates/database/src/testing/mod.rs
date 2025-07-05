@@ -94,6 +94,20 @@ impl QueryResultRow for MockQueryResultRow {
             .ok_or_else(|| anyhow!("Index {} out of bounds", index))
     }
 
+    fn get_int_value(&self, index: usize) -> Result<i64, Error> {
+        self.values
+            .get(index)
+            .and_then(|value| value.parse::<i64>().ok())
+            .ok_or_else(|| anyhow!("Index {} out of bounds", index))
+    }
+
+    fn get_uint_value(&self, index: usize) -> Result<u64, Error> {
+        self.values
+            .get(index)
+            .and_then(|value| value.parse::<u64>().ok())
+            .ok_or_else(|| anyhow!("Index {} out of bounds", index))
+    }
+
     fn count(&self) -> usize {
         self.values.len()
     }

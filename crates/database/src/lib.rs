@@ -1,3 +1,4 @@
+pub mod graph;
 pub mod kuzu;
 pub mod querying;
 

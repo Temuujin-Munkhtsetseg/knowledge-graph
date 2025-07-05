@@ -2,11 +2,11 @@ use crate::database::node_database_service::NodeDatabaseService;
 use crate::database::types::{
     DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, KuzuNodeType,
 };
-use crate::database::utils::{RelationshipType, RelationshipTypeMapping};
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
 use crate::project::source::{GitaliskFileSource, PathFileSource};
+use database::graph::{RelationshipType, RelationshipTypeMapping};
 use database::kuzu::config::DatabaseConfig;
 use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;

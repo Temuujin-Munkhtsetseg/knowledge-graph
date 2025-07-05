@@ -1,4 +1,4 @@
-use crate::tools::types::{KnowledgeGraphTool, ToolParameter, ToolParameterKind};
+use crate::tools::types::{KnowledgeGraphTool, ToolParameter, ToolParameterDefinition};
 use database::querying::{Query, QueryParameter, QueryingService};
 use rmcp::model::{CallToolResult, Content, JsonObject, Tool};
 use serde_json;
@@ -8,9 +8,7 @@ use std::sync::Arc;
 
 pub struct QueryKnowledgeGraphTool {
     query_service: Arc<dyn QueryingService>,
-    name: &'static str,
-    query: &'static str,
-    description: &'static str,
+    query: Query,
     parameters: HashMap<&'static str, ToolParameter>,
 }
 
@@ -18,9 +16,7 @@ impl QueryKnowledgeGraphTool {
     pub fn new(query_service: Arc<dyn QueryingService>, query: Query) -> Self {
         Self {
             query_service,
-            name: query.name,
-            query: query.query,
-            description: query.description,
+            query: query.clone(),
             parameters: extract_parameters(query.parameters),
         }
     }
@@ -30,13 +26,12 @@ const PROJECT_PARAMETER: ToolParameter = ToolParameter {
     name: "project",
     description: "The project to execute the query on. This is the path to current project directory.",
     required: true,
-    kind: ToolParameterKind::String,
-    default: None,
+    definition: ToolParameterDefinition::String(None),
 };
 
 impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
     fn name(&self) -> &str {
-        self.name
+        self.query.name
     }
 
     fn to_mcp_tool(&self) -> Tool {
@@ -73,8 +68,8 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
         );
 
         Tool {
-            name: Cow::Borrowed(self.name),
-            description: Cow::Borrowed(self.description),
+            name: Cow::Borrowed(self.query.name),
+            description: Cow::Borrowed(self.query.description),
             input_schema: Arc::new(input_schema),
         }
     }
@@ -107,7 +102,7 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
             .query_service
             .execute_query(
                 project_path.unwrap().as_str().unwrap(),
-                self.query,
+                self.query.query,
                 query_params,
             )
             .map_err(|e| {
@@ -118,13 +113,23 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
                 )
             })?;
 
-        let json_result = result.to_json().map_err(|e| {
+        let json_result = result.to_json(&self.query.result).map_err(|e| {
             rmcp::Error::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
                 format!("Could not convert query result to JSON: {e}."),
                 None,
             )
         })?;
+
+        if json_result.is_array() {
+            let mut content = Vec::new();
+
+            for item in json_result.as_array().unwrap() {
+                content.push(Content::json(item).unwrap());
+            }
+
+            return Ok(CallToolResult::success(content));
+        }
 
         Ok(CallToolResult::success(vec![
             Content::json(json_result).unwrap(),
@@ -144,8 +149,7 @@ fn extract_parameters(
                 name,
                 description: parameter.description,
                 required: parameter.required,
-                kind: ToolParameterKind::from_query_kind(parameter.kind),
-                default: parameter.default,
+                definition: ToolParameterDefinition::from_query_kind(parameter.definition),
             },
         );
     }
@@ -159,7 +163,10 @@ fn extract_parameters(
 mod tests {
     use super::*;
     use database::{
-        querying::library::{Query, QueryParameter, QueryParameterKind},
+        querying::{
+            library::{Query, QueryParameter, QueryParameterDefinition},
+            mappers::{INT_MAPPER, STRING_MAPPER},
+        },
         testing::MockQueryingService,
     };
     use serde_json::json;
@@ -174,27 +181,26 @@ mod tests {
                 name: "fqn",
                 description: "The fully qualified name",
                 required: true,
-                kind: QueryParameterKind::String,
-                default: None,
+                definition: QueryParameterDefinition::String(None),
             },
         );
+
         parameters.insert(
             "limit",
             QueryParameter {
                 name: "limit",
                 description: "Maximum number of results",
                 required: false,
-                kind: QueryParameterKind::Int,
-                default: Some(json!(10)),
+                definition: QueryParameterDefinition::Int(Some(10)),
             },
         );
 
         Query {
             name: "test_query",
-            slug: "Test Query",
             description: "A test query for testing purposes",
-            query: "MATCH (n) WHERE n.fqn = $fqn RETURN n LIMIT $limit",
+            query: "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit",
             parameters,
+            result: HashMap::from([("id", INT_MAPPER), ("name", STRING_MAPPER)]),
         }
     }
 
@@ -208,12 +214,12 @@ mod tests {
 
             let tool = QueryKnowledgeGraphTool::new(mock_service, query);
 
-            assert_eq!(tool.name, "test_query");
+            assert_eq!(tool.name(), "test_query");
             assert_eq!(
-                tool.query,
-                "MATCH (n) WHERE n.fqn = $fqn RETURN n LIMIT $limit"
+                tool.query.query,
+                "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit"
             );
-            assert_eq!(tool.description, "A test query for testing purposes");
+            assert_eq!(tool.query.description, "A test query for testing purposes");
         }
 
         #[test]
@@ -271,7 +277,7 @@ mod tests {
         }
     }
 
-    mod call_method_tests {
+    mod call_tool_tests {
         use super::*;
 
         #[test]
@@ -287,14 +293,14 @@ mod tests {
                 MockQueryingService::new()
                     .with_expectations(
                         "/test/project".to_string(),
-                        "MATCH (n) WHERE n.fqn = $fqn RETURN n LIMIT $limit".to_string(),
+                        "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit".to_string(),
                         expected_params,
                     )
                     .with_return_data(
-                        vec!["name".to_string(), "type".to_string()],
+                        vec!["id".to_string(), "name".to_string()],
                         vec![
-                            vec!["TestClass".to_string(), "class".to_string()],
-                            vec!["TestMethod".to_string(), "method".to_string()],
+                            vec!["1".to_string(), "TestClass".to_string()],
+                            vec!["2".to_string(), "TestMethod".to_string()],
                         ],
                     ),
             );
@@ -314,25 +320,30 @@ mod tests {
             let result = tool.call(params).unwrap();
 
             assert!(!result.is_error.unwrap());
-            assert_eq!(result.content.len(), 1);
+            assert_eq!(result.content.len(), 2);
 
-            // The content should be JSON data
-            let content = &result.content[0];
+            // Assert against the content array directly
+            assert_eq!(result.content.len(), 2);
+
+            let first_content = &result.content[0];
+            let second_content = &result.content[1];
+
             if let Ok(json_data) =
-                serde_json::from_str::<serde_json::Value>(&content.as_text().unwrap().text)
+                serde_json::from_str::<serde_json::Value>(&first_content.as_text().unwrap().text)
             {
-                if let Some(data_array) = json_data.as_array() {
-                    println!("data_array: {data_array:?}");
-                    assert_eq!(data_array.len(), 2);
-                    assert_eq!(data_array[0]["name"], "TestClass");
-                    assert_eq!(data_array[0]["type"], "class");
-                    assert_eq!(data_array[1]["name"], "TestMethod");
-                    assert_eq!(data_array[1]["type"], "method");
-                } else {
-                    panic!("Expected JSON array data");
-                }
+                assert_eq!(json_data["id"], 1);
+                assert_eq!(json_data["name"], "TestClass");
             } else {
-                panic!("Expected JSON content");
+                panic!("Expected JSON content for first item");
+            }
+
+            if let Ok(json_data) =
+                serde_json::from_str::<serde_json::Value>(&second_content.as_text().unwrap().text)
+            {
+                assert_eq!(json_data["id"], 2);
+                assert_eq!(json_data["name"], "TestMethod");
+            } else {
+                panic!("Expected JSON content for second item");
             }
         }
 
@@ -366,11 +377,14 @@ mod tests {
                 params
             };
 
-            let mock_service = Arc::new(MockQueryingService::new().with_expectations(
-                "/test/project".to_string(),
-                "MATCH (n) WHERE n.fqn = $fqn RETURN n LIMIT $limit".to_string(),
-                expected_params,
-            ));
+            let mock_service = Arc::new(
+                MockQueryingService::new().with_expectations(
+                    "/test/project".to_string(),
+                    "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit"
+                        .to_string(),
+                    expected_params,
+                ),
+            );
 
             let query = create_test_query();
             let tool = QueryKnowledgeGraphTool::new(mock_service, query);
@@ -439,11 +453,14 @@ mod tests {
                 params
             };
 
-            let mock_service = Arc::new(MockQueryingService::new().with_expectations(
-                "/test/project".to_string(),
-                "MATCH (n) WHERE n.fqn = $fqn RETURN n LIMIT $limit".to_string(),
-                expected_params,
-            ));
+            let mock_service = Arc::new(
+                MockQueryingService::new().with_expectations(
+                    "/test/project".to_string(),
+                    "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit"
+                        .to_string(),
+                    expected_params,
+                ),
+            );
 
             let query = create_test_query();
             let tool = QueryKnowledgeGraphTool::new(mock_service, query);
