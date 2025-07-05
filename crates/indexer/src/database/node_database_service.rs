@@ -1,8 +1,7 @@
 use crate::database::types::{
     FromKuzuNode, KuzuNodeType, NodeCounts, QuoteEscape, RelationshipCounts,
 };
-use crate::database::utils::RelationshipType;
-use crate::utils::RelationshipTypeMapping;
+use database::graph::{RelationshipType, RelationshipTypeMapping};
 use database::kuzu::{connection::KuzuConnection, types::DatabaseError};
 
 #[derive(Default)]

@@ -39,6 +39,32 @@ impl QueryResultRow for DatabaseQueryResultRow {
         Ok(self.row[index].to_string())
     }
 
+    fn get_int_value(&self, index: usize) -> Result<i64, Error> {
+        match &self.row[index] {
+            kuzu::Value::Int64(value) => Ok(*value),
+            kuzu::Value::Int32(value) => Ok((*value).into()),
+            kuzu::Value::Int16(value) => Ok((*value).into()),
+            kuzu::Value::Int8(value) => Ok((*value).into()),
+            _ => Err(Error::msg(format!(
+                "Expected integer value, got: {:?}",
+                self.row[index]
+            ))),
+        }
+    }
+
+    fn get_uint_value(&self, index: usize) -> Result<u64, Error> {
+        match &self.row[index] {
+            kuzu::Value::UInt64(value) => Ok(*value),
+            kuzu::Value::UInt32(value) => Ok((*value).into()),
+            kuzu::Value::UInt16(value) => Ok((*value).into()),
+            kuzu::Value::UInt8(value) => Ok((*value).into()),
+            _ => Err(Error::msg(format!(
+                "Expected unsigned integer value, got: {:?}",
+                self.row[index]
+            ))),
+        }
+    }
+
     fn count(&self) -> usize {
         self.row.len()
     }

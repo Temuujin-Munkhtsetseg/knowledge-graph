@@ -1,13 +1,12 @@
 use crate::analysis::{DefinitionNode, DirectoryNode, FileNode, GraphData};
-use crate::database::utils::{
-    ConsolidatedRelationship, GraphMapper, NodeIdGenerator, RelationshipTypeMapping,
-};
+use crate::database::utils::{ConsolidatedRelationship, GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Result};
 use arrow::{
     array::{Int32Array, Int64Array, StringArray, UInt8Array, UInt32Array},
     datatypes::{DataType, Field, Schema},
     record_batch::RecordBatch,
 };
+use database::graph::RelationshipTypeMapping;
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 use parser_core::definitions::DefinitionTypeInfo;
 use std::{
