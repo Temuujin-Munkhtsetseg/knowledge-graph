@@ -7,31 +7,38 @@ use database::querying::{Query, QueryLibrary, QueryingService};
 use rmcp::model::CallToolResult;
 use rmcp::model::JsonObject;
 use rmcp::model::Tool;
+use workspace_manager::WorkspaceManager;
 
 pub struct AvailableToolsService {
     tools: HashMap<String, Box<dyn KnowledgeGraphTool>>,
 }
 
 impl AvailableToolsService {
-    pub fn new(query_service: Arc<dyn QueryingService>) -> Self {
+    pub fn new(
+        query_service: Arc<dyn QueryingService>,
+        workspace_manager: Arc<WorkspaceManager>,
+    ) -> Self {
         let mut tools: HashMap<String, Box<dyn KnowledgeGraphTool>> = HashMap::new();
 
         add_query_tool(
             &mut tools,
             QueryLibrary::get_definition_relations_query(),
             query_service.clone(),
+            workspace_manager.clone(),
         );
 
         add_query_tool(
             &mut tools,
             QueryLibrary::get_file_definitions_query(),
             query_service.clone(),
+            workspace_manager.clone(),
         );
 
         add_query_tool(
             &mut tools,
             QueryLibrary::get_list_matches_query(),
             query_service.clone(),
+            workspace_manager.clone(),
         );
 
         Self { tools }
@@ -61,9 +68,14 @@ fn add_query_tool(
     tools: &mut HashMap<String, Box<dyn KnowledgeGraphTool>>,
     query: Query,
     query_service: Arc<dyn QueryingService>,
+    workspace_manager: Arc<WorkspaceManager>,
 ) {
     tools.insert(
         query.name.to_string(),
-        Box::new(QueryKnowledgeGraphTool::new(query_service.clone(), query)),
+        Box::new(QueryKnowledgeGraphTool::new(
+            query_service.clone(),
+            query,
+            workspace_manager,
+        )),
     );
 }

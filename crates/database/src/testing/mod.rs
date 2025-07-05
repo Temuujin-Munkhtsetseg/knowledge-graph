@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{querying::QueryResult, querying::QueryResultRow, querying::QueryingService};
 use anyhow::{Error, anyhow};
 use serde_json::{Map, Value};
@@ -56,7 +58,7 @@ impl MockQueryingService {
 impl QueryingService for MockQueryingService {
     fn execute_query(
         &self,
-        project_path: &str,
+        project_path: PathBuf,
         query: &str,
         params: Map<String, Value>,
     ) -> Result<Box<dyn QueryResult>, Error> {
@@ -66,7 +68,11 @@ impl QueryingService for MockQueryingService {
 
         // Verify expectations if set
         if let Some(expected_path) = &self.expected_project_path {
-            assert_eq!(project_path, expected_path, "Project path mismatch");
+            assert_eq!(
+                project_path.to_str().unwrap(),
+                expected_path,
+                "Project path mismatch"
+            );
         }
         if let Some(expected_query) = &self.expected_query {
             assert_eq!(query, expected_query, "Query mismatch");

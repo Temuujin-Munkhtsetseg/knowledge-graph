@@ -5,6 +5,7 @@ use rmcp::model::{
 };
 use std::sync::Arc;
 use tracing::info;
+use workspace_manager::WorkspaceManager;
 
 pub trait McpService: Send + Sync {
     fn initialize(&self, request: InitializeRequest) -> InitializeResult;
@@ -24,9 +25,12 @@ pub struct DefaultMcpService {
 }
 
 impl DefaultMcpService {
-    pub fn new(query_service: Arc<dyn QueryingService>) -> Self {
+    pub fn new(
+        query_service: Arc<dyn QueryingService>,
+        workspace_manager: Arc<WorkspaceManager>,
+    ) -> Self {
         Self {
-            available_tools_service: AvailableToolsService::new(query_service),
+            available_tools_service: AvailableToolsService::new(query_service, workspace_manager),
         }
     }
 }
