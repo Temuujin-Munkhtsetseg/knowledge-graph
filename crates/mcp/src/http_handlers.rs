@@ -1,7 +1,7 @@
 use crate::service::McpService;
 use rmcp::model::{
-    CallToolRequest, ErrorCode, ErrorData, InitializeRequest, JsonObject, JsonRpcMessage, Message,
-    NumberOrString, PaginatedRequestParam, WithMeta, object,
+    CallToolRequest, ErrorCode, ErrorData, InitializeRequest, JsonObject, JsonRpcMessage,
+    NumberOrString, PaginatedRequestParam, object,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -21,7 +21,7 @@ pub fn handle_mcp_request(service: &dyn McpService, request: Value) -> Value {
 
             let result = service.initialize(request);
 
-            Message::Response(to_json_object(result), id).into_json_rpc_message()
+            JsonRpcMessage::response(to_json_object(result), id)
         }
         "notifications/initialized" => {
             service.on_initialized();
@@ -39,8 +39,8 @@ pub fn handle_mcp_request(service: &dyn McpService, request: Value) -> Value {
             let result = service.list_tools(request);
 
             match result {
-                Ok(tools) => Message::Response(to_json_object(tools), id).into_json_rpc_message(),
-                Err(error) => Message::Error(error, id).into_json_rpc_message(),
+                Ok(tools) => JsonRpcMessage::response(to_json_object(tools), id),
+                Err(error) => JsonRpcMessage::error(error, id),
             }
         }
         "tools/call" => {
@@ -54,19 +54,18 @@ pub fn handle_mcp_request(service: &dyn McpService, request: Value) -> Value {
             let result = service.call_tool(request.params);
 
             match result {
-                Ok(result) => Message::Response(to_json_object(result), id).into_json_rpc_message(),
-                Err(error) => Message::Error(error, id).into_json_rpc_message(),
+                Ok(result) => JsonRpcMessage::response(to_json_object(result), id),
+                Err(error) => JsonRpcMessage::error(error, id),
             }
         }
-        _ => Message::Error(
+        _ => JsonRpcMessage::error(
             ErrorData::new(
                 ErrorCode::METHOD_NOT_FOUND,
                 format!("Method not found: {method}"),
                 None,
             ),
             extract_id(&request),
-        )
-        .into_json_rpc_message(),
+        ),
     };
 
     serde_json::to_value(message).unwrap_or_else(|e| {
@@ -93,15 +92,14 @@ fn parse_request<T: for<'a> Deserialize<'a>>(request: Value) -> Result<T, Value>
     if json.is_err() {
         error!("[MCP] Failed to parse request: {}.", json.err().unwrap());
 
-        let message: JsonRpcMessage = Message::Error(
+        let message: JsonRpcMessage = JsonRpcMessage::error(
             ErrorData::new(
                 ErrorCode::INVALID_PARAMS,
                 "Invalid request parameters".to_string(),
                 None,
             ),
             id,
-        )
-        .into_json_rpc_message();
+        );
 
         return Err(serde_json::to_value(message).unwrap());
     }
@@ -114,11 +112,8 @@ fn extract_id(request: &Value) -> NumberOrString {
         .unwrap_or(NumberOrString::Number(0))
 }
 
-fn to_json_object<T: Serialize>(result: T) -> WithMeta<JsonObject, JsonObject> {
-    WithMeta {
-        inner: object(serde_json::to_value(result).unwrap()),
-        _meta: None,
-    }
+fn to_json_object<T: Serialize>(result: T) -> JsonObject {
+    object(serde_json::to_value(result).unwrap())
 }
 
 #[cfg(test)]

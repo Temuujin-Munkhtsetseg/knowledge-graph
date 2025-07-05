@@ -16,7 +16,7 @@ parser-core = { git = "https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git
 gitalisk-core = { git = "https://gitlab.com/gitlab-org/rust/gitalisk.git", tag = "v0.3.1" }
 
 anyhow = "1.0.98"
-clap = { version = "4.5.39", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 toml = "0.8.23"
 ignore = "0.4.23"
 serde = { version = "1.0.219", features = ["derive"] }
@@ -36,7 +36,7 @@ chrono = { version = "0.4.41", features = ["serde"] }
 sha2 = "0.10.9"
 hex = "0.4.3"
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
-tokio = { version = "1.45.1", features = ["full"] }
+tokio = { version = "1.46.1", features = ["full"] }
 ctrlc = "3.4.7"
 single-instance = "0.3.3"
 home = "0.5.11"
@@ -46,13 +46,13 @@ http = "1.3.1"
 once_cell = "1.21.3"
 rust-embed = "8.7.2"
 tower = "0.5.2"
-tower-http = { version = "0.6", features = ["cors"] }
+tower-http = { version = "0.6.6", features = ["cors"] }
 futures-util = "0.3.31"
 tokio-stream = "0.1.17"
 ts-rs = "11.0.1"
 tracing-appender = "0.2.3"
 file-rotate = "0.8.0"
-rmcp = { version = "0.1", features = ["server"] }
+rmcp = { version = "0.2.1", features = ["server"] }
 dashmap = "6.1.0"
 tokio-util = "0.7.15"
 miette = "7.6.0"
@@ -66,4 +66,4 @@ criterion = "0.6.0"
 # Test dependencies
 axum-test = "17.3.0"
 tokio-test = "0.4.4"
-reqwest = "0.12.0"
+reqwest = "0.12.22"
