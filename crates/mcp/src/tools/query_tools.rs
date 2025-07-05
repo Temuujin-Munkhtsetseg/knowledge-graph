@@ -1,5 +1,8 @@
 use crate::tools::types::{KnowledgeGraphTool, ToolParameter, ToolParameterDefinition};
-use database::querying::{Query, QueryParameter, QueryingService};
+use database::querying::{
+    QueryingService,
+    library::{Query, QueryParameter},
+};
 use rmcp::model::{CallToolResult, Content, JsonObject, Tool};
 use serde_json;
 use std::borrow::Cow;
@@ -69,8 +72,9 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
 
         Tool {
             name: Cow::Borrowed(self.query.name),
-            description: Cow::Borrowed(self.query.description),
+            description: Some(Cow::Borrowed(self.query.description)),
             input_schema: Arc::new(input_schema),
+            annotations: None,
         }
     }
 
