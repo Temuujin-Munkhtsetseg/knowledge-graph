@@ -3,6 +3,8 @@ import type { EventSourceMessage } from 'eventsource-parser';
 import type {
   ApiContract,
   GkgEvent,
+  GraphInitialQueryRequest,
+  GraphInitialSuccessResponse,
   HttpMethod,
   ServerInfoResponse,
   WorkspaceDeleteBodyRequest,
@@ -121,8 +123,23 @@ class HttpClient {
   protected async get<T>(
     endpoint: string,
     options?: { headers?: HeadersInit; timeout?: number },
+    pathParams?: Record<string, string>,
+    queryParams?: Record<string, string | number | null>,
   ): Promise<T> {
-    return this.#makeRequest<T>(endpoint, 'GET', options);
+    let newEndpoint = endpoint;
+    if (pathParams) {
+      Object.entries(pathParams).forEach(([key, value]) => {
+        const encodedValue = encodeURIComponent(value);
+        newEndpoint = newEndpoint.replace(`{${key}}`, encodedValue);
+      });
+    }
+    const url = new URL(newEndpoint, window.location.origin);
+    if (queryParams) {
+      Object.entries(queryParams).forEach(([key, value]) => {
+        url.searchParams.set(key, value?.toString() ?? '');
+      });
+    }
+    return this.#makeRequest<T>(url.toString(), 'GET', options);
   }
 
   protected async post<T>(
@@ -210,6 +227,27 @@ export class ApiClient extends HttpClient {
 
   async deleteWorkspace(data: WorkspaceDeleteBodyRequest): Promise<WorkspaceDeleteSuccessResponse> {
     return this.delete<WorkspaceDeleteSuccessResponse>(endpointPaths.workspace_delete, data);
+  }
+
+  async fetchGraphData(
+    workspaceFolderPath: string,
+    projectPath: string,
+  ): Promise<GraphInitialSuccessResponse> {
+    const queryParams: GraphInitialQueryRequest = {
+      directory_limit: 20,
+      file_limit: 100,
+      definition_limit: 500,
+    };
+
+    return this.get<GraphInitialSuccessResponse>(
+      endpointPaths.graph_initial,
+      undefined,
+      {
+        workspace_folder_path: workspaceFolderPath,
+        project_path: projectPath,
+      },
+      queryParams,
+    );
   }
 }
 

@@ -13,6 +13,10 @@ import { useWorkspaces } from '@/hooks/api';
 const { data: workspacesData, isLoading, error, refetch } = useWorkspaces();
 const isIndexerOpen = ref(false);
 
+const emit = defineEmits<{
+  openProject: [projectPath: string];
+}>();
+
 const workspaces = computed((): WorkspaceListSuccessResponse['workspaces'] => {
   if (workspacesData.value?.workspaces && Array.isArray(workspacesData.value.workspaces)) {
     return workspacesData.value.workspaces.filter(
@@ -89,7 +93,11 @@ const hasWorkspaces = computed(() => workspaces.value.length > 0);
 
       <!-- Workspace List -->
       <div v-else class="space-y-0.5">
-        <WorkspaceList :workspaces="workspaces" @refresh="refetch" />
+        <WorkspaceList
+          :workspaces="workspaces"
+          @refresh="refetch"
+          @open-project="emit('openProject', $event)"
+        />
       </div>
     </SidebarContent>
   </Sidebar>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { ChevronRight, AlertCircle, Database, FolderOpen, type LucideIcon } from 'lucide-vue-next';
-import StyledPath from './StyledPath.vue';
+import StyledPath from '@/components/common/StyledPath.vue';
 import { Badge } from '@/components/ui/badge';
 
 interface Props {

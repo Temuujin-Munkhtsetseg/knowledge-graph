@@ -15,19 +15,9 @@ const refreshPage = () => {
   location.reload();
 };
 
-// Simple error logging utility
-const logError = (err: Error, context = 'ErrorBoundary') => {
-  console.error(`[${context}] Error caught:`, {
-    message: err.message,
-    stack: err.stack,
-    timestamp: new Date().toISOString(),
-  });
-};
-
 onErrorCaptured((err) => {
   error.value = err;
   hasError.value = true;
-  logError(err, 'ErrorBoundary');
   return false; // Prevent error from propagating
 });
 
