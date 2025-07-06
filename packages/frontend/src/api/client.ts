@@ -21,6 +21,7 @@ const endpointPaths = {
   workspace_index: '/api/workspace/index',
   index: '/api/workspace/index',
   events: '/api/events',
+  graph_initial: '/api/graph/initial/{workspace_folder_path}/{project_path}',
 } satisfies Record<keyof ApiContract, ApiContract[keyof ApiContract]['path']>;
 
 export class ApiError extends Error {
