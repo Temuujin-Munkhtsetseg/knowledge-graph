@@ -8,19 +8,26 @@ use serde_json;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
+use workspace_manager::WorkspaceManager;
 
 pub struct QueryKnowledgeGraphTool {
     query_service: Arc<dyn QueryingService>,
     query: Query,
     parameters: HashMap<&'static str, ToolParameter>,
+    workspace_manager: Arc<WorkspaceManager>,
 }
 
 impl QueryKnowledgeGraphTool {
-    pub fn new(query_service: Arc<dyn QueryingService>, query: Query) -> Self {
+    pub fn new(
+        query_service: Arc<dyn QueryingService>,
+        query: Query,
+        workspace_manager: Arc<WorkspaceManager>,
+    ) -> Self {
         Self {
             query_service,
             query: query.clone(),
             parameters: extract_parameters(query.parameters),
+            workspace_manager,
         }
     }
 }
@@ -102,13 +109,27 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
             ));
         }
 
+        // FIXME: get_project_for_path only returns the first result if there are multiple projects across workspace paths
+        // MCP needs a way to find the correct workspace_folder_path for the project
+        // This should be OK for now since the project paths point to the same project on the file system, but when we connect nodes across projects in a
+        // workspace, this will be a bug.
+        let project_info = match self
+            .workspace_manager
+            .get_project_for_path(project_path.unwrap().as_str().unwrap())
+        {
+            Some(info) => info,
+            None => {
+                return Err(rmcp::Error::new(
+                    rmcp::model::ErrorCode::RESOURCE_NOT_FOUND,
+                    "Project not found. Please provide a valid project path.",
+                    None,
+                ));
+            }
+        };
+
         let mut result = self
             .query_service
-            .execute_query(
-                project_path.unwrap().as_str().unwrap(),
-                self.query.query,
-                query_params,
-            )
+            .execute_query(project_info.database_path, self.query.query, query_params)
             .map_err(|e| {
                 rmcp::Error::new(
                     rmcp::model::ErrorCode::INVALID_REQUEST,
@@ -176,6 +197,30 @@ mod tests {
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use tempfile::TempDir;
+    use testing::repository::TestRepository;
+
+    fn create_test_workspace_manager() -> (Arc<WorkspaceManager>, String) {
+        let temp_workspace_dir = TempDir::new().unwrap();
+        let workspace_path = temp_workspace_dir.path().join("test_workspace");
+        std::fs::create_dir_all(&workspace_path).unwrap();
+
+        let test_project_path = workspace_path.join("test_project");
+        TestRepository::new(&test_project_path, Some("test-repo"));
+
+        let temp_data_dir = TempDir::new().unwrap();
+        let manager = Arc::new(
+            WorkspaceManager::new_with_directory(temp_data_dir.path().to_path_buf()).unwrap(),
+        );
+
+        manager.register_workspace_folder(&workspace_path).unwrap();
+
+        // Get the canonical project path that was actually registered
+        let projects = manager.list_all_projects();
+        let project_path = projects[0].project_path.clone();
+
+        (manager, project_path)
+    }
 
     fn create_test_query() -> Query {
         let mut parameters = HashMap::new();
@@ -215,8 +260,9 @@ mod tests {
         fn test_new_creates_tool_with_correct_properties() {
             let mock_service = Arc::new(MockQueryingService::new());
             let query = create_test_query();
+            let (workspace_manager, _) = create_test_workspace_manager();
 
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             assert_eq!(tool.name(), "test_query");
             assert_eq!(
@@ -230,8 +276,9 @@ mod tests {
         fn test_new_extracts_parameters_and_include_project_parameter_correctly() {
             let mock_service = Arc::new(MockQueryingService::new());
             let query = create_test_query();
+            let (workspace_manager, _) = create_test_workspace_manager();
 
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             assert_eq!(tool.parameters.len(), 3);
             assert!(tool.parameters.contains_key("fqn"));
@@ -247,7 +294,8 @@ mod tests {
         fn test_to_mcp_tool_includes_all_parameters() {
             let mock_service = Arc::new(MockQueryingService::new());
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let (workspace_manager, _) = create_test_workspace_manager();
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let mcp_tool = tool.to_mcp_tool();
             let schema = mcp_tool.input_schema.as_ref();
@@ -269,7 +317,8 @@ mod tests {
         fn test_to_mcp_tool_parameter_with_default_value() {
             let mock_service = Arc::new(MockQueryingService::new());
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let (workspace_manager, _) = create_test_workspace_manager();
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let mcp_tool = tool.to_mcp_tool();
             let schema = mcp_tool.input_schema.as_ref();
@@ -286,6 +335,11 @@ mod tests {
 
         #[test]
         fn test_call_executes_query_successfully() {
+            let (workspace_manager, project_path) = create_test_workspace_manager();
+            let project_info = workspace_manager
+                .get_project_for_path(&project_path)
+                .unwrap();
+
             let expected_params = {
                 let mut params = serde_json::Map::new();
                 params.insert("fqn".to_string(), json!("test.fqn"));
@@ -296,7 +350,7 @@ mod tests {
             let mock_service = Arc::new(
                 MockQueryingService::new()
                     .with_expectations(
-                        "/test/project".to_string(),
+                        project_info.database_path.to_string_lossy().to_string(),
                         "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit".to_string(),
                         expected_params,
                     )
@@ -310,10 +364,10 @@ mod tests {
             );
 
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let params = json!({
-                "project": "/test/project",
+                "project": project_path,
                 "fqn": "test.fqn",
                 "limit": 5
             })
@@ -355,7 +409,8 @@ mod tests {
         fn test_call_fails_when_project_parameter_missing() {
             let mock_service = Arc::new(MockQueryingService::new());
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let (workspace_manager, _) = create_test_workspace_manager();
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let params = json!({
                 "fqn": "test.fqn",
@@ -374,6 +429,11 @@ mod tests {
 
         #[test]
         fn test_call_uses_default_values_for_optional_parameters() {
+            let (workspace_manager, project_path) = create_test_workspace_manager();
+            let project_info = workspace_manager
+                .get_project_for_path(&project_path)
+                .unwrap();
+
             let expected_params = {
                 let mut params = serde_json::Map::new();
                 params.insert("fqn".to_string(), json!("test.fqn"));
@@ -383,7 +443,7 @@ mod tests {
 
             let mock_service = Arc::new(
                 MockQueryingService::new().with_expectations(
-                    "/test/project".to_string(),
+                    project_info.database_path.to_string_lossy().to_string(),
                     "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit"
                         .to_string(),
                     expected_params,
@@ -391,10 +451,10 @@ mod tests {
             );
 
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let params = json!({
-                "project": "/test/project",
+                "project": project_path,
                 "fqn": "test.fqn"
                 // limit not provided, should use default
             })
@@ -410,10 +470,11 @@ mod tests {
         fn test_call_fails_when_required_parameter_missing() {
             let mock_service = Arc::new(MockQueryingService::new());
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let (workspace_manager, project_path) = create_test_workspace_manager();
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let params = json!({
-                "project": "/test/project"
+                "project": project_path
                 // fqn is required but missing
             })
             .as_object()
@@ -429,12 +490,14 @@ mod tests {
 
         #[test]
         fn test_call_handles_query_service_failure() {
+            let (workspace_manager, project_path) = create_test_workspace_manager();
+
             let mock_service = Arc::new(MockQueryingService::new().with_failure());
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let params = json!({
-                "project": "/test/project",
+                "project": project_path,
                 "fqn": "test.fqn"
             })
             .as_object()
@@ -450,6 +513,11 @@ mod tests {
 
         #[test]
         fn test_call_removes_project_parameter_from_database_query_params() {
+            let (workspace_manager, project_path) = create_test_workspace_manager();
+            let project_info = workspace_manager
+                .get_project_for_path(&project_path)
+                .unwrap();
+
             let expected_params = {
                 let mut params = serde_json::Map::new();
                 params.insert("fqn".to_string(), json!("test.fqn"));
@@ -459,7 +527,7 @@ mod tests {
 
             let mock_service = Arc::new(
                 MockQueryingService::new().with_expectations(
-                    "/test/project".to_string(),
+                    project_info.database_path.to_string_lossy().to_string(),
                     "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit"
                         .to_string(),
                     expected_params,
@@ -467,10 +535,10 @@ mod tests {
             );
 
             let query = create_test_query();
-            let tool = QueryKnowledgeGraphTool::new(mock_service, query);
+            let tool = QueryKnowledgeGraphTool::new(mock_service, query, workspace_manager);
 
             let params = json!({
-                "project": "/test/project",
+                "project": project_path,
                 "fqn": "test.fqn"
             })
             .as_object()

@@ -1,12 +1,12 @@
 use crate::querying::mappers::{QueryResultMapper, STRING_MAPPER};
 use anyhow::Error;
 use serde_json::Map;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 pub trait QueryingService: Send + Sync {
     fn execute_query(
         &self,
-        project_path: &str,
+        database_path: PathBuf,
         query: &str,
         params: Map<String, serde_json::Value>,
     ) -> Result<Box<dyn QueryResult>, Error>;

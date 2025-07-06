@@ -10,7 +10,9 @@ anyhow = { workspace = true }
 rmcp = { workspace = true, features = ["server"] }
 tracing = { workspace = true }
 database = { path = "../database" }
+workspace-manager = { path = "../workspace-manager" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 database = { path = "../database", features = ["test-utils"] }
+testing = { path = "../testing" }

@@ -68,14 +68,11 @@ pub async fn run(
         Arc::clone(&database),
     ));
 
-    let query_service = Arc::new(DatabaseQueryingService::new(
-        Arc::clone(&database),
-        workspace_manager.clone(),
-    ));
+    let query_service = Arc::new(DatabaseQueryingService::new(Arc::clone(&database)));
 
     let state = AppState {
         database: Arc::clone(&database),
-        workspace_manager,
+        workspace_manager: workspace_manager.clone(),
         event_bus,
         job_dispatcher,
     };
@@ -83,7 +80,10 @@ pub async fn run(
     let mcp_router = Router::new()
         .route("/", post(mcp_handler))
         .route("/batch", post(mcp_batch_handler))
-        .with_state(Arc::new(DefaultMcpService::new(query_service)));
+        .with_state(Arc::new(DefaultMcpService::new(
+            query_service,
+            workspace_manager,
+        )));
 
     let serve_assets = ServeEmbed::<Assets>::new();
 

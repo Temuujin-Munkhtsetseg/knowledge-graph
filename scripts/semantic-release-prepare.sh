@@ -116,6 +116,14 @@ if [ -f "Cargo.toml" ]; then
         echo "✅ Updated database to version $NEW_VERSION"
     fi
 
+    # Update testing
+    if [ -f "crates/testing/Cargo.toml" ]; then
+        echo "📦 Updating testing version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/testing/Cargo.toml"
+        rm -f "crates/testing/Cargo.toml.bak"
+        echo "✅ Updated testing to version $NEW_VERSION"
+    fi
+
     # Update Cargo.lock with new workspace versions
     echo "🔄 Updating Cargo.lock..."
     cargo update --workspace

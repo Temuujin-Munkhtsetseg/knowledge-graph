@@ -1,0 +1,11 @@
+[package]
+name = "testing"
+version = "0.4.0"
+license = "MIT"
+authors = ["GitLab Inc."]
+description = "Testing utilities for the GitLab Knowledge Graph framework"
+repository = "https://gitlab.com/gitlab-org/rust/knowledge-graph"
+edition = "2024"
+
+[dependencies]
+tempfile.workspace = true
