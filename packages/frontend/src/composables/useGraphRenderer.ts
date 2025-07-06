@@ -20,7 +20,7 @@ export interface GraphEventCallbacks {
     event: MouseCoords,
   ) => void;
   onEdgeLeave?: (edge: string) => void;
-  onNodeClick?: (node: TypedGraphNode, event: MouseCoords) => void;
+  onNodeDoubleClick?: (node: TypedGraphNode, event: MouseCoords) => void;
 }
 
 export const useGraphRenderer = () => {
@@ -194,6 +194,10 @@ export const useGraphRenderer = () => {
       sigmaInstance.on('enterNode', ({ node, event }) => {
         const nodeData = nodeMap.get(node);
         if (nodeData) {
+          // Change cursor to pointer for clickable nodes
+          if (graphContainer.value) {
+            graphContainer.value.style.cursor = 'pointer';
+          }
           callbacks.onNodeHover?.(nodeData, event);
         }
       });
@@ -203,16 +207,20 @@ export const useGraphRenderer = () => {
       sigmaInstance.on('leaveNode', ({ node }) => {
         const nodeData = nodeMap.get(node);
         if (nodeData) {
+          // Reset cursor when leaving nodes
+          if (graphContainer.value) {
+            graphContainer.value.style.cursor = 'default';
+          }
           callbacks.onNodeLeave?.(nodeData);
         }
       });
     }
 
-    if (callbacks.onNodeClick) {
-      sigmaInstance.on('clickNode', ({ node, event }) => {
+    if (callbacks.onNodeDoubleClick) {
+      sigmaInstance.on('doubleClickNode', ({ node, event }) => {
         const nodeData = nodeMap.get(node);
         if (nodeData) {
-          callbacks.onNodeClick?.(nodeData, event);
+          callbacks.onNodeDoubleClick?.(nodeData, event);
         }
       });
     }
@@ -275,7 +283,130 @@ export const useGraphRenderer = () => {
   const zoomIn = () => sigmaInstance?.getCamera().animatedZoom({ duration: 200 });
   const zoomOut = () => sigmaInstance?.getCamera().animatedUnzoom({ duration: 200 });
   const resetView = () => sigmaInstance?.getCamera().animatedReset({ duration: 200 });
+  const centerOnNode = (nodeId: string) => {
+    if (!sigmaInstance) return;
+
+    const graph = sigmaInstance.getGraph();
+    if (!graph.hasNode(nodeId)) return;
+
+    const camera = sigmaInstance.getCamera();
+    const currentState = camera.getState();
+
+    // Temporarily move the node to center for reset calculation
+    const nodeAttrs = graph.getNodeAttributes(nodeId);
+    const originalX = nodeAttrs.x;
+    const originalY = nodeAttrs.y;
+
+    // Move node to origin temporarily
+    graph.setNodeAttribute(nodeId, 'x', 0);
+    graph.setNodeAttribute(nodeId, 'y', 0);
+
+    // Use animatedReset to center on origin (where our node now is)
+    camera
+      .animatedReset({ duration: 300 })
+      .then(() => {
+        // Restore original node position
+        graph.setNodeAttribute(nodeId, 'x', originalX);
+        graph.setNodeAttribute(nodeId, 'y', originalY);
+
+        // Get camera position after reset
+        const afterResetState = camera.getState();
+
+        // Now adjust camera ratio back to what user had
+        return camera.animate(
+          {
+            x: afterResetState.x,
+            y: afterResetState.y,
+            ratio: currentState.ratio,
+            angle: afterResetState.angle,
+          },
+          { duration: 100 },
+        );
+      })
+      .then(() => {
+        return undefined;
+      })
+      .catch(() => {
+        // Restore node position even if animation fails
+        graph.setNodeAttribute(nodeId, 'x', originalX);
+        graph.setNodeAttribute(nodeId, 'y', originalY);
+        return undefined;
+      });
+  };
   const refresh = () => sigmaInstance?.refresh();
+
+  const addNodesToGraph = async (
+    nodes: TypedGraphNode[],
+    relationships: GraphInitialSuccessResponse['relationships'],
+  ) => {
+    if (!sigmaInstance || !graphData) return;
+
+    const graph = sigmaInstance.getGraph();
+
+    // Add new nodes to the existing graph
+    nodes.forEach((node: TypedGraphNode) => {
+      if (!graph.hasNode(node.id)) {
+        // Position new nodes near existing nodes to avoid them being too far away
+        const existingNodes = graph.nodes();
+        let x = Math.random() * 100;
+        let y = Math.random() * 100;
+
+        if (existingNodes.length > 0) {
+          // Position near a random existing node
+          const randomExisting = existingNodes[Math.floor(Math.random() * existingNodes.length)];
+          const existingAttrs = graph.getNodeAttributes(randomExisting);
+          x = existingAttrs.x + (Math.random() - 0.5) * 50;
+          y = existingAttrs.y + (Math.random() - 0.5) * 50;
+        }
+
+        graph.addNode(node.id, {
+          label: node.label,
+          size: getNodeSize(node.node_type),
+          color: getNodeColor(node.node_type),
+          nodeType: node.node_type,
+          properties: node.properties,
+          highlighted: false,
+          x,
+          y,
+        });
+
+        // Add to our node map
+        nodeMap.set(node.id, node);
+      }
+    });
+
+    // Add new relationships
+    relationships.forEach((rel) => {
+      if (graph.hasNode(rel.source) && graph.hasNode(rel.target)) {
+        try {
+          graph.addEdge(rel.source, rel.target, {
+            size: 1,
+            color: currentTheme.value.edge,
+            type: 'arrow',
+            highlighted: false,
+            relationshipData: rel,
+          });
+        } catch (e) {
+          // Ignore duplicate edges
+        }
+      }
+    });
+
+    // Apply minimal layout adjustment for new nodes only
+    if (nodes.length > 0) {
+      try {
+        const { default: forceAtlas2 } = await import('graphology-layout-forceatlas2');
+        const settings = forceAtlas2.inferSettings(graph);
+        // Run fewer iterations to preserve existing layout
+        forceAtlas2.assign(graph, { iterations: 20, settings });
+        sigmaInstance?.refresh();
+      } catch {
+        sigmaInstance?.refresh();
+      }
+    } else {
+      sigmaInstance?.refresh();
+    }
+  };
 
   const getRelationship = (edgeId: string) => {
     if (!sigmaInstance || !graphData) return null;
@@ -289,9 +420,11 @@ export const useGraphRenderer = () => {
     sigmaInstance: () => sigmaInstance,
     clearGraph,
     initializeGraph,
+    addNodesToGraph,
     zoomIn,
     zoomOut,
     resetView,
+    centerOnNode,
     refresh,
     getRelationship,
   };

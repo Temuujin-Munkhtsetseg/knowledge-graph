@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { File, Folder, Code, MapPin, Hash, Type, Calendar, GitBranch } from 'lucide-vue-next';
 import type { TypedGraphNode } from '@gitlab-org/gkg';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
@@ -56,8 +56,17 @@ const getFileExtension = (path: string) => {
   return lastDot > 0 ? path.substring(lastDot) : '';
 };
 
-const shouldFlipTooltip = computed(() => {
-  return props.y > 400; // Simple threshold instead of window height
+const tooltipPosition = computed(() => {
+  const graphContainer = document.querySelector('.graph-container');
+  if (!graphContainer) {
+    return { top: '1rem', right: '1rem' };
+  }
+
+  const containerRect = graphContainer.getBoundingClientRect();
+  return {
+    top: `${containerRect.top + 16}px`,
+    right: `${window.innerWidth - containerRect.right + 16}px`,
+  };
 });
 </script>
 
@@ -65,57 +74,64 @@ const shouldFlipTooltip = computed(() => {
   <Teleport to="body">
     <div
       v-if="visible && node"
-      class="fixed z-50 pointer-events-none"
+      class="fixed z-50 pointer-events-none transition-all duration-200 ease-out"
       :style="{
-        left: `${x + 10}px`,
-        top: `${y - 10}px`,
-        transform: shouldFlipTooltip ? 'translateY(-100%)' : 'translateY(0)',
+        top: tooltipPosition.top,
+        right: tooltipPosition.right,
       }"
     >
-      <Card class="w-80 shadow-lg border-2 bg-background/95 backdrop-blur-sm">
-        <CardHeader class="pb-3">
-          <CardTitle class="flex items-center gap-2 text-base">
-            <div class="flex items-center justify-center w-6 h-6 rounded-full" :class="nodeColor">
-              <component :is="nodeIcon" class="w-3 h-3 text-white" />
+      <Card class="w-72 sm:w-80 shadow-lg border-2 bg-background/95 backdrop-blur-sm">
+        <div class="flex flex-col p-3 space-y-2">
+          <div class="flex items-start gap-2">
+            <div
+              class="flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 rounded-full flex-shrink-0 mt-0.5"
+              :class="nodeColor"
+            >
+              <component :is="nodeIcon" class="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" />
             </div>
-            <span class="truncate">{{ node.label }}</span>
-            <Badge variant="outline" class="ml-auto text-xs">
+            <span
+              class="break-words whitespace-normal min-w-0 flex-1 text-xs sm:text-sm font-medium leading-tight"
+              >{{ node.label }}</span
+            >
+            <Badge variant="outline" class="text-xs flex-shrink-0 px-1.5 py-0.5 mt-0.5">
               {{ node.node_type.replace('Node', '') }}
             </Badge>
-          </CardTitle>
-        </CardHeader>
+          </div>
 
-        <CardContent class="pt-0 space-y-3">
           <!-- Directory Node Info -->
           <div v-if="node.node_type === 'DirectoryNode'" class="space-y-2">
-            <div class="flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin class="w-4 h-4" />
-              <span class="truncate">{{ node.properties.path }}</span>
+            <div class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground">
+              <MapPin class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{ node.properties.path }}</span>
             </div>
             <div
               v-if="node.properties.absolute_path"
-              class="flex items-center gap-2 text-sm text-muted-foreground"
+              class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground"
             >
-              <Folder class="w-4 h-4" />
-              <span class="truncate">{{ node.properties.absolute_path }}</span>
+              <Folder class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{
+                node.properties.absolute_path
+              }}</span>
             </div>
             <div
               v-if="node.properties.repository_name"
-              class="flex items-center gap-2 text-sm text-muted-foreground"
+              class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground"
             >
-              <GitBranch class="w-4 h-4" />
-              <span class="truncate">{{ node.properties.repository_name }}</span>
+              <GitBranch class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{
+                node.properties.repository_name
+              }}</span>
             </div>
           </div>
 
           <!-- File Node Info -->
           <div v-if="node.node_type === 'FileNode'" class="space-y-2">
-            <div class="flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin class="w-4 h-4" />
-              <span class="truncate">{{ node.properties.path }}</span>
+            <div class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground">
+              <MapPin class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{ node.properties.path }}</span>
             </div>
-            <div class="flex items-center gap-2 text-sm">
-              <Type class="w-4 h-4" />
+            <div class="flex items-center gap-2 text-xs sm:text-sm">
+              <Type class="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
               <Badge variant="secondary" class="text-xs">
                 {{ node.properties.language || 'Unknown' }}
               </Badge>
@@ -125,32 +141,38 @@ const shouldFlipTooltip = computed(() => {
             </div>
             <div
               v-if="node.properties.absolute_path"
-              class="flex items-center gap-2 text-sm text-muted-foreground"
+              class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground"
             >
-              <File class="w-4 h-4" />
-              <span class="truncate">{{ node.properties.absolute_path }}</span>
+              <File class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{
+                node.properties.absolute_path
+              }}</span>
             </div>
             <div
               v-if="node.properties.repository_name"
-              class="flex items-center gap-2 text-sm text-muted-foreground"
+              class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground"
             >
-              <GitBranch class="w-4 h-4" />
-              <span class="truncate">{{ node.properties.repository_name }}</span>
+              <GitBranch class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{
+                node.properties.repository_name
+              }}</span>
             </div>
           </div>
 
           <!-- Definition Node Info -->
           <div v-if="node.node_type === 'DefinitionNode'" class="space-y-2">
-            <div class="flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin class="w-4 h-4" />
-              <span class="truncate">{{ node.properties.path }}</span>
+            <div class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground">
+              <MapPin class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{ node.properties.path }}</span>
             </div>
-            <div v-if="node.properties.fqn" class="flex items-center gap-2 text-sm">
-              <Hash class="w-4 h-4" />
-              <span class="truncate font-mono text-xs">{{ node.properties.fqn }}</span>
+            <div v-if="node.properties.fqn" class="flex items-start gap-2 text-xs sm:text-sm">
+              <Hash class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-all whitespace-normal font-mono text-xs min-w-0">{{
+                node.properties.fqn
+              }}</span>
             </div>
-            <div class="flex items-center gap-2 text-sm">
-              <Type class="w-4 h-4" />
+            <div class="flex items-center gap-2 text-xs sm:text-sm">
+              <Type class="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
               <Badge variant="secondary" class="text-xs">
                 {{ node.properties.definition_type }}
               </Badge>
@@ -161,10 +183,10 @@ const shouldFlipTooltip = computed(() => {
               </Badge>
             </div>
             <Separator />
-            <div class="text-xs text-muted-foreground space-y-1">
+            <div class="text-xs text-muted-foreground">
               <div class="flex items-center gap-2">
-                <Calendar class="w-3 h-3" />
-                <span>{{
+                <Calendar class="w-3 h-3 flex-shrink-0" />
+                <span class="min-w-0">{{
                   formatLocation(
                     node.properties.primary_line_number,
                     node.properties.primary_start_byte,
@@ -174,7 +196,7 @@ const shouldFlipTooltip = computed(() => {
               </div>
             </div>
           </div>
-        </CardContent>
+        </div>
       </Card>
     </div>
   </Teleport>

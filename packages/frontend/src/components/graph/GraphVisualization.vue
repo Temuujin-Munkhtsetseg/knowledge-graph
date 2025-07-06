@@ -40,10 +40,28 @@ const edgeTooltip = ref({
   y: 0,
 });
 
-// Use composables
+// State for tracking clicked nodes and expanded graph data
+const clickedNodes = ref(new Set<string>());
+const expandedGraphData = ref<{
+  nodes: TypedGraphNode[];
+  relationships: GraphRelationship[];
+}>({
+  nodes: [],
+  relationships: [],
+});
+
 const { getNodeColor } = useGraphTheme();
-const { graphContainer, initializeGraph, zoomIn, zoomOut, resetView, clearGraph, getRelationship } =
-  useGraphRenderer();
+const {
+  graphContainer,
+  initializeGraph,
+  addNodesToGraph,
+  centerOnNode,
+  zoomIn,
+  zoomOut,
+  resetView,
+  clearGraph,
+  getRelationship,
+} = useGraphRenderer();
 
 const {
   data: initialGraphData,
@@ -96,14 +114,74 @@ const handleEdgeLeave = () => {
   edgeTooltip.value.visible = false;
 };
 
+/**
+ * Double click on a node to expand the graph to include the node's neighbors.
+ * This fetches the neighbors from the API,
+ * adds them to the graph,
+ * and centers the camera on the node.
+ */
+const handleNodeDoubleClick = async (node: TypedGraphNode, _: { x: number; y: number }) => {
+  // Check if this node has already been clicked
+  if (clickedNodes.value.has(node.id)) {
+    return;
+  }
+
+  try {
+    const neighborsData = await apiClient.fetchNodeNeighbors(
+      props.workspaceFolderPath,
+      props.projectPath,
+      node.id,
+      50, // limit
+    );
+
+    clickedNodes.value.add(node.id);
+
+    const existingNodeIds = new Set(
+      [...(initialGraphData.value?.nodes || []), ...expandedGraphData.value.nodes].map((n) => n.id),
+    );
+    const existingRelationshipIds = new Set(
+      [
+        ...(initialGraphData.value?.relationships || []),
+        ...expandedGraphData.value.relationships,
+      ].map((r) => r.id),
+    );
+
+    const newNodes = neighborsData.nodes.filter((n) => !existingNodeIds.has(n.id));
+    const newRelationships = neighborsData.relationships.filter(
+      (r) => !existingRelationshipIds.has(r.id),
+    );
+
+    expandedGraphData.value.nodes.push(...newNodes);
+    expandedGraphData.value.relationships.push(...newRelationships);
+
+    await addNodesToGraph(newNodes, newRelationships);
+
+    if (newNodes.length > 0) {
+      centerOnNode(node.id);
+    }
+  } catch (error) {
+    console.error('Failed to fetch node neighbors:', error);
+  }
+};
+
 const initializeGraphWithData = async () => {
   if (!initialGraphData.value) return;
 
-  await initializeGraph(initialGraphData.value, {
+  const combinedData = {
+    nodes: [...initialGraphData.value.nodes, ...expandedGraphData.value.nodes],
+    relationships: [
+      ...initialGraphData.value.relationships,
+      ...expandedGraphData.value.relationships,
+    ],
+    project_info: initialGraphData.value.project_info,
+  };
+
+  await initializeGraph(combinedData, {
     onNodeHover: handleNodeHover,
     onNodeLeave: handleNodeLeave,
     onEdgeHover: handleEdgeHover,
     onEdgeLeave: handleEdgeLeave,
+    onNodeDoubleClick: handleNodeDoubleClick,
   });
 };
 

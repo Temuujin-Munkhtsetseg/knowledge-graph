@@ -2,7 +2,7 @@
 import type { TSProjectInfo } from "./project_info";
 import type { TSWorkspaceFolderInfo } from "./workspace_folder";
 
-export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, };
+export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, graph_neighbors: GraphNeighborsEndpointDef, };
 
 export type DefinitionNodeProperties = { path: string, fqn: string, definition_type: string, primary_line_number: number, primary_start_byte: bigint, primary_end_byte: bigint, total_locations: number, };
 
@@ -25,6 +25,16 @@ export type GraphInitialQueryRequest = { directory_limit: number | null, file_li
 export type GraphInitialResponses = { "200": GraphInitialSuccessResponse | null, "404": StatusResponse | null, "400": StatusResponse | null, "500": StatusResponse | null, };
 
 export type GraphInitialSuccessResponse = { nodes: Array<TypedGraphNode>, relationships: Array<GraphRelationship>, project_info: TSProjectInfo, };
+
+export type GraphNeighborsEndpointDef = { method: HttpMethod, path: "/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}", path_request: GraphNeighborsPathRequest, body_request: EmptyRequest, query_request: GraphNeighborsQueryRequest, responses: GraphNeighborsSuccessResponse, };
+
+export type GraphNeighborsPathRequest = { workspace_folder_path: string, project_path: string, node_id: string, };
+
+export type GraphNeighborsQueryRequest = { limit: number | null, };
+
+export type GraphNeighborsResponses = { "200": GraphNeighborsSuccessResponse | null, "404": StatusResponse | null, "400": StatusResponse | null, "500": StatusResponse | null, };
+
+export type GraphNeighborsSuccessResponse = { nodes: Array<TypedGraphNode>, relationships: Array<GraphRelationship>, project_info: TSProjectInfo, };
 
 export type GraphRelationship = { id: string, source: string, target: string, relationship_type: string, properties: Record<string, any>, };
 
