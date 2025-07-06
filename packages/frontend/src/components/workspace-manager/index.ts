@@ -7,5 +7,4 @@ export { default as WorkspaceIndexer } from './WorkspaceIndexer.vue';
 export { default as RecentActivity } from './RecentActivity.vue';
 export { default as RecentActivityItem } from './RecentActivityItem.vue';
 export { default as WorkspaceIndexingProgress } from './WorkspaceIndexingProgress.vue';
-export { default as StyledPath } from './StyledPath.vue';
 export { default as WorkspaceListItemHeader } from './WorkspaceListItemHeader.vue';

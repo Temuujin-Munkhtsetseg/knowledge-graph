@@ -11,16 +11,31 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const emit = defineEmits<{
+  openProject: [projectPath: string];
+}>();
+
 const formatPath = (path: string) => {
   const parts = path.split('/');
   return parts[parts.length - 1] || path;
 };
 
 const isError = computed(() => props.project?.status?.toLowerCase() === 'error');
+const isIndexed = computed(() => props.project?.status?.toLowerCase() === 'indexed');
+
+const handleProjectClick = () => {
+  if (isIndexed.value && props.project?.project_path) {
+    emit('openProject', props.project.project_path);
+  }
+};
 </script>
 
 <template>
-  <div class="border border-border bg-card hover:bg-muted/30 transition-colors rounded-sm">
+  <div
+    class="border border-border bg-card hover:bg-muted/30 transition-colors rounded-sm"
+    :class="{ 'cursor-pointer': isIndexed }"
+    @click="handleProjectClick"
+  >
     <div class="flex flex-col space-y-2 p-2">
       <WorkspaceListItemHeader
         :name="formatPath(project?.project_path || 'Unknown project')"

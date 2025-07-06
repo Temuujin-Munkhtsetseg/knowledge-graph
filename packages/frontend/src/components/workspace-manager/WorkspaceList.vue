@@ -13,6 +13,7 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   refresh: [];
+  openProject: [projectPath: string];
 }>();
 
 const processedWorkspaces = computed(() => {
@@ -67,23 +68,20 @@ const formatPath = (path: string) => {
               :project="project"
               :workspace-path="workspace.workspace_info?.workspace_folder_path || 'Unknown path'"
               @refresh="emit('refresh')"
+              @open-project="emit('openProject', $event)"
             />
           </div>
         </CollapsibleContent>
       </Collapsible>
 
       <!-- Single Project Workspace -->
-      <WorkspaceItem v-else :workspace="workspace.workspace_info" @refresh="emit('refresh')">
-        <template #trigger>
-          <WorkspaceListItemHeader
-            :name="formatPath(workspace.projects?.[0]?.project_path || 'Unknown project')"
-            :status="workspace.projects?.[0]?.status || 'unknown'"
-            :last-indexed-at="workspace.projects?.[0]?.last_indexed_at || null"
-            :path="workspace.projects?.[0]?.project_path || 'Unknown path'"
-            :is-collapsible="false"
-          />
-        </template>
-      </WorkspaceItem>
+      <ProjectItem
+        v-else-if="workspace.projects?.[0]"
+        :project="workspace.projects[0]"
+        :workspace-path="workspace.workspace_info?.workspace_folder_path || 'Unknown path'"
+        @refresh="emit('refresh')"
+        @open-project="emit('openProject', $event)"
+      />
     </div>
   </div>
 </template>

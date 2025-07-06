@@ -63,12 +63,10 @@ export const useIndexWorkspace = () => {
         onWorkspaceEvent: (event) => {
           currentWorkspaceEvent.value = event;
           workspaceEventHistory.value.push(event);
-          console.log('workspace event', event);
         },
         onProjectEvent: (event) => {
           currentProjectEvent.value = event;
           projectEventHistory.value.push(event);
-          console.log('project event', event);
         },
         onError: (err) => {
           error.value = err;
@@ -116,7 +114,6 @@ export const useWorkspaceStream = () => {
       cleanup = await apiClient.subscribeToEventBus({
         onConnect: () => {
           isConnected.value = true;
-          console.log('SSE stream connected');
         },
         onEvent: (event) => {
           // note - connection_established is a special event that is not a GkgEvent
@@ -131,22 +128,18 @@ export const useWorkspaceStream = () => {
           if (event.type === 'WorkspaceIndexing' || event.type === 'ProjectIndexing') {
             // eslint-disable-next-line no-void
             void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-            console.log('Received event:', event.type, 'payload:', event.payload);
           }
         },
-        onError: (error) => {
-          console.error('Event bus error:', error);
+        onError: () => {
           isConnected.value = false;
           // Don't re-throw the error to prevent it from reaching the error boundary
           // Just log it and update the connection state
         },
         onDisconnect: () => {
           isConnected.value = false;
-          console.log('SSE stream disconnected');
         },
       });
     } catch (error) {
-      console.error('Failed to start event bus:', error);
       isConnected.value = false;
     }
   };

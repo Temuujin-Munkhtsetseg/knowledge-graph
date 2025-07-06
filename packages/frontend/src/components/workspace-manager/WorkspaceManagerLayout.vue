@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useColorMode } from '@vueuse/core';
-import { Moon, Sun, Monitor, Folder, GitBranch, Activity } from 'lucide-vue-next';
+import { Moon, Sun, Monitor, Activity } from 'lucide-vue-next';
 import type { GkgEvent } from '@gitlab-org/gkg';
 import WorkspaceManagerSidebar from './WorkspaceManagerSidebar.vue';
-import RecentActivity from './RecentActivity.vue';
+import WelcomeScreen from './WelcomeScreen.vue';
+import { MainContent } from '@/components/content';
 import GitLabIcon from '@/components/icons/GitLabIcon.vue';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -23,7 +24,11 @@ const sidebarOpen = ref(true);
 const mode = useColorMode();
 
 const { startStream, stopStream, isConnected, lastEvent } = useWorkspaceStream();
-const { isLoading: workspacesLoading } = useWorkspaces();
+const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces();
+
+const hasWorkspaces = computed(() => {
+  return workspacesData.value && workspacesData.value.workspaces.length > 0;
+});
 
 const checkScreenSize = () => {
   isSmallScreen.value = window.innerWidth < 768;
@@ -76,13 +81,19 @@ const eventStatus = computed(() => getEventStatus(lastEvent.value));
 const openGitLabRepository = () => {
   window.open('https://gitlab.com/gitlab-org/rust/knowledge-graph', '_blank');
 };
+
+const selectedProjectPath = ref<string | null>(null);
+
+const handleOpenProject = (projectPath: string) => {
+  selectedProjectPath.value = projectPath;
+};
 </script>
 
 <template>
   <TooltipProvider>
     <div class="h-screen flex bg-background">
       <SidebarProvider :open="sidebarOpen" @update:open="sidebarOpen = $event">
-        <WorkspaceManagerSidebar />
+        <WorkspaceManagerSidebar @open-project="handleOpenProject" />
 
         <SidebarInset class="flex-1 flex flex-col min-w-0">
           <!-- VS Code Style Header - More Compact -->
@@ -158,7 +169,7 @@ const openGitLabRepository = () => {
                   class="h-6 w-6 p-0 hover:bg-muted/60"
                   @click="openGitLabRepository"
                 >
-                  <GitLabIcon className="h-3 w-3" />
+                  <GitLabIcon class="h-3 w-3" />
                   <span class="sr-only">Open GitLab Repository</span>
                 </Button>
               </TooltipTrigger>
@@ -170,76 +181,12 @@ const openGitLabRepository = () => {
 
           <!-- VS Code Style Main Content - More Compact -->
           <main class="flex-1 overflow-auto p-4 bg-background">
-            <div class="max-w-4xl mx-auto space-y-6">
-              <!-- Welcome Section with VS Code styling -->
-              <div class="space-y-3">
-                <div class="flex items-center gap-2">
-                  <GitLabIcon className="h-5 w-5 text-foreground" />
-                  <h2 class="text-lg font-medium text-foreground">GitLab Knowledge Graph</h2>
-                </div>
-                <p class="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-                  Manage your workspaces and projects from the sidebar. Add new workspaces to get
-                  started with indexing and organizing your codebase.
-                </p>
-              </div>
-
-              <!-- VS Code Style Feature Cards - More Compact -->
-              <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <!-- Quick Start Card -->
-                <div
-                  class="group relative p-3 border border-border bg-card hover:bg-muted/30 transition-colors cursor-pointer rounded-sm"
-                >
-                  <div class="flex items-start gap-2">
-                    <div class="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
-                      <Folder class="h-3 w-3 text-primary" />
-                    </div>
-                    <div class="space-y-1 flex-1">
-                      <h3 class="text-xs font-medium text-foreground">Quick Start</h3>
-                      <p class="text-xs text-muted-foreground leading-relaxed">
-                        Add your first workspace using the + button in the sidebar to begin indexing
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Project Management Card -->
-                <div
-                  class="group relative p-3 border border-border bg-card hover:bg-muted/30 transition-colors cursor-pointer rounded-sm"
-                >
-                  <div class="flex items-start gap-2">
-                    <div class="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
-                      <GitBranch class="h-3 w-3 text-primary" />
-                    </div>
-                    <div class="space-y-1 flex-1">
-                      <h3 class="text-xs font-medium text-foreground">Project Management</h3>
-                      <p class="text-xs text-muted-foreground leading-relaxed">
-                        View and manage all your projects in one centralized location
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Real-time Updates Card -->
-                <div
-                  class="group relative p-3 border border-border bg-card hover:bg-muted/30 transition-colors cursor-pointer rounded-sm md:col-span-2 lg:col-span-1"
-                >
-                  <div class="flex items-start gap-2">
-                    <div class="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
-                      <Activity class="h-3 w-3 text-primary" />
-                    </div>
-                    <div class="space-y-1 flex-1">
-                      <h3 class="text-xs font-medium text-foreground">Real-time Updates</h3>
-                      <p class="text-xs text-muted-foreground leading-relaxed">
-                        Track indexing progress and status updates in real-time via event bus
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Recent Activity Section -->
-              <RecentActivity :last-event="lastEvent" />
-            </div>
+            <MainContent
+              v-if="hasWorkspaces"
+              :last-event="lastEvent"
+              :selected-project-path="selectedProjectPath"
+            />
+            <WelcomeScreen v-else />
           </main>
         </SidebarInset>
       </SidebarProvider>

@@ -76,7 +76,6 @@ const formatTimestamp = (timestamp: string): string => {
 
 // Helper function to format event for display
 const formatEventForDisplay = (event: GkgEvent) => {
-  console.log('event', event);
   const { payload, type } = event;
   const { status } = payload;
   const eventTime = getEventTimestamp(payload, status);
