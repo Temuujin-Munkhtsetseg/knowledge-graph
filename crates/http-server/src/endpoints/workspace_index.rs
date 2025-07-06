@@ -28,12 +28,12 @@ pub struct WorkspaceIndexBodyRequest {
 #[derive(Serialize, Deserialize, TS, Default)]
 #[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct WorkspaceIndexResponses {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ok: Option<TSWorkspaceFolderInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bad_request: Option<StatusResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub internal_server_error: Option<StatusResponse>,
+    #[serde(rename = "200")]
+    pub ok: TSWorkspaceFolderInfo,
+    #[serde(rename = "400")]
+    pub bad_request: StatusResponse,
+    #[serde(rename = "500")]
+    pub internal_server_error: StatusResponse,
 }
 
 pub struct WorkspaceIndexEndpointConfig;
@@ -74,12 +74,9 @@ pub async fn index_handler(
     if !workspace_folder_path.exists() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(WorkspaceIndexResponses {
-                bad_request: Some(WorkspaceIndexEndpoint::create_error_response(
-                    "invalid_workspace_path".to_string(),
-                )),
-                ..Default::default()
-            }),
+            Json(WorkspaceIndexEndpoint::create_error_response(
+                "invalid_workspace_path".to_string(),
+            )),
         )
             .into_response();
     }
@@ -92,12 +89,9 @@ pub async fn index_handler(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(WorkspaceIndexResponses {
-                    internal_server_error: Some(WorkspaceIndexEndpoint::create_error_response(
-                        format!("Failed to get or register workspace: {e}"),
-                    )),
-                    ..Default::default()
-                }),
+                Json(WorkspaceIndexEndpoint::create_error_response(format!(
+                    "Failed to get or register workspace: {e}"
+                ))),
             )
                 .into_response();
         }
@@ -106,12 +100,9 @@ pub async fn index_handler(
     if workspace_info.project_count == 0 {
         return (
             StatusCode::BAD_REQUEST,
-            Json(WorkspaceIndexResponses {
-                bad_request: Some(WorkspaceIndexEndpoint::create_error_response(
-                    "no_projects_found_in_workspace".to_string(),
-                )),
-                ..Default::default()
-            }),
+            Json(WorkspaceIndexEndpoint::create_error_response(
+                "no_projects_found_in_workspace".to_string(),
+            )),
         )
             .into_response();
     }
@@ -126,24 +117,18 @@ pub async fn index_handler(
         tracing::error!("Failed to dispatch indexing job: {}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(WorkspaceIndexResponses {
-                internal_server_error: Some(WorkspaceIndexEndpoint::create_error_response(
-                    format!("Failed to schedule indexing job: {e}"),
-                )),
-                ..Default::default()
-            }),
+            Json(WorkspaceIndexEndpoint::create_error_response(format!(
+                "Failed to schedule indexing job: {e}"
+            ))),
         )
             .into_response();
     }
 
     (
         StatusCode::OK,
-        Json(WorkspaceIndexResponses {
-            ok: Some(WorkspaceIndexEndpoint::create_success_response(
-                &workspace_info,
-            )),
-            ..Default::default()
-        }),
+        Json(WorkspaceIndexEndpoint::create_success_response(
+            &workspace_info,
+        )),
     )
         .into_response()
 }
@@ -265,9 +250,8 @@ mod tests {
         let response = server.post("/workspace/index").json(&request_body).await;
 
         response.assert_status(StatusCode::BAD_REQUEST);
-        let body: WorkspaceIndexResponses = response.json();
-        assert!(body.bad_request.is_some());
-        assert_eq!(body.bad_request.unwrap().status, "invalid_workspace_path");
+        let body: StatusResponse = response.json();
+        assert_eq!(body.status, "invalid_workspace_path");
     }
 
     #[tokio::test]
@@ -283,12 +267,8 @@ mod tests {
 
         let status = response.status_code();
         if status == StatusCode::BAD_REQUEST {
-            let body: WorkspaceIndexResponses = response.json();
-            assert!(body.bad_request.is_some());
-            assert_eq!(
-                body.bad_request.unwrap().status,
-                "no_projects_found_in_workspace"
-            );
+            let body: StatusResponse = response.json();
+            assert_eq!(body.status, "no_projects_found_in_workspace");
         } else {
             panic!("Expected BAD_REQUEST but got: {status}");
         }
@@ -306,13 +286,10 @@ mod tests {
         let response = server.post("/workspace/index").json(&request_body).await;
 
         response.assert_status_ok();
-        let body: WorkspaceIndexResponses = response.json();
-        assert!(body.ok.is_some());
-
-        let workspace_info = body.ok.unwrap();
-        assert_eq!(workspace_info.project_count, 2);
-        assert!(!workspace_info.workspace_folder_path.is_empty());
-        assert!(!workspace_info.data_directory_name.is_empty());
+        let body: TSWorkspaceFolderInfo = response.json();
+        assert_eq!(body.project_count, 2);
+        assert!(!body.workspace_folder_path.is_empty());
+        assert!(!body.data_directory_name.is_empty());
     }
 
     #[tokio::test]
@@ -344,8 +321,7 @@ mod tests {
             "Indexing took too long: {duration:?}"
         );
 
-        let body: WorkspaceIndexResponses = response.json();
-        assert!(body.ok.is_some());
-        assert_eq!(body.ok.unwrap().project_count, 2);
+        let body: TSWorkspaceFolderInfo = response.json();
+        assert_eq!(body.project_count, 2);
     }
 }

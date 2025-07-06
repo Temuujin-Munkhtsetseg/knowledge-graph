@@ -15,10 +15,10 @@ use ts_rs::TS;
 #[derive(Serialize, Deserialize, TS, Default)]
 #[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct WorkspaceListResponses {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ok: Option<WorkspaceListSuccessResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub internal_server_error: Option<StatusResponse>,
+    #[serde(rename = "200")]
+    pub ok: WorkspaceListSuccessResponse,
+    #[serde(rename = "500")]
+    pub internal_server_error: StatusResponse,
 }
 
 #[derive(Serialize, Deserialize, TS, Default)]
