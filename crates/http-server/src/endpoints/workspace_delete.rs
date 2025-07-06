@@ -16,17 +16,22 @@ pub struct WorkspaceDeleteBodyRequest {
 
 #[derive(Serialize, Deserialize, TS, Default)]
 #[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
+pub struct WorkspaceDeleteSuccessResponse {
+    pub workspace_folder_path: String,
+    pub removed: bool,
+}
+
+#[derive(Serialize, Deserialize, TS, Default)]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct WorkspaceDeleteResponses {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_folder_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub removed: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bad_request: Option<StatusResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub not_found: Option<StatusResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub internal_server_error: Option<StatusResponse>,
+    #[serde(rename = "200")]
+    pub ok: WorkspaceDeleteSuccessResponse,
+    #[serde(rename = "400")]
+    pub bad_request: StatusResponse,
+    #[serde(rename = "404")]
+    pub not_found: StatusResponse,
+    #[serde(rename = "500")]
+    pub internal_server_error: StatusResponse,
 }
 
 pub struct WorkspaceDeleteEndpointConfig;
@@ -52,13 +57,10 @@ impl WorkspaceDeleteEndpoint {
     pub fn create_success_response(
         workspace_folder_path: String,
         removed: bool,
-    ) -> WorkspaceDeleteResponses {
-        WorkspaceDeleteResponses {
-            workspace_folder_path: Some(workspace_folder_path),
-            removed: Some(removed),
-            bad_request: None,
-            not_found: None,
-            internal_server_error: None,
+    ) -> WorkspaceDeleteSuccessResponse {
+        WorkspaceDeleteSuccessResponse {
+            workspace_folder_path,
+            removed,
         }
     }
 
@@ -77,12 +79,9 @@ pub async fn delete_handler(
     if payload.workspace_folder_path.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(WorkspaceDeleteResponses {
-                bad_request: Some(WorkspaceDeleteEndpoint::create_error_response(
-                    "empty_workspace_path".to_string(),
-                )),
-                ..Default::default()
-            }),
+            Json(WorkspaceDeleteEndpoint::create_error_response(
+                "empty_workspace_path".to_string(),
+            )),
         )
             .into_response();
     }
@@ -95,12 +94,9 @@ pub async fn delete_handler(
     if workspace_info.is_none() {
         return (
             StatusCode::NOT_FOUND,
-            Json(WorkspaceDeleteResponses {
-                not_found: Some(WorkspaceDeleteEndpoint::create_error_response(
-                    "workspace_not_found".to_string(),
-                )),
-                ..Default::default()
-            }),
+            Json(WorkspaceDeleteEndpoint::create_error_response(
+                "workspace_not_found".to_string(),
+            )),
         )
             .into_response();
     }
@@ -122,12 +118,9 @@ pub async fn delete_handler(
             tracing::error!("Failed to remove workspace folder: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(WorkspaceDeleteResponses {
-                    internal_server_error: Some(WorkspaceDeleteEndpoint::create_error_response(
-                        format!("Failed to remove workspace: {e}"),
-                    )),
-                    ..Default::default()
-                }),
+                Json(WorkspaceDeleteEndpoint::create_error_response(format!(
+                    "Failed to remove workspace: {e}"
+                ))),
             )
                 .into_response()
         }
@@ -239,12 +232,9 @@ mod tests {
         let response = server.delete("/workspace/delete").json(&request_body).await;
 
         response.assert_status_ok();
-        let body: WorkspaceDeleteResponses = response.json();
-        assert!(body.workspace_folder_path.is_some());
-        assert!(body.removed.is_some());
-
-        assert_eq!(body.workspace_folder_path.unwrap(), workspace_path);
-        assert!(body.removed.unwrap());
+        let body: WorkspaceDeleteSuccessResponse = response.json();
+        assert_eq!(body.workspace_folder_path, workspace_path);
+        assert!(body.removed);
     }
 
     #[tokio::test]
@@ -258,9 +248,8 @@ mod tests {
         let response = server.delete("/workspace/delete").json(&request_body).await;
 
         response.assert_status(StatusCode::NOT_FOUND);
-        let body: WorkspaceDeleteResponses = response.json();
-        assert!(body.not_found.is_some());
-        assert_eq!(body.not_found.unwrap().status, "workspace_not_found");
+        let body: StatusResponse = response.json();
+        assert_eq!(body.status, "workspace_not_found");
     }
 
     #[tokio::test]
@@ -274,9 +263,8 @@ mod tests {
         let response = server.delete("/workspace/delete").json(&request_body).await;
 
         response.assert_status(StatusCode::BAD_REQUEST);
-        let body: WorkspaceDeleteResponses = response.json();
-        assert!(body.bad_request.is_some());
-        assert_eq!(body.bad_request.unwrap().status, "empty_workspace_path");
+        let body: StatusResponse = response.json();
+        assert_eq!(body.status, "empty_workspace_path");
     }
 
     #[tokio::test]
@@ -290,9 +278,8 @@ mod tests {
         let response = server.delete("/workspace/delete").json(&request_body).await;
 
         response.assert_status(StatusCode::BAD_REQUEST);
-        let body: WorkspaceDeleteResponses = response.json();
-        assert!(body.bad_request.is_some());
-        assert_eq!(body.bad_request.unwrap().status, "empty_workspace_path");
+        let body: StatusResponse = response.json();
+        assert_eq!(body.status, "empty_workspace_path");
     }
 
     #[tokio::test]
@@ -325,10 +312,9 @@ mod tests {
             "Deletion took too long: {duration:?}"
         );
 
-        let body: WorkspaceDeleteResponses = response.json();
-        assert!(body.workspace_folder_path.is_some());
-        assert!(body.removed.is_some());
-        assert!(body.removed.unwrap());
+        let body: WorkspaceDeleteSuccessResponse = response.json();
+        assert!(!body.workspace_folder_path.is_empty());
+        assert!(body.removed);
     }
 
     #[tokio::test]
@@ -346,8 +332,7 @@ mod tests {
         // Second deletion should return not found
         let response = server.delete("/workspace/delete").json(&request_body).await;
         response.assert_status(StatusCode::NOT_FOUND);
-        let body: WorkspaceDeleteResponses = response.json();
-        assert!(body.not_found.is_some());
-        assert_eq!(body.not_found.unwrap().status, "workspace_not_found");
+        let body: StatusResponse = response.json();
+        assert_eq!(body.status, "workspace_not_found");
     }
 }

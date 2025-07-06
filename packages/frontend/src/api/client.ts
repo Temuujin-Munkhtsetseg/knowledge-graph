@@ -6,7 +6,7 @@ import type {
   HttpMethod,
   ServerInfoResponse,
   WorkspaceDeleteBodyRequest,
-  WorkspaceDeleteResponses,
+  WorkspaceDeleteSuccessResponse,
   WorkspaceIndexBodyRequest,
   WorkspaceListSuccessResponse,
 } from '@gitlab-org/gkg';
@@ -207,8 +207,8 @@ export class ApiClient extends HttpClient {
     return response;
   }
 
-  async deleteWorkspace(data: WorkspaceDeleteBodyRequest): Promise<WorkspaceDeleteResponses> {
-    return this.delete<WorkspaceDeleteResponses>(endpointPaths.workspace_delete, data);
+  async deleteWorkspace(data: WorkspaceDeleteBodyRequest): Promise<WorkspaceDeleteSuccessResponse> {
+    return this.delete<WorkspaceDeleteSuccessResponse>(endpointPaths.workspace_delete, data);
   }
 }
 

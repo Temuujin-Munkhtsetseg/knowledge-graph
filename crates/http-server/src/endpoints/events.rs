@@ -14,7 +14,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use ts_rs::TS;
 
 #[derive(Serialize, TS, Default)]
-#[ts(export, export_to = "api.ts")]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct EventsResponses {
     // SSE responses don't need structured response types
     // The events are streamed directly as Server-Sent Events
@@ -36,7 +36,7 @@ define_endpoint! {
     "/events",
     ts_path_type = "\"/api/events\"",
     config = EventsEndpointConfig,
-    export_to = "api.ts"
+    export_to = "../../../packages/gkg/src/api.ts"
 }
 
 /// Handler for the events endpoint
