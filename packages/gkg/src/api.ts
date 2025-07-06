@@ -2,13 +2,31 @@
 import type { TSProjectInfo } from "./project_info";
 import type { TSWorkspaceFolderInfo } from "./workspace_folder";
 
-export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, };
+export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, };
+
+export type DefinitionNodeProperties = { path: string, fqn: string, definition_type: string, primary_line_number: number, primary_start_byte: bigint, primary_end_byte: bigint, total_locations: number, };
+
+export type DirectoryNodeProperties = { path: string, absolute_path: string, repository_name: string, };
 
 export type EmptyRequest = null;
 
 export type EventsEndpointDef = { method: HttpMethod, path: "/api/events", path_request: EmptyRequest, body_request: EmptyRequest, query_request: EmptyRequest, responses: EventsResponses, };
 
 export type EventsResponses = Record<string, never>;
+
+export type FileNodeProperties = { path: string, absolute_path: string, repository_name: string, language: string, extension: string, };
+
+export type GraphInitialEndpointDef = { method: HttpMethod, path: "/api/graph/initial/{workspace_folder_path}/{project_path}", path_request: GraphInitialPathRequest, body_request: EmptyRequest, query_request: GraphInitialQueryRequest, responses: GraphInitialSuccessResponse, };
+
+export type GraphInitialPathRequest = { workspace_folder_path: string, project_path: string, };
+
+export type GraphInitialQueryRequest = { directory_limit: number | null, file_limit: number | null, definition_limit: number | null, };
+
+export type GraphInitialResponses = { "200": GraphInitialSuccessResponse | null, "404": StatusResponse | null, "400": StatusResponse | null, "500": StatusResponse | null, };
+
+export type GraphInitialSuccessResponse = { nodes: Array<TypedGraphNode>, relationships: Array<GraphRelationship>, project_info: TSProjectInfo, };
+
+export type GraphRelationship = { id: string, source: string, target: string, relationship_type: string, properties: Record<string, any>, };
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 
@@ -39,6 +57,8 @@ export type JobStatus = "Pending" | "Running" | "Completed" | "Failed" | "Cancel
 export type ServerInfoResponse = { port: number, version: string, };
 
 export type StatusResponse = { status: string, };
+
+export type TypedGraphNode = { "node_type": "DirectoryNode", id: string, label: string, properties: DirectoryNodeProperties, } | { "node_type": "FileNode", id: string, label: string, properties: FileNodeProperties, } | { "node_type": "DefinitionNode", id: string, label: string, properties: DefinitionNodeProperties, };
 
 export type WorkspaceDeleteBodyRequest = { workspace_folder_path: string, };
 

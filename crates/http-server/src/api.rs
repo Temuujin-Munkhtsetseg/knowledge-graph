@@ -1,5 +1,6 @@
 use crate::endpoints::{
-    events::EventsEndpointDef, info::InfoEndpointDef, workspace_delete::WorkspaceDeleteEndpointDef,
+    events::EventsEndpointDef, graph::graph_initial::GraphInitialEndpointDef,
+    info::InfoEndpointDef, workspace_delete::WorkspaceDeleteEndpointDef,
     workspace_index::WorkspaceIndexEndpointDef, workspace_list::WorkspaceListEndpointDef,
 };
 use serde::Serialize;
@@ -15,4 +16,5 @@ pub struct ApiContract {
     pub workspace_delete: WorkspaceDeleteEndpointDef,
     pub index: WorkspaceIndexEndpointDef,
     pub events: EventsEndpointDef,
+    pub graph_initial: GraphInitialEndpointDef,
 }
