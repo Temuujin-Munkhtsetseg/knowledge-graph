@@ -13,6 +13,7 @@ use crate::{
         graph::{
             graph_initial::{GraphInitialEndpoint, graph_initial_handler},
             graph_neighbors::{GraphNeighborsEndpoint, graph_neighbors_handler},
+            graph_search::{GraphSearchEndpoint, graph_search_handler},
         },
         info::{InfoEndpoint, info_handler},
         mcp::{mcp_batch_handler, mcp_handler},
@@ -108,6 +109,7 @@ pub async fn run(
         .route(WorkspaceListEndpoint::PATH, get(workspace_list_handler))
         .route(GraphInitialEndpoint::PATH, get(graph_initial_handler))
         .route(GraphNeighborsEndpoint::PATH, get(graph_neighbors_handler))
+        .route(GraphSearchEndpoint::PATH, get(graph_search_handler))
         .with_state(state);
 
     let app = Router::new()

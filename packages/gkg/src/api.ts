@@ -2,7 +2,7 @@
 import type { TSProjectInfo } from "./project_info";
 import type { TSWorkspaceFolderInfo } from "./workspace_folder";
 
-export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, graph_neighbors: GraphNeighborsEndpointDef, };
+export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, graph_neighbors: GraphNeighborsEndpointDef, graph_search: GraphSearchEndpointDef, };
 
 export type DefinitionNodeProperties = { path: string, fqn: string, definition_type: string, primary_line_number: number, primary_start_byte: bigint, primary_end_byte: bigint, total_locations: number, };
 
@@ -37,6 +37,16 @@ export type GraphNeighborsResponses = { "200": GraphNeighborsSuccessResponse | n
 export type GraphNeighborsSuccessResponse = { nodes: Array<TypedGraphNode>, relationships: Array<GraphRelationship>, project_info: TSProjectInfo, };
 
 export type GraphRelationship = { id: string, source: string, target: string, relationship_type: string, properties: Record<string, any>, };
+
+export type GraphSearchEndpointDef = { method: HttpMethod, path: "/api/graph/search/{workspace_folder_path}/{project_path}", path_request: GraphSearchPathRequest, body_request: EmptyRequest, query_request: GraphSearchQueryRequest, responses: GraphSearchSuccessResponse, };
+
+export type GraphSearchPathRequest = { workspace_folder_path: string, project_path: string, };
+
+export type GraphSearchQueryRequest = { search_term: string, limit: number | null, };
+
+export type GraphSearchResponses = { "200": GraphSearchSuccessResponse | null, "404": StatusResponse | null, "400": StatusResponse | null, "500": StatusResponse | null, };
+
+export type GraphSearchSuccessResponse = { nodes: Array<TypedGraphNode>, project_info: TSProjectInfo, };
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 

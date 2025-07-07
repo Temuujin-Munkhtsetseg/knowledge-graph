@@ -7,6 +7,8 @@ import type {
   GraphInitialSuccessResponse,
   GraphNeighborsQueryRequest,
   GraphNeighborsSuccessResponse,
+  GraphSearchQueryRequest,
+  GraphSearchSuccessResponse,
   HttpMethod,
   ServerInfoResponse,
   WorkspaceDeleteBodyRequest,
@@ -27,6 +29,7 @@ const endpointPaths = {
   events: '/api/events',
   graph_initial: '/api/graph/initial/{workspace_folder_path}/{project_path}',
   graph_neighbors: '/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}',
+  graph_search: '/api/graph/search/{workspace_folder_path}/{project_path}',
 } satisfies Record<keyof ApiContract, ApiContract[keyof ApiContract]['path']>;
 
 export class ApiError extends Error {
@@ -270,6 +273,28 @@ export class ApiClient extends HttpClient {
         workspace_folder_path: workspaceFolderPath,
         project_path: projectPath,
         node_id: nodeId,
+      },
+      queryParams,
+    );
+  }
+
+  async searchNodes(
+    workspaceFolderPath: string,
+    projectPath: string,
+    searchTerm: string,
+    limit: number = 100,
+  ): Promise<GraphSearchSuccessResponse> {
+    const queryParams: GraphSearchQueryRequest = {
+      search_term: searchTerm,
+      limit,
+    };
+
+    return this.get<GraphSearchSuccessResponse>(
+      endpointPaths.graph_search,
+      undefined,
+      {
+        workspace_folder_path: workspaceFolderPath,
+        project_path: projectPath,
       },
       queryParams,
     );

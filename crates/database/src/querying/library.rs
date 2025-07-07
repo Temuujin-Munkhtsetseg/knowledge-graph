@@ -509,6 +509,109 @@ impl QueryLibrary {
         }
     }
 
+    pub fn get_search_nodes_query() -> Query {
+        Query {
+            name: "search_nodes",
+            description: "Search across all node types by name, path, or FQN (case insensitive).",
+            query: r#"
+                MATCH (d:DirectoryNode)
+                WHERE toLower(d.name) CONTAINS toLower($search_term) 
+                   OR toLower(d.path) CONTAINS toLower($search_term)
+                RETURN 
+                    d.id as id,
+                    'DirectoryNode' as node_type,
+                    d.name as name,
+                    d.path as path,
+                    d.absolute_path as absolute_path,
+                    d.repository_name as repository_name,
+                    '' as fqn,
+                    '' as definition_type,
+                    '' as language,
+                    '' as extension,
+                    CAST(0 AS INT64) as primary_line_number,
+                    CAST(0 AS INT64) as primary_start_byte,
+                    CAST(0 AS INT64) as primary_end_byte,
+                    CAST(0 AS INT64) as total_locations
+                UNION
+                MATCH (f:FileNode)
+                WHERE toLower(f.name) CONTAINS toLower($search_term)
+                   OR toLower(f.path) CONTAINS toLower($search_term)
+                RETURN 
+                    f.id as id,
+                    'FileNode' as node_type,
+                    f.name as name,
+                    f.path as path,
+                    f.absolute_path as absolute_path,
+                    f.repository_name as repository_name,
+                    '' as fqn,
+                    '' as definition_type,
+                    f.language as language,
+                    f.extension as extension,
+                    CAST(0 AS INT64) as primary_line_number,
+                    CAST(0 AS INT64) as primary_start_byte,
+                    CAST(0 AS INT64) as primary_end_byte,
+                    CAST(0 AS INT64) as total_locations
+                UNION
+                MATCH (def:DefinitionNode)
+                WHERE toLower(def.name) CONTAINS toLower($search_term)
+                   OR toLower(def.fqn) CONTAINS toLower($search_term)
+                RETURN 
+                    def.id as id,
+                    'DefinitionNode' as node_type,
+                    def.name as name,
+                    def.primary_file_path as path,
+                    '' as absolute_path,
+                    '' as repository_name,
+                    def.fqn as fqn,
+                    def.definition_type as definition_type,
+                    '' as language,
+                    '' as extension,
+                    CAST(def.primary_line_number AS INT64) as primary_line_number,
+                    def.primary_start_byte as primary_start_byte,
+                    def.primary_end_byte as primary_end_byte,
+                    CAST(def.total_locations AS INT64) as total_locations
+                ORDER BY node_type, name
+                LIMIT $limit
+            "#,
+            parameters: HashMap::from([
+                (
+                    "search_term",
+                    QueryParameter {
+                        name: "search_term",
+                        description: "The search term to match against node names, paths, or FQNs (case insensitive).",
+                        required: true,
+                        definition: QueryParameterDefinition::String(None),
+                    },
+                ),
+                (
+                    "limit",
+                    QueryParameter {
+                        name: "limit",
+                        description: "The maximum number of search results to return.",
+                        required: false,
+                        definition: QueryParameterDefinition::Int(Some(100)),
+                    },
+                ),
+            ]),
+            result: HashMap::from([
+                ("id", STRING_MAPPER),
+                ("node_type", STRING_MAPPER),
+                ("name", STRING_MAPPER),
+                ("path", STRING_MAPPER),
+                ("absolute_path", STRING_MAPPER),
+                ("repository_name", STRING_MAPPER),
+                ("fqn", STRING_MAPPER),
+                ("definition_type", STRING_MAPPER),
+                ("language", STRING_MAPPER),
+                ("extension", STRING_MAPPER),
+                ("primary_line_number", INT_MAPPER),
+                ("primary_start_byte", INT_MAPPER),
+                ("primary_end_byte", INT_MAPPER),
+                ("total_locations", INT_MAPPER),
+            ]),
+        }
+    }
+
     pub fn all_queries() -> Vec<Query> {
         vec![
             Self::get_definition_relations_query(),
@@ -516,6 +619,7 @@ impl QueryLibrary {
             Self::get_list_matches_query(),
             Self::get_initial_project_graph_query(),
             Self::get_node_neighbors_query(),
+            Self::get_search_nodes_query(),
         ]
     }
 }
