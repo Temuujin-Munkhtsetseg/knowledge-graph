@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::tools::query_tools::QueryKnowledgeGraphTool;
 use crate::tools::types::KnowledgeGraphTool;
+use crate::tools::workspace_tools::get_list_projects_tool;
 use database::querying::{Query, QueryLibrary, QueryingService};
 use rmcp::model::CallToolResult;
 use rmcp::model::JsonObject;
@@ -39,6 +40,13 @@ impl AvailableToolsService {
             QueryLibrary::get_list_matches_query(),
             query_service.clone(),
             workspace_manager.clone(),
+        );
+
+        let list_projects_tool = get_list_projects_tool(workspace_manager.clone());
+
+        tools.insert(
+            list_projects_tool.name().to_string(),
+            Box::new(list_projects_tool),
         );
 
         Self { tools }
