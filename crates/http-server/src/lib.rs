@@ -15,7 +15,6 @@ use crate::{
             graph_neighbors::{GraphNeighborsEndpoint, graph_neighbors_handler},
         },
         info::{InfoEndpoint, info_handler},
-        mcp::{mcp_batch_handler, mcp_handler},
         workspace_delete::{WorkspaceDeleteEndpoint, delete_handler},
         workspace_index::{WorkspaceIndexEndpoint, index_handler},
         workspace_list::{WorkspaceListEndpoint, workspace_list_handler},
@@ -29,10 +28,10 @@ use axum::{
     routing::{delete, get, post},
 };
 use axum_embed::ServeEmbed;
-use database::kuzu::database::KuzuDatabase;
 use database::querying::service::DatabaseQueryingService;
+use database::{kuzu::database::KuzuDatabase, querying::QueryingService};
 use event_bus::EventBus;
-use mcp::DefaultMcpService;
+use mcp::{http::mcp_http_service, sse::mcp_sse_router};
 use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
@@ -58,6 +57,7 @@ pub async fn run(
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
 ) -> Result<()> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
         |origin: &HeaderValue, _| {
             if let Ok(origin_str) = origin.to_str() {
@@ -75,7 +75,8 @@ pub async fn run(
         Arc::clone(&database),
     ));
 
-    let query_service = Arc::new(DatabaseQueryingService::new(Arc::clone(&database)));
+    let query_service: Arc<dyn QueryingService> =
+        Arc::new(DatabaseQueryingService::new(Arc::clone(&database)));
 
     let state = AppState {
         database: Arc::clone(&database),
@@ -84,15 +85,15 @@ pub async fn run(
         job_dispatcher,
     };
 
-    let mcp_router = Router::new()
-        .route("/", post(mcp_handler))
-        .route("/batch", post(mcp_batch_handler))
-        .with_state(Arc::new(DefaultMcpService::new(
-            query_service,
-            workspace_manager,
-        )));
-
     let serve_assets = ServeEmbed::<Assets>::new();
+
+    let mcp_http_router =
+        mcp_http_service(Arc::clone(&query_service), Arc::clone(&workspace_manager));
+    let (mcp_sse_router, mcp_sse_cancellation_token) = mcp_sse_router(
+        addr,
+        Arc::clone(&query_service),
+        Arc::clone(&workspace_manager),
+    );
 
     let api_router = Router::new()
         .route(
@@ -112,14 +113,15 @@ pub async fn run(
 
     let app = Router::new()
         .nest("/api", api_router)
-        .nest("/mcp", mcp_router)
+        .nest_service("/mcp", mcp_http_router)
+        .nest_service("/mcp/sse", mcp_sse_router)
         .fallback_service(serve_assets)
         .layer(ServiceBuilder::new().layer(cors_layer));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     tracing::info!("HTTP server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
+    mcp_sse_cancellation_token.cancel();
     Ok(())
 }
 

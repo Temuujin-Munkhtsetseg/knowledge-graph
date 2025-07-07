@@ -7,10 +7,12 @@ edition = "2024"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-rmcp = { workspace = true, features = ["server"] }
+rmcp = { workspace = true, features = ["server", "transport-streamable-http-server", "transport-worker", "transport-sse-server"] }
 tracing = { workspace = true }
 database = { path = "../database" }
 workspace-manager = { path = "../workspace-manager" }
+axum = { workspace = true }
+tokio-util = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

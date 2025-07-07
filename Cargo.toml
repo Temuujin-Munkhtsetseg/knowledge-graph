@@ -63,7 +63,7 @@ tokio-stream = "0.1.17"
 ts-rs = "11.0.1"
 tracing-appender = "0.2.3"
 file-rotate = "0.8.0"
-rmcp = { version = "0.2.1", features = ["server"] }
+rmcp = { version = "0.2.1", features = ["server", "transport-streamable-http-server", "transport-worker", "transport-sse-server"] }
 dashmap = "6.1.0"
 tokio-util = "0.7.15"
 miette = "7.6.0"
