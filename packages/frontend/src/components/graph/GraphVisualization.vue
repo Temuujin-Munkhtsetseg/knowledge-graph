@@ -9,6 +9,7 @@ import GraphLegend from './GraphLegend.vue';
 import GraphStateOverlay from './GraphStateOverlay.vue';
 import NodeTooltip from './NodeTooltip.vue';
 import EdgeTooltip from './EdgeTooltip.vue';
+import GraphSearch from './GraphSearch.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGraphTheme } from '@/composables/useGraphTheme';
 import { useGraphRenderer } from '@/composables/useGraphRenderer';
@@ -22,6 +23,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const isFullscreen = ref(false);
+const isSearchVisible = ref(false);
 
 // Tooltip state
 const nodeTooltip = ref({
@@ -120,8 +122,7 @@ const handleEdgeLeave = () => {
  * adds them to the graph,
  * and centers the camera on the node.
  */
-const handleNodeDoubleClick = async (node: TypedGraphNode, _: { x: number; y: number }) => {
-  // Check if this node has already been clicked
+const handleNodeDoubleClick = async (node: TypedGraphNode) => {
   if (clickedNodes.value.has(node.id)) {
     return;
   }
@@ -193,6 +194,47 @@ const toggleFullscreen = () => {
   }, 100);
 };
 
+const toggleSearch = () => {
+  isSearchVisible.value = !isSearchVisible.value;
+};
+
+const handleSearchClose = () => {
+  isSearchVisible.value = false;
+};
+
+const handleNodeSelected = async (node: TypedGraphNode) => {
+  try {
+    if (!initialGraphData.value?.project_info) {
+      console.error('No project info available');
+      return;
+    }
+
+    clearGraph();
+
+    const singleNodeData = {
+      nodes: [node],
+      relationships: [],
+      project_info: initialGraphData.value.project_info,
+    };
+
+    expandedGraphData.value = { nodes: [], relationships: [] };
+    clickedNodes.value.clear();
+
+    await initializeGraph(singleNodeData, {
+      onNodeHover: handleNodeHover,
+      onNodeLeave: handleNodeLeave,
+      onEdgeHover: handleEdgeHover,
+      onEdgeLeave: handleEdgeLeave,
+      onNodeDoubleClick: handleNodeDoubleClick,
+    });
+
+    centerOnNode(node.id);
+    isSearchVisible.value = false;
+  } catch (error) {
+    console.error('Failed to load selected node:', error);
+  }
+};
+
 watch(
   () => props.projectPath,
   () => {
@@ -241,6 +283,7 @@ onUnmounted(() => clearGraph());
           @zoom-out="zoomOut"
           @reset-view="resetView"
           @toggle-fullscreen="toggleFullscreen"
+          @toggle-search="toggleSearch"
           @refresh="refetch"
         />
       </div>
@@ -282,6 +325,15 @@ onUnmounted(() => clearGraph());
     :x="edgeTooltip.x"
     :y="edgeTooltip.y"
     :visible="edgeTooltip.visible"
+  />
+
+  <!-- Search Panel -->
+  <GraphSearch
+    :project-path="props.projectPath"
+    :workspace-folder-path="props.workspaceFolderPath"
+    :visible="isSearchVisible"
+    @close="handleSearchClose"
+    @node-selected="handleNodeSelected"
   />
 </template>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Loader2 } from 'lucide-vue-next';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Loader2, Search } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 
 interface Props {
@@ -15,6 +15,7 @@ const emit = defineEmits<{
   (e: 'reset-view'): void;
   (e: 'toggle-fullscreen'): void;
   (e: 'refresh'): void;
+  (e: 'toggle-search'): void;
 }>();
 </script>
 
@@ -32,6 +33,9 @@ const emit = defineEmits<{
       </Button>
       <Button variant="ghost" size="sm" class="h-6 w-6 p-0" @click="emit('toggle-fullscreen')">
         <Maximize2 class="h-3 w-3" />
+      </Button>
+      <Button variant="ghost" size="sm" class="h-6 w-6 p-0" @click="emit('toggle-search')">
+        <Search class="h-3 w-3" />
       </Button>
     </div>
     <Button variant="outline" size="sm" :disabled="isLoading" @click="emit('refresh')">
