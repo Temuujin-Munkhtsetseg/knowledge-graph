@@ -5,6 +5,8 @@ import type {
   GkgEvent,
   GraphInitialQueryRequest,
   GraphInitialSuccessResponse,
+  GraphNeighborsQueryRequest,
+  GraphNeighborsSuccessResponse,
   HttpMethod,
   ServerInfoResponse,
   WorkspaceDeleteBodyRequest,
@@ -24,6 +26,7 @@ const endpointPaths = {
   index: '/api/workspace/index',
   events: '/api/events',
   graph_initial: '/api/graph/initial/{workspace_folder_path}/{project_path}',
+  graph_neighbors: '/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}',
 } satisfies Record<keyof ApiContract, ApiContract[keyof ApiContract]['path']>;
 
 export class ApiError extends Error {
@@ -245,6 +248,28 @@ export class ApiClient extends HttpClient {
       {
         workspace_folder_path: workspaceFolderPath,
         project_path: projectPath,
+      },
+      queryParams,
+    );
+  }
+
+  async fetchNodeNeighbors(
+    workspaceFolderPath: string,
+    projectPath: string,
+    nodeId: string,
+    limit: number = 100,
+  ): Promise<GraphNeighborsSuccessResponse> {
+    const queryParams: GraphNeighborsQueryRequest = {
+      limit,
+    };
+
+    return this.get<GraphNeighborsSuccessResponse>(
+      endpointPaths.graph_neighbors,
+      undefined,
+      {
+        workspace_folder_path: workspaceFolderPath,
+        project_path: projectPath,
+        node_id: nodeId,
       },
       queryParams,
     );

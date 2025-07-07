@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { ArrowRight, Folder, File, Code, Link } from 'lucide-vue-next';
 import type { TypedGraphNode, GraphRelationship } from '@gitlab-org/gkg';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
@@ -73,8 +73,17 @@ const relationshipColor = computed(() => {
   }
 });
 
-const shouldFlipTooltip = computed(() => {
-  return props.y > 400; // Simple threshold instead of window height
+const tooltipPosition = computed(() => {
+  const graphContainer = document.querySelector('.graph-container');
+  if (!graphContainer) {
+    return { top: '1rem', right: '1rem' };
+  }
+
+  const containerRect = graphContainer.getBoundingClientRect();
+  return {
+    top: `${containerRect.top + 16}px`,
+    right: `${window.innerWidth - containerRect.right + 16}px`,
+  };
 });
 </script>
 
@@ -82,46 +91,49 @@ const shouldFlipTooltip = computed(() => {
   <Teleport to="body">
     <div
       v-if="visible && relationship && sourceNode && targetNode"
-      class="fixed z-50 pointer-events-none"
+      class="fixed z-50 pointer-events-none transition-all duration-200 ease-out"
       :style="{
-        left: `${x + 10}px`,
-        top: `${y - 10}px`,
-        transform: shouldFlipTooltip ? 'translateY(-100%)' : 'translateY(0)',
+        top: tooltipPosition.top,
+        right: tooltipPosition.right,
       }"
     >
-      <Card class="w-96 shadow-lg border-2 bg-background/95 backdrop-blur-sm">
-        <CardHeader class="pb-3">
-          <CardTitle class="flex items-center gap-2 text-base">
+      <Card class="w-72 sm:w-80 shadow-lg border-2 bg-background/95 backdrop-blur-sm">
+        <div class="flex flex-col p-3 space-y-2">
+          <div class="flex items-center gap-2">
             <div
-              class="flex items-center justify-center w-6 h-6 rounded-full"
+              class="flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 rounded-full flex-shrink-0"
               :class="relationshipColor"
             >
-              <ArrowRight class="w-3 h-3 text-white" />
+              <ArrowRight class="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" />
             </div>
-            <span>{{ relationshipTypeDisplay }}</span>
-            <Badge variant="outline" class="ml-auto text-xs"> Relationship </Badge>
-          </CardTitle>
-        </CardHeader>
+            <span class="truncate min-w-0 flex-1 text-xs sm:text-sm font-medium">{{
+              relationshipTypeDisplay
+            }}</span>
+            <Badge variant="outline" class="text-xs flex-shrink-0 px-1.5 py-0.5"
+              >Relationship</Badge
+            >
+          </div>
 
-        <CardContent class="pt-0 space-y-4">
           <!-- Source Node -->
           <div class="space-y-2">
-            <div class="flex items-center gap-2 text-sm font-medium">
+            <div class="flex items-center gap-2 text-xs sm:text-sm font-medium">
               <component
                 :is="getNodeIcon(sourceNode.node_type)"
-                class="w-4 h-4"
+                class="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0"
                 :class="getNodeColor(sourceNode.node_type)"
               />
               <span>Source</span>
             </div>
-            <div class="ml-6 space-y-1">
+            <div class="ml-5 sm:ml-6 space-y-1">
               <div class="flex items-center gap-2">
-                <span class="font-mono text-sm">{{ sourceNode.label }}</span>
-                <Badge variant="secondary" class="text-xs">
+                <span class="font-mono text-xs sm:text-sm truncate min-w-0">{{
+                  sourceNode.label
+                }}</span>
+                <Badge variant="secondary" class="text-xs flex-shrink-0">
                   {{ sourceNode.node_type.replace('Node', '') }}
                 </Badge>
               </div>
-              <div class="text-xs text-muted-foreground">
+              <div class="text-xs text-muted-foreground break-words">
                 {{
                   sourceNode.properties.path ||
                   (sourceNode.node_type === 'DefinitionNode' ? sourceNode.properties.fqn : '')
@@ -134,22 +146,24 @@ const shouldFlipTooltip = computed(() => {
 
           <!-- Target Node -->
           <div class="space-y-2">
-            <div class="flex items-center gap-2 text-sm font-medium">
+            <div class="flex items-center gap-2 text-xs sm:text-sm font-medium">
               <component
                 :is="getNodeIcon(targetNode.node_type)"
-                class="w-4 h-4"
+                class="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0"
                 :class="getNodeColor(targetNode.node_type)"
               />
               <span>Target</span>
             </div>
-            <div class="ml-6 space-y-1">
+            <div class="ml-5 sm:ml-6 space-y-1">
               <div class="flex items-center gap-2">
-                <span class="font-mono text-sm">{{ targetNode.label }}</span>
-                <Badge variant="secondary" class="text-xs">
+                <span class="font-mono text-xs sm:text-sm truncate min-w-0">{{
+                  targetNode.label
+                }}</span>
+                <Badge variant="secondary" class="text-xs flex-shrink-0">
                   {{ targetNode.node_type.replace('Node', '') }}
                 </Badge>
               </div>
-              <div class="text-xs text-muted-foreground">
+              <div class="text-xs text-muted-foreground break-words">
                 {{
                   targetNode.properties.path ||
                   (targetNode.node_type === 'DefinitionNode' ? targetNode.properties.fqn : '')
@@ -164,19 +178,19 @@ const shouldFlipTooltip = computed(() => {
             class="space-y-2"
           >
             <Separator />
-            <div class="text-sm font-medium">Properties</div>
-            <div class="ml-6 space-y-1">
+            <div class="text-xs sm:text-sm font-medium">Properties</div>
+            <div class="ml-5 sm:ml-6 space-y-1">
               <div
                 v-for="[key, value] in Object.entries(relationship.properties)"
                 :key="key"
                 class="flex items-center gap-2 text-xs"
               >
                 <span class="text-muted-foreground">{{ key }}:</span>
-                <span class="font-mono">{{ value }}</span>
+                <span class="font-mono min-w-0 break-words">{{ value }}</span>
               </div>
             </div>
           </div>
-        </CardContent>
+        </div>
       </Card>
     </div>
   </Teleport>
