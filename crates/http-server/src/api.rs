@@ -1,7 +1,10 @@
 use crate::endpoints::{
-    events::EventsEndpointDef, graph::graph_initial::GraphInitialEndpointDef,
-    info::InfoEndpointDef, workspace_delete::WorkspaceDeleteEndpointDef,
-    workspace_index::WorkspaceIndexEndpointDef, workspace_list::WorkspaceListEndpointDef,
+    events::EventsEndpointDef,
+    graph::{graph_initial::GraphInitialEndpointDef, graph_neighbors::GraphNeighborsEndpointDef},
+    info::InfoEndpointDef,
+    workspace_delete::WorkspaceDeleteEndpointDef,
+    workspace_index::WorkspaceIndexEndpointDef,
+    workspace_list::WorkspaceListEndpointDef,
 };
 use serde::Serialize;
 use ts_rs::TS;
@@ -17,4 +20,5 @@ pub struct ApiContract {
     pub index: WorkspaceIndexEndpointDef,
     pub events: EventsEndpointDef,
     pub graph_initial: GraphInitialEndpointDef,
+    pub graph_neighbors: GraphNeighborsEndpointDef,
 }

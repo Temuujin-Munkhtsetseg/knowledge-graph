@@ -10,7 +10,10 @@ use crate::{
     contract::EndpointContract,
     endpoints::{
         events::{EventsEndpoint, events_handler},
-        graph::graph_initial::{GraphInitialEndpoint, graph_initial_handler},
+        graph::{
+            graph_initial::{GraphInitialEndpoint, graph_initial_handler},
+            graph_neighbors::{GraphNeighborsEndpoint, graph_neighbors_handler},
+        },
         info::{InfoEndpoint, info_handler},
         mcp::{mcp_batch_handler, mcp_handler},
         workspace_delete::{WorkspaceDeleteEndpoint, delete_handler},
@@ -104,6 +107,7 @@ pub async fn run(
         .route(EventsEndpoint::PATH, get(events_handler))
         .route(WorkspaceListEndpoint::PATH, get(workspace_list_handler))
         .route(GraphInitialEndpoint::PATH, get(graph_initial_handler))
+        .route(GraphNeighborsEndpoint::PATH, get(graph_neighbors_handler))
         .with_state(state);
 
     let app = Router::new()
