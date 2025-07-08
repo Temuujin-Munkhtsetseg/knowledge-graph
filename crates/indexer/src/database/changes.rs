@@ -1,5 +1,5 @@
-use database::kuzu::connection::KuzuConnection;
 use database::kuzu::schema::{SchemaManager, SchemaManagerImportMode};
+use kuzu::Database;
 
 use crate::analysis::{DefinitionNode, GraphData};
 use crate::database::types::FromKuzuNode;
@@ -33,8 +33,8 @@ pub struct KuzuNodeChanges<T> {
 }
 
 pub struct KuzuChanges<'a> {
-    pub connection: KuzuConnection<'a>,
-    pub node_database_service: NodeDatabaseService,
+    pub database: &'a Database,
+    pub node_database_service: NodeDatabaseService<'a>,
     pub file_changes: FileChanges,
     pub graph_data: GraphData,
     pub repo_path: String,
@@ -43,15 +43,15 @@ pub struct KuzuChanges<'a> {
 
 impl<'a> KuzuChanges<'a> {
     pub fn new(
-        connection: KuzuConnection<'a>,
+        database: &'a Database,
         file_changes: FileChanges,
         graph_data: GraphData,
         repo_path: &str,
         output_path: &str,
     ) -> Self {
         Self {
-            connection,
-            node_database_service: NodeDatabaseService,
+            database,
+            node_database_service: NodeDatabaseService::new(database),
             file_changes,
             graph_data,
             repo_path: repo_path.to_string(),
@@ -91,18 +91,14 @@ impl<'a> KuzuChanges<'a> {
             .get_rel_paths(FileChangesPathType::ChangedFiles, &self.repo_path);
 
         let _ = self.node_database_service.delete_by(
-            &self.connection,
             KuzuNodeType::DefinitionNode,
             "primary_file_path",
             &changed_files,
         );
 
-        let _ = self.node_database_service.delete_by(
-            &self.connection,
-            KuzuNodeType::FileNode,
-            "path",
-            &changed_files,
-        );
+        let _ =
+            self.node_database_service
+                .delete_by(KuzuNodeType::FileNode, "path", &changed_files);
 
         // Delete the nodes for deleted files from the database
         let changed_dirs = self
@@ -110,21 +106,16 @@ impl<'a> KuzuChanges<'a> {
             .get_rel_paths(FileChangesPathType::ChangedDirs, &self.repo_path);
 
         let _ = self.node_database_service.delete_by(
-            &self.connection,
             KuzuNodeType::DirectoryNode,
             "path",
             &changed_dirs,
         );
 
         // Import the new nodes from Parquet files
-        let schema_manager = SchemaManager::new();
+        let schema_manager = SchemaManager::new(self.database);
 
         schema_manager
-            .import_graph_data(
-                &self.connection,
-                &self.output_path,
-                SchemaManagerImportMode::Reindexing,
-            )
+            .import_graph_data(&self.output_path, SchemaManagerImportMode::Reindexing)
             .expect("Failed to import graph data");
 
         result
@@ -134,17 +125,17 @@ impl<'a> KuzuChanges<'a> {
         // Compute the max id of each node type
         let max_definition_id = self
             .node_database_service
-            .agg_node_by(&self.connection, KuzuNodeType::DefinitionNode, "max", "id")
+            .agg_node_by(KuzuNodeType::DefinitionNode, "max", "id")
             .unwrap();
 
         let max_file_id = self
             .node_database_service
-            .agg_node_by(&self.connection, KuzuNodeType::FileNode, "max", "id")
+            .agg_node_by(KuzuNodeType::FileNode, "max", "id")
             .unwrap();
 
         let max_dir_id = self
             .node_database_service
-            .agg_node_by(&self.connection, KuzuNodeType::DirectoryNode, "max", "id")
+            .agg_node_by(KuzuNodeType::DirectoryNode, "max", "id")
             .unwrap();
 
         (max_definition_id, max_file_id, max_dir_id)
@@ -159,22 +150,17 @@ impl<'a> KuzuChanges<'a> {
         match node_type {
             KuzuNodeType::DefinitionNode => self
                 .node_database_service
-                .get_by::<String, R>(
-                    &self.connection,
-                    node_type,
-                    "primary_file_path",
-                    &changed_files,
-                )
+                .get_by::<String, R>(node_type, "primary_file_path", &changed_files)
                 .unwrap(),
 
             KuzuNodeType::FileNode => self
                 .node_database_service
-                .get_by::<String, R>(&self.connection, node_type, "path", &changed_files)
+                .get_by::<String, R>(node_type, "path", &changed_files)
                 .unwrap(),
 
             KuzuNodeType::DirectoryNode => self
                 .node_database_service
-                .get_by::<String, R>(&self.connection, node_type, "path", &changed_files)
+                .get_by::<String, R>(node_type, "path", &changed_files)
                 .unwrap(),
         }
     }
@@ -204,7 +190,6 @@ impl<'a> KuzuChanges<'a> {
             .map(|def| def.id)
             .collect::<Vec<_>>();
         let _ = self.node_database_service.delete_by(
-            &self.connection,
             KuzuNodeType::DefinitionNode,
             "id",
             &deleted_def_ids,
@@ -218,12 +203,9 @@ impl<'a> KuzuChanges<'a> {
 
         // Remove deleted files (and their relationships)
         let deleted_file_ids = deleted_files.iter().map(|file| file.id).collect::<Vec<_>>();
-        let _ = self.node_database_service.delete_by(
-            &self.connection,
-            KuzuNodeType::FileNode,
-            "id",
-            &deleted_file_ids,
-        );
+        let _ =
+            self.node_database_service
+                .delete_by(KuzuNodeType::FileNode, "id", &deleted_file_ids);
 
         // Find removed directories (exist in kuzu but not in new)
         let deleted_dirs = self.find_nodes::<DirectoryNodeFromKuzu>(
@@ -234,7 +216,6 @@ impl<'a> KuzuChanges<'a> {
         // Remove deleted directories (and their relationships)
         let deleted_dir_ids = deleted_dirs.iter().map(|dir| dir.id).collect::<Vec<_>>();
         let _ = self.node_database_service.delete_by(
-            &self.connection,
             KuzuNodeType::DirectoryNode,
             "id",
             &deleted_dir_ids,

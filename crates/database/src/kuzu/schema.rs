@@ -1,4 +1,6 @@
-use crate::kuzu::{connection::KuzuConnection, types::DatabaseError};
+use crate::kuzu::connection::KuzuConnection;
+use crate::kuzu::types::DatabaseError;
+use kuzu::Database;
 use tracing::{info, warn};
 
 /// Represents a Kuzu node table definition
@@ -64,12 +66,8 @@ impl std::fmt::Display for KuzuDataType {
 }
 
 /// Manages database schema creation and operations
-pub struct SchemaManager;
-
-impl Default for SchemaManager {
-    fn default() -> Self {
-        Self::new()
-    }
+pub struct SchemaManager<'a> {
+    database: &'a Database,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -78,32 +76,40 @@ pub enum SchemaManagerImportMode {
     Reindexing,
 }
 
-impl SchemaManager {
-    pub fn new() -> Self {
-        Self
+fn get_connection(database: &Database) -> KuzuConnection {
+    match KuzuConnection::new(database) {
+        Ok(connection) => connection,
+        Err(e) => panic!("Failed to create database connection: {e}"),
+    }
+}
+
+impl<'a> SchemaManager<'a> {
+    pub fn new(database: &'a Database) -> Self {
+        Self { database }
     }
 
     /// Initialize the complete schema for the knowledge graph
-    pub fn initialize_schema(&self, connection: &KuzuConnection) -> Result<(), DatabaseError> {
+    pub fn initialize_schema(&self) -> Result<(), DatabaseError> {
         info!("Initializing knowledge graph schema...");
 
-        if self.schema_exists(connection)? {
+        if self.schema_exists()? {
             info!("Schema already exists, skipping creation");
             return Ok(());
         }
 
         // Create node tables
-        self.create_node_tables(connection)?;
+        self.create_node_tables()?;
 
         // Create relationship tables
-        self.create_relationship_tables(connection)?;
+        self.create_relationship_tables()?;
 
         info!("Knowledge graph schema initialized successfully");
         Ok(())
     }
 
     /// Check if the schema already exists by looking for key tables
-    fn schema_exists(&self, connection: &KuzuConnection) -> Result<bool, DatabaseError> {
+    fn schema_exists(&self) -> Result<bool, DatabaseError> {
+        let connection = get_connection(self.database);
         let required_tables = vec!["DirectoryNode", "FileNode", "DefinitionNode"];
 
         for table in required_tables {
@@ -116,7 +122,7 @@ impl SchemaManager {
     }
 
     /// Create all node tables
-    fn create_node_tables(&self, connection: &KuzuConnection) -> Result<(), DatabaseError> {
+    fn create_node_tables(&self) -> Result<(), DatabaseError> {
         info!("Creating node tables...");
 
         // Directory nodes
@@ -250,15 +256,15 @@ impl SchemaManager {
         };
 
         // Create the tables
-        self.create_node_table(connection, &directory_table)?;
-        self.create_node_table(connection, &file_table)?;
-        self.create_node_table(connection, &definition_table)?;
+        self.create_node_table(&directory_table)?;
+        self.create_node_table(&file_table)?;
+        self.create_node_table(&definition_table)?;
 
         Ok(())
     }
 
     /// Create all relationship tables with consolidated schema
-    fn create_relationship_tables(&self, connection: &KuzuConnection) -> Result<(), DatabaseError> {
+    fn create_relationship_tables(&self) -> Result<(), DatabaseError> {
         info!("Creating consolidated relationship tables...");
 
         // Directory relationships (DIR_CONTAINS_DIR + DIR_CONTAINS_FILE)
@@ -307,19 +313,16 @@ impl SchemaManager {
         };
 
         // Create consolidated relationship tables
-        self.create_relationship_table(connection, &directory_relationships)?;
-        self.create_relationship_table(connection, &file_relationships)?;
-        self.create_relationship_table(connection, &definition_relationships)?;
+        self.create_relationship_table(&directory_relationships)?;
+        self.create_relationship_table(&file_relationships)?;
+        self.create_relationship_table(&definition_relationships)?;
 
         Ok(())
     }
 
     /// Create a single node table
-    fn create_node_table(
-        &self,
-        connection: &KuzuConnection,
-        table: &NodeTable,
-    ) -> Result<(), DatabaseError> {
+    fn create_node_table(&self, table: &NodeTable) -> Result<(), DatabaseError> {
+        let connection = get_connection(self.database);
         let columns_str = table
             .columns
             .iter()
@@ -346,11 +349,8 @@ impl SchemaManager {
     }
 
     /// Create a single relationship table
-    fn create_relationship_table(
-        &self,
-        connection: &KuzuConnection,
-        table: &RelationshipTable,
-    ) -> Result<(), DatabaseError> {
+    fn create_relationship_table(&self, table: &RelationshipTable) -> Result<(), DatabaseError> {
+        let connection = get_connection(self.database);
         let mut query = format!("CREATE REL TABLE IF NOT EXISTS {} (", table.name);
 
         // Handle multiple FROM-TO pairs if specified
@@ -393,7 +393,6 @@ impl SchemaManager {
     /// Import graph data from Parquet files with support for both consolidated and legacy formats
     pub fn import_graph_data(
         &self,
-        connection: &KuzuConnection,
         parquet_dir: &str,
         mode: SchemaManagerImportMode,
     ) -> Result<(), DatabaseError> {
@@ -411,10 +410,10 @@ impl SchemaManager {
         }
 
         // Import node data
-        self.import_nodes(connection, parquet_dir)?;
+        self.import_nodes(parquet_dir)?;
 
         // Import relationship data (try consolidated format first, fall back to legacy)
-        match self.import_consolidated_relationships(connection, parquet_dir, mode) {
+        match self.import_consolidated_relationships(parquet_dir, mode) {
             Ok(_) => {
                 info!("Successfully imported consolidated relationships");
             }
@@ -431,11 +430,9 @@ impl SchemaManager {
     }
 
     /// Import node data from Parquet files
-    fn import_nodes(
-        &self,
-        connection: &KuzuConnection,
-        parquet_dir: &str,
-    ) -> Result<(), DatabaseError> {
+    fn import_nodes(&self, parquet_dir: &str) -> Result<(), DatabaseError> {
+        let connection = get_connection(self.database);
+
         let node_files = vec![
             ("DirectoryNode", "directories.parquet"),
             ("FileNode", "files.parquet"),
@@ -461,10 +458,11 @@ impl SchemaManager {
     /// Import consolidated relationship data from Parquet files
     fn import_consolidated_relationships(
         &self,
-        connection: &KuzuConnection,
         parquet_dir: &str,
         mode: SchemaManagerImportMode,
     ) -> Result<(), DatabaseError> {
+        let connection = get_connection(self.database);
+
         // Import directory-to-directory relationships
         let dir_to_dir_file =
             std::path::Path::new(parquet_dir).join("directory_to_directory_relationships.parquet");
@@ -558,10 +556,8 @@ impl SchemaManager {
     }
 
     /// Get schema statistics
-    pub fn get_schema_stats(
-        &self,
-        connection: KuzuConnection,
-    ) -> Result<SchemaStats, DatabaseError> {
+    pub fn get_schema_stats(&self) -> Result<SchemaStats, DatabaseError> {
+        let connection = get_connection(self.database);
         let db_stats = connection.get_database_stats()?;
         let table_names = connection.get_table_names()?;
 

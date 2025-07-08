@@ -413,12 +413,9 @@ fn setup_reindexing_pipeline(
     let database_instance =
         Database::new(&database_path, SystemConfig::default()).expect("Failed to create database");
 
-    let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
+    let node_database_service = NodeDatabaseService::new(&database_instance);
 
-    let node_database_service = NodeDatabaseService;
-
-    let all_definition_count =
-        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
+    let all_definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
     println!("all_definition_count: {all_definition_count}");
     assert_eq!(
         all_definition_count, 94,
@@ -432,7 +429,6 @@ fn setup_reindexing_pipeline(
     ];
     let definition_count = node_database_service
         .count_node_by(
-            &connection,
             KuzuNodeType::DefinitionNode,
             "primary_file_path",
             &file_paths,
@@ -495,11 +491,9 @@ async fn test_full_reindexing_pipeline_git_status() {
     let database_instance = database
         .get_or_create_database(&setup.database_path)
         .expect("Failed to create database");
-    let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
-    let node_database_service = NodeDatabaseService;
+    let node_database_service = NodeDatabaseService::new(&database_instance);
 
-    let definition_count =
-        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
+    let definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
     println!("definition_count: {definition_count}");
     assert_eq!(
         definition_count, 95,
@@ -512,7 +506,6 @@ async fn test_full_reindexing_pipeline_git_status() {
     ];
     let definition_count = node_database_service
         .count_node_by(
-            &connection,
             KuzuNodeType::DefinitionNode,
             "primary_file_path",
             &file_paths,
@@ -558,16 +551,14 @@ async fn test_full_reindexing_pipeline_watchexec() {
     let database_instance = database
         .get_or_create_database(&setup.database_path)
         .expect("Failed to create database");
-    let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
 
-    let node_database_service = NodeDatabaseService;
+    let node_database_service = NodeDatabaseService::new(&database_instance);
 
-    let all_definition_count =
-        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
+    let all_definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
     println!("all_definition_count: {all_definition_count}");
 
     let definitions = node_database_service
-        .get_all::<DefinitionNodeFromKuzu>(&connection, KuzuNodeType::DefinitionNode)
+        .get_all::<DefinitionNodeFromKuzu>(KuzuNodeType::DefinitionNode)
         .unwrap();
     let ids_paths = definitions
         .iter()
@@ -608,8 +599,7 @@ async fn test_full_reindexing_pipeline_watchexec() {
 
     // Check that we have the expected number of definition nodes
     let expected_definition_count = 142;
-    let definition_count =
-        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
+    let definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
     assert_eq!(
         definition_count, expected_definition_count,
         "Should have {expected_definition_count} definition nodes"
@@ -655,18 +645,15 @@ fn setup_end_to_end_kuzu(temp_repo: &TempDir) {
         .create_temporary_database(config)
         .expect("Failed to create Kuzu database");
 
-    let connection =
-        KuzuConnection::new(&database_instance).expect("Failed to create Kuzu connection");
-
     // Initialize schema
-    let schema_manager = SchemaManager::new();
+    let schema_manager = SchemaManager::new(&database_instance);
     schema_manager
-        .initialize_schema(&connection)
+        .initialize_schema()
         .expect("Failed to initialize schema");
 
     // Import Parquet data
     schema_manager
-        .import_graph_data(&connection, output_path, SchemaManagerImportMode::Indexing)
+        .import_graph_data(output_path, SchemaManagerImportMode::Indexing)
         .expect("Failed to import graph data");
 
     println!("✅ Kuzu database created and data imported successfully");
@@ -872,28 +859,25 @@ fn test_full_indexing_pipeline() {
         .create_temporary_database(config)
         .expect("Failed to create Kuzu database");
 
-    let connection =
-        KuzuConnection::new(&database_instance).expect("Failed to create Kuzu connection");
-
     // Initialize schema
-    let schema_manager = SchemaManager::new();
+    let schema_manager = SchemaManager::new(&database_instance);
 
     schema_manager
-        .initialize_schema(&connection)
+        .initialize_schema()
         .expect("Failed to initialize schema");
 
     // Import Parquet data
     schema_manager
-        .import_graph_data(&connection, output_path, SchemaManagerImportMode::Indexing)
+        .import_graph_data(output_path, SchemaManagerImportMode::Indexing)
         .expect("Failed to import graph data");
 
     println!("✅ Kuzu database created and data imported successfully");
 
     // Verify basic node counts
     println!("\n📊 Kuzu Database Node Counts:");
-    let node_database_service = NodeDatabaseService;
+    let node_database_service = NodeDatabaseService::new(&database_instance);
     let node_counts = node_database_service
-        .get_node_counts(&connection)
+        .get_node_counts()
         .expect("Failed to get node counts");
 
     println!("  📁 Directory nodes: {}", node_counts.directory_count);
@@ -903,7 +887,7 @@ fn test_full_indexing_pipeline() {
     // Verify relationship counts
     println!("\n📊 Kuzu Database Relationship Counts:");
     let rel_counts = node_database_service
-        .get_relationship_counts(&connection)
+        .get_relationship_counts()
         .expect("Failed to get relationship counts");
 
     println!(
@@ -1144,52 +1128,50 @@ fn test_simple_end_to_end_kuzu() {
     let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
 
     let relationship_type_map = RelationshipTypeMapping::new();
-    let node_database_service = NodeDatabaseService;
+    let node_database_service = NodeDatabaseService::new(&database_instance);
 
     // Get definition node count
-    let defn_node_count =
-        node_database_service.count_nodes(&connection, KuzuNodeType::DefinitionNode);
+    let defn_node_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
     println!("Definition node count: {defn_node_count}");
     assert_eq!(defn_node_count, 94);
 
     // Get file node count
-    let file_node_count = node_database_service.count_nodes(&connection, KuzuNodeType::FileNode);
+    let file_node_count = node_database_service.count_nodes(KuzuNodeType::FileNode);
     println!("File node count: {file_node_count}");
     assert_eq!(file_node_count, 7);
 
     // Get module -> class relationships count
-    let module_class_rel_count = node_database_service
-        .count_relationships_of_type(&connection, RelationshipType::ModuleToClass);
+    let module_class_rel_count =
+        node_database_service.count_relationships_of_type(RelationshipType::ModuleToClass);
     println!("Module -> class relationship count: {module_class_rel_count}");
     assert_eq!(module_class_rel_count, 7);
 
     // Get file definition relationships count
-    let file_defn_rel_count = node_database_service
-        .count_relationships_of_type(&connection, RelationshipType::FileDefines);
+    let file_defn_rel_count =
+        node_database_service.count_relationships_of_type(RelationshipType::FileDefines);
     println!("File defines relationship count: {file_defn_rel_count}");
     assert_eq!(file_defn_rel_count, 96);
 
     // Get directory node count
-    let dir_node_count =
-        node_database_service.count_nodes(&connection, KuzuNodeType::DirectoryNode);
+    let dir_node_count = node_database_service.count_nodes(KuzuNodeType::DirectoryNode);
     println!("Directory node count: {dir_node_count}");
     assert_eq!(dir_node_count, 4);
 
     // get directory -> file relationships count
-    let dir_file_rel_count = node_database_service
-        .count_relationships_of_type(&connection, RelationshipType::DirContainsFile);
+    let dir_file_rel_count =
+        node_database_service.count_relationships_of_type(RelationshipType::DirContainsFile);
     println!("Directory -> file relationship count: {dir_file_rel_count}");
     assert_eq!(dir_file_rel_count, 6);
 
     // get directory -> directory relationships count
-    let dir_dir_rel_count = node_database_service
-        .count_relationships_of_type(&connection, RelationshipType::DirContainsDir);
+    let dir_dir_rel_count =
+        node_database_service.count_relationships_of_type(RelationshipType::DirContainsDir);
     println!("Directory -> directory relationship count: {dir_dir_rel_count}");
     assert_eq!(dir_dir_rel_count, 2);
 
     // get definition relationships count
-    let def_rel_count = node_database_service
-        .count_relationships_of_node_type(&connection, KuzuNodeType::DefinitionNode);
+    let def_rel_count =
+        node_database_service.count_relationships_of_node_type(KuzuNodeType::DefinitionNode);
     println!("Definition relationship count: {def_rel_count}");
     assert_eq!(def_rel_count, 88);
 

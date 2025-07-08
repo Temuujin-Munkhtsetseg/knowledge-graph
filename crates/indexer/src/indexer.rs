@@ -12,7 +12,6 @@
 // ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║
 //  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
-use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;
 use database::kuzu::schema::{SchemaManager, SchemaManagerImportMode};
 use gitalisk_core::repository::gitalisk_repository::FileInfo;
@@ -493,16 +492,9 @@ impl RepositoryIndexer {
             .analyze_results(&result.file_results)
             .map_err(|e| format!("Analysis failed: {e}"))?;
 
-        let connection = KuzuConnection::new(&database_instance);
-
-        if connection.is_err() {
-            return Err(format!("Failed to create database connection: {db_path}."));
-        }
-
-        let connection = connection.unwrap();
         // Sync diff changes to kuzu
         let mut kuzu_syncer = KuzuChanges::new(
-            connection,
+            &database_instance,
             file_changes,
             graph_data,
             &self.path,
@@ -543,26 +535,16 @@ impl RepositoryIndexer {
             .create_temporary_database(config)
             .map_err(|e| format!("Failed to create database: {e:?}"))?;
 
-        let connection = KuzuConnection::new(&database_instance)
-            .map_err(|_| format!("Failed to create database connection: {database_path}."))?;
-        let schema_manager = SchemaManager::new();
+        let schema_manager = SchemaManager::new(&database_instance);
         schema_manager
-            .initialize_schema(&connection)
+            .initialize_schema()
             .map_err(|e| format!("Failed to initialize database schema: {e:?}"))?;
 
-        let connection = KuzuConnection::new(&database_instance)
-            .map_err(|_| format!("Failed to create database connection: {database_path}."))?;
         schema_manager
-            .import_graph_data(
-                &connection,
-                parquet_directory,
-                SchemaManagerImportMode::Indexing,
-            )
+            .import_graph_data(parquet_directory, SchemaManagerImportMode::Indexing)
             .map_err(|e| format!("Failed to import graph data: {e:?}"))?;
 
-        let connection = KuzuConnection::new(&database_instance)
-            .map_err(|_| format!("Failed to create database connection: {database_path}."))?;
-        match schema_manager.get_schema_stats(connection) {
+        match schema_manager.get_schema_stats() {
             Ok(stats) => {
                 info!("Database loading completed successfully:");
                 info!("{stats}");
