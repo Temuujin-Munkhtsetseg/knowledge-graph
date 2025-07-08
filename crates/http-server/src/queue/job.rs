@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use ts_rs::TS;
 
 /// Priority levels for job processing.
@@ -29,6 +30,11 @@ pub enum Job {
         workspace_folder_path: String,
         priority: JobPriority,
     },
+    ReindexWorkspaceFolderWithWatchedFiles {
+        workspace_folder_path: String,
+        workspace_changes: Vec<PathBuf>,
+        priority: JobPriority,
+    },
 }
 
 impl Job {
@@ -38,18 +44,26 @@ impl Job {
                 workspace_folder_path,
                 ..
             } => workspace_folder_path,
+            Job::ReindexWorkspaceFolderWithWatchedFiles {
+                workspace_folder_path,
+                ..
+            } => workspace_folder_path,
         }
     }
 
     pub fn priority(&self) -> JobPriority {
         match self {
             Job::IndexWorkspaceFolder { priority, .. } => priority.clone(),
+            Job::ReindexWorkspaceFolderWithWatchedFiles { priority, .. } => priority.clone(),
         }
     }
 
     pub fn job_type(&self) -> &'static str {
         match self {
             Job::IndexWorkspaceFolder { .. } => "IndexWorkspaceFolder",
+            Job::ReindexWorkspaceFolderWithWatchedFiles { .. } => {
+                "ReindexWorkspaceFolderWithWatchedFiles"
+            }
         }
     }
 }

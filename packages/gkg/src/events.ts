@@ -2,7 +2,7 @@
 import type { TSProjectInfo } from "./project_info";
 import type { TSWorkspaceFolderInfo } from "./workspace_folder";
 
-export type GkgEvent = { "type": "WorkspaceIndexing", "payload": WorkspaceIndexingEvent } | { "type": "ProjectIndexing", "payload": ProjectIndexingEvent };
+export type GkgEvent = { "type": "WorkspaceIndexing", "payload": WorkspaceIndexingEvent } | { "type": "ProjectIndexing", "payload": ProjectIndexingEvent } | { "type": "ProjectReindexing", "payload": ProjectReindexingEvent } | { "type": "WorkspaceReindexing", "payload": WorkspaceReindexingEvent };
 
 export type ProjectIndexingCompleted = { project_info: TSProjectInfo, completed_at: string, };
 
@@ -12,6 +12,14 @@ export type ProjectIndexingFailed = { project_info: TSProjectInfo, error: string
 
 export type ProjectIndexingStarted = { project_info: TSProjectInfo, started_at: string, };
 
+export type ProjectReindexingCompleted = { project_info: TSProjectInfo, completed_at: string, };
+
+export type ProjectReindexingEvent = { "status": "Started" } & ProjectReindexingStarted | { "status": "Completed" } & ProjectReindexingCompleted | { "status": "Failed" } & ProjectReindexingFailed;
+
+export type ProjectReindexingFailed = { project_info: TSProjectInfo, error: string, failed_at: string, };
+
+export type ProjectReindexingStarted = { project_info: TSProjectInfo, started_at: string, };
+
 export type WorkspaceIndexingCompleted = { workspace_folder_info: TSWorkspaceFolderInfo, projects_indexed: Array<string>, completed_at: string, };
 
 export type WorkspaceIndexingEvent = { "status": "Started" } & WorkspaceIndexingStarted | { "status": "Completed" } & WorkspaceIndexingCompleted | { "status": "Failed" } & WorkspaceIndexingFailed;
@@ -19,3 +27,11 @@ export type WorkspaceIndexingEvent = { "status": "Started" } & WorkspaceIndexing
 export type WorkspaceIndexingFailed = { workspace_folder_info: TSWorkspaceFolderInfo, projects_indexed: Array<string>, error: string, failed_at: string, };
 
 export type WorkspaceIndexingStarted = { workspace_folder_info: TSWorkspaceFolderInfo, projects_to_process: Array<string>, started_at: string, };
+
+export type WorkspaceReindexingCompleted = { workspace_folder_info: TSWorkspaceFolderInfo, projects_indexed: Array<string>, completed_at: string, };
+
+export type WorkspaceReindexingEvent = { "status": "Started" } & WorkspaceReindexingStarted | { "status": "Completed" } & WorkspaceReindexingCompleted | { "status": "Failed" } & WorkspaceReindexingFailed;
+
+export type WorkspaceReindexingFailed = { workspace_folder_info: TSWorkspaceFolderInfo, error: string, failed_at: string, };
+
+export type WorkspaceReindexingStarted = { workspace_folder_info: TSWorkspaceFolderInfo, projects_to_process: Array<string>, started_at: string, };

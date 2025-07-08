@@ -47,6 +47,8 @@ pub mod types;
 pub enum GkgEvent {
     WorkspaceIndexing(WorkspaceIndexingEvent),
     ProjectIndexing(ProjectIndexingEvent),
+    ProjectReindexing(ProjectReindexingEvent),
+    WorkspaceReindexing(WorkspaceReindexingEvent),
 }
 
 #[derive(Clone, Debug, Serialize, TS)]
@@ -109,6 +111,70 @@ pub struct ProjectIndexingCompleted {
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
 pub struct ProjectIndexingFailed {
+    pub project_info: TSProjectInfo,
+    pub error: String,
+    pub failed_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+#[serde(tag = "status")]
+pub enum WorkspaceReindexingEvent {
+    Started(WorkspaceReindexingStarted),
+    Completed(WorkspaceReindexingCompleted),
+    Failed(WorkspaceReindexingFailed),
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct WorkspaceReindexingStarted {
+    pub workspace_folder_info: TSWorkspaceFolderInfo,
+    pub projects_to_process: Vec<String>,
+    pub started_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct WorkspaceReindexingCompleted {
+    pub workspace_folder_info: TSWorkspaceFolderInfo,
+    pub projects_indexed: Vec<String>,
+    pub completed_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct WorkspaceReindexingFailed {
+    pub workspace_folder_info: TSWorkspaceFolderInfo,
+    pub error: String,
+    pub failed_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+#[serde(tag = "status")]
+pub enum ProjectReindexingEvent {
+    Started(ProjectReindexingStarted),
+    Completed(ProjectReindexingCompleted),
+    Failed(ProjectReindexingFailed),
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct ProjectReindexingStarted {
+    pub project_info: TSProjectInfo,
+    pub started_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct ProjectReindexingCompleted {
+    pub project_info: TSProjectInfo,
+    pub completed_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export, export_to = "../../../packages/gkg/src/events.ts")]
+pub struct ProjectReindexingFailed {
     pub project_info: TSProjectInfo,
     pub error: String,
     pub failed_at: DateTime<Utc>,
