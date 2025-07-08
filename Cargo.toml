@@ -73,6 +73,7 @@ watchexec-events = "6.0.0"
 watchexec-filterer-ignore = "7.0.0"
 watchexec-signals = "5.0.0"
 criterion = "0.6.0"
+ignore-files = "3.0.4"
 
 # Test dependencies
 axum-test = "17.3.0"

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 pub enum Status {
     Indexed,
     Indexing,
+    Reindexing,
     Error,
     Pending,
 }
@@ -19,6 +20,7 @@ impl fmt::Display for Status {
         match self {
             Status::Indexed => write!(f, "indexed"),
             Status::Indexing => write!(f, "indexing"),
+            Status::Reindexing => write!(f, "reindexing"),
             Status::Error => write!(f, "error"),
             Status::Pending => write!(f, "pending"),
         }
@@ -135,6 +137,7 @@ impl WorkspaceFolderMetadata {
         let mut latest_indexed_at: Option<DateTime<Utc>> = None;
         let mut has_error = false;
         let mut has_indexing = false;
+        let mut has_reindexing = false;
         let mut all_indexed = true;
 
         for project in self.projects.values() {
@@ -145,6 +148,10 @@ impl WorkspaceFolderMetadata {
                 }
                 Status::Indexing => {
                     has_indexing = true;
+                    all_indexed = false;
+                }
+                Status::Reindexing => {
+                    has_reindexing = true;
                     all_indexed = false;
                 }
                 Status::Pending => {
@@ -170,6 +177,8 @@ impl WorkspaceFolderMetadata {
             Status::Error
         } else if has_indexing {
             Status::Indexing
+        } else if has_reindexing {
+            Status::Reindexing
         } else if all_indexed {
             Status::Indexed
         } else {

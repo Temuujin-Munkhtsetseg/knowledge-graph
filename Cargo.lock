@@ -1990,6 +1990,7 @@ dependencies = [
  "futures-util",
  "gitalisk-core",
  "http",
+ "ignore-files",
  "indexer",
  "logging",
  "mcp",
@@ -2013,6 +2014,10 @@ dependencies = [
  "ts-rs",
  "urlencoding",
  "uuid",
+ "watchexec",
+ "watchexec-events",
+ "watchexec-filterer-ignore",
+ "watchexec-signals",
  "workspace-manager",
 ]
 

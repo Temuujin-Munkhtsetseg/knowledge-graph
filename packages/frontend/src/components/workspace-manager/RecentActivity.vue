@@ -11,6 +11,14 @@ import type {
   ProjectIndexingCompleted,
   WorkspaceIndexingFailed,
   ProjectIndexingFailed,
+  WorkspaceReindexingEvent,
+  ProjectReindexingEvent,
+  WorkspaceReindexingStarted,
+  ProjectReindexingStarted,
+  WorkspaceReindexingCompleted,
+  ProjectReindexingCompleted,
+  WorkspaceReindexingFailed,
+  ProjectReindexingFailed,
 } from '@gitlab-org/gkg';
 import RecentActivityItem from './RecentActivityItem.vue';
 
@@ -38,19 +46,35 @@ watch(
 
 // Helper function to extract timestamp from event payload
 const getEventTimestamp = (
-  payload: WorkspaceIndexingEvent | ProjectIndexingEvent,
+  payload:
+    | WorkspaceIndexingEvent
+    | ProjectIndexingEvent
+    | WorkspaceReindexingEvent
+    | ProjectReindexingEvent,
   status: string,
 ): string => {
   if (status === 'Started') {
-    const startedEvent = payload as WorkspaceIndexingStarted | ProjectIndexingStarted;
+    const startedEvent = payload as
+      | WorkspaceIndexingStarted
+      | ProjectIndexingStarted
+      | WorkspaceReindexingStarted
+      | ProjectReindexingStarted;
     return startedEvent.started_at;
   }
   if (status === 'Completed') {
-    const completedEvent = payload as WorkspaceIndexingCompleted | ProjectIndexingCompleted;
+    const completedEvent = payload as
+      | WorkspaceIndexingCompleted
+      | ProjectIndexingCompleted
+      | WorkspaceReindexingCompleted
+      | ProjectReindexingCompleted;
     return completedEvent.completed_at;
   }
   if (status === 'Failed') {
-    const failedEvent = payload as WorkspaceIndexingFailed | ProjectIndexingFailed;
+    const failedEvent = payload as
+      | WorkspaceIndexingFailed
+      | ProjectIndexingFailed
+      | WorkspaceReindexingFailed
+      | ProjectReindexingFailed;
     return failedEvent.failed_at;
   }
 
@@ -96,6 +120,31 @@ const formatEventForDisplay = (event: GkgEvent) => {
 
   if (type === 'ProjectIndexing') {
     const projectPayload = payload as ProjectIndexingEvent;
+    const projectPath = projectPayload.project_info?.project_path || 'Unknown project';
+    const projectName = projectPath.split('/').pop() || projectPath;
+    return {
+      timestamp,
+      description: `Project "${projectName}"`,
+      status,
+      type: 'project',
+    };
+  }
+
+  if (type === 'WorkspaceReindexing') {
+    const workspacePayload = payload as WorkspaceReindexingEvent;
+    const workspacePath =
+      workspacePayload.workspace_folder_info?.workspace_folder_path || 'Unknown workspace';
+    const workspaceName = workspacePath.split('/').pop() || workspacePath;
+    return {
+      timestamp,
+      description: `Workspace "${workspaceName}"`,
+      status,
+      type: 'workspace',
+    };
+  }
+
+  if (type === 'ProjectReindexing') {
+    const projectPayload = payload as ProjectReindexingEvent;
     const projectPath = projectPayload.project_info?.project_path || 'Unknown project';
     const projectName = projectPath.split('/').pop() || projectPath;
     return {
