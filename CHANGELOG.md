@@ -1,3 +1,49 @@
+## [0.5.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.4.0...v0.5.0) (2025-07-08)
+
+### :sparkles: Features
+
+* **axum:** graceful shutdown handling for http server ([fae3870](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/fae38709f2125fc1effb1c948837c5b2ff87e056)) by Michael Usachenko
+* **ci:** use nextest for tests and report generation ([ad386e8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ad386e8218ff37163c7200409689b0cc1d2f1ca2)) by Bohdan Parkhomchuk
+* **db:** enforcing short lived connections for all interactions with kuzu ([f32e3a8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/f32e3a88df46c88704b64cb8bb02bd7c5c4c2171)) by Michael Usachenko
+* **devex:** add common tasks to mise ([2887021](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/288702120f3d9ffa9f1f24c2c24bc83cfadb67ca)) by michaelangeloio
+* **http-server, panel:** add explorer to panel ([ea53699](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ea53699ab4f1d37248c2ebf80c49e52dac2f498d)) by Michael Angelo Rivera
+* **http-server:** add initial graph endpoint ([30dddc0](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/30dddc0f250bb2a0a070f116560fcd83f7b3d155)) by michaelangeloio
+* **http-server:** add neighbors endpoint ([6e75eb1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6e75eb163fc27a4eafd51527dd82608204f095fc)) by michaelangeloio
+* **http-server:** delete workspace endpoint ([81ae26b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/81ae26b616dc1bdbd3f88c097f19609ca1b06006)) by michaelangeloio
+* **http-server:** fifo-queue ([19a5d3e](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/19a5d3eb99371f3b666dcaf66bb6e703501a92e2)) by Michael Angelo Rivera
+* **mcp:** add simple list projects tool ([0c0da1a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/0c0da1a294ba37dcdac3c3b9c37caacfd075750b)) by Bohdan Parkhomchuk
+* **mcp:** implement first set of tools for mcp ([e4a1bd7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e4a1bd7344d14fc64d238ff8f64591e04e38c4ce)) by Bohdan Parkhomchuk
+* **mcp:** serve MCP over HTTP and SSE ([0b22921](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/0b2292119f7b1b962c3918616b0060d9bd25c2ce)) by Jean-Gabriel Doyon
+* **panel, http-server:** add node search support ([c3737d3](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c3737d354e05a93e9ae76ed0bf0cf6a88a541b54)) by michaelangeloio
+* **panel:** add node click functionality ([eb9eb44](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/eb9eb44d87857b055ad25e0b4c22e07d43a1b219)) by michaelangeloio
+* **panel:** introduce knowledge graph panel ([1bdd323](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1bdd32340e8ce27ea089ce1ffafa72ac30762889)) by Michael Angelo Rivera
+* **querying:** create result mappers for query library ([d3036b1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d3036b192bfeca778ac2ae9d128d43ecfda6b389)) by Jean-Gabriel Doyon
+
+### :bug: Fixes
+
+* **cli:** register workspace folder ([161ac11](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/161ac11e20a0a0f0650781e8f28f161d9c0c8328)) by michaelangeloio
+* **http-server:** event bus types ([8468309](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/846830932cf52d14b7314623d776a2348afa573c)) by michaelangeloio
+* **http:** save gkg-http-server lock file in the home directory ([dfd287e](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/dfd287ec57882076fa565d113c4fe3e91b0a80ef)) by Jean-Gabriel Doyon
+* **mcp:** fix invalid MCP type ([3eb3d52](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3eb3d5200363e76935603750d6c6610b79c6cfa5)) by Jean-Gabriel Doyon
+
+### :zap: Refactor
+
+* **database:** remove workspace manager ([4c0e0ab](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4c0e0ab4a6ec859afe9d509b88eb5bd78da0fab3)) by michaelangeloio
+* **http-server:** refine response structs ([8efda87](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8efda8756f532d701d3d155a17a0bedf8bbdc624)) by michaelangeloio
+* **indexer:** make indexer depend and use database crate ([ab8dddc](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ab8dddc8607806e6947fad2e7987b4b18d9e7090)) by Jean-Gabriel Doyon
+* **querying:** move querying in database crate ([1f7c0fd](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1f7c0fd752931830e7998ca30a7bea6a5fa25d38)) by Jean-Gabriel Doyon
+
+### :repeat: Chore
+
+* **deps:** add shadcn deps ([d573c6a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d573c6a2bbcd36fcfa52135180317fabe4d9b3a5)) by michaelangeloio
+* **deps:** remove .eslintrc.json ([8182a9c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8182a9c56f9b6f1ec9a4b3cf89baa6631e01304b)) by michaelangeloio
+* **deps:** update eslint and prettier ([7179fe2](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7179fe2c5e8454e00e95a2505279097937dd6d0a)) by michaelangeloio
+* **deps:** update gitalisk to version v0.3.1 ([35dc2d1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/35dc2d1dfab8e0c471a28efc70179af1abcb50a2)) by michaelangeloio
+* **deps:** upgrade deps and rmcp ([df71a79](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/df71a79ecc596cf7d0b606c3b486885631fdae92)) by michaelangeloio
+* **devex:** remove build.rs script ([212364c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/212364cc4aa49f4bb152366bab561ca99ebb6401)) by michaelangeloio
+* **hooks:** make pre-commit hook auto-fix ([45c7a1f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/45c7a1fc047f0e5c541685495cd78bfd5a439e36)) by Jean-Gabriel Doyon
+* **tests:** only expose database testing package for test modules ([1fcbfb2](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1fcbfb2ff91b37e3f4f952d415b20ecf2e342d23)) by Jean-Gabriel Doyon
+
 ## [0.4.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.3.0...v0.4.0) (2025-07-03)
 
 ### :sparkles: Features
