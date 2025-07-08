@@ -22,6 +22,7 @@ use crate::{
     },
     queue::dispatch::JobDispatcher,
 };
+
 use anyhow::Result;
 use axum::http::HeaderValue;
 use axum::{
@@ -36,6 +37,7 @@ use mcp::{http::mcp_http_service, sse::mcp_sse_router};
 use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
+use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use workspace_manager::WorkspaceManager;
@@ -122,9 +124,48 @@ pub async fn run(
 
     tracing::info!("HTTP server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+
+    // Set up graceful shutdown
+    let server = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
+
+    // Run the server and handle shutdown
+    let result = server.await;
+
+    // Cancel MCP SSE server
     mcp_sse_cancellation_token.cancel();
-    Ok(())
+
+    // Log shutdown completion
+    tracing::info!("HTTP server shut down gracefully");
+
+    result.map_err(Into::into)
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("Received Ctrl+C, initiating graceful shutdown...");
+        },
+        _ = terminate => {
+            tracing::info!("Received SIGTERM, initiating graceful shutdown...");
+        },
+    }
 }
 
 // The preferred port is an easter egg from "knowledge graph":
