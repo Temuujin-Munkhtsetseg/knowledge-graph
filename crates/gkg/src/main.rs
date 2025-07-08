@@ -37,6 +37,22 @@ fn get_lock_file_path() -> Result<PathBuf> {
     Ok(get_gkg_dir()?.join("gkg.lock"))
 }
 
+#[cfg(target_os = "macos")]
+fn get_single_instance() -> Result<SingleInstance> {
+    let home_dir = home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+    let single_instance_path = home_dir.join(GKG_HTTP_SERVER);
+    // On macOS, SingleInstance uses a file-based lock to ensure only one instance of the server is running.
+    Ok(SingleInstance::new(single_instance_path.to_str().unwrap())?)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_single_instance() -> Result<SingleInstance> {
+    // SingleInstance has a different implementation for Windows and Linux.
+    // On Windows, it will create a mutex object using CreateMutexW.
+    // On Linux, it will create a socket based on the name.
+    Ok(SingleInstance::new(GKG_HTTP_SERVER)?)
+}
+
 fn is_server_running() -> Result<Option<u16>> {
     let lock_file = get_lock_file_path()?;
     if !lock_file.exists() {
@@ -114,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
             executor.execute_workspace_indexing(workspace_path, None)
         }
         Commands::Server { register_mcp } => {
-            let instance = SingleInstance::new(GKG_HTTP_SERVER)?;
+            let instance = get_single_instance()?;
             if instance.is_single() {
                 let port = http_server::find_unused_port()?;
 
