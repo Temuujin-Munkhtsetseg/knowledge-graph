@@ -52,6 +52,7 @@ pub struct AppState {
 
 #[derive(Embed, Clone)]
 #[folder = "../../packages/frontend/dist"]
+#[allow_missing = true]
 struct Assets;
 
 pub async fn run(

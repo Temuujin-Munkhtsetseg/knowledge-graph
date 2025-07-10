@@ -37,6 +37,20 @@ rust-fmt-check:
     - cargo fmt --check
   extends: .rust-job-template
 
+rust-lint-check:
+  stage: lint
+  needs: []
+  script:
+    - cargo clippy --all-targets --all-features -- -D warnings  
+  extends: .rust-job-template
+
+xtask-version-check:
+  stage: lint
+  needs: []
+  script:
+    - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
+  extends: .rust-job-template
+
 frontend-build:
   stage: build
   image: node:22.17.0
@@ -55,14 +69,6 @@ frontend-build:
     - merge_requests
     - tags
 
-rust-lint-check:
-  stage: build
-  needs:
-    - frontend-build
-  script:
-    - cargo clippy --all-targets --all-features -- -D warnings  
-  extends: .rust-job-template
-
 rust-unit-test-report:
   stage: test
   variables:
@@ -77,18 +83,6 @@ rust-unit-test-report:
     reports:
       junit:
         - target/nextest/ci/junit.xml
-
-rust-check-packages:
-  stage: test
-  script:
-    - cargo check --workspace --all-features --all-targets
-  extends: .rust-job-template
-
-xtask-version-check:
-  stage: test
-  script:
-    - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
-  extends: .rust-job-template
 
 publish-release::manual:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
