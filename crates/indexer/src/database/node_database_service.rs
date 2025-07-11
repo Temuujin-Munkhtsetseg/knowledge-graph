@@ -189,7 +189,7 @@ impl<'a> NodeDatabaseService<'a> {
         let connection = get_connection(self.database);
         let mut directory_count = 0;
         let mut file_count = 0;
-        let definition_count = 0;
+        let mut definition_count = 0;
 
         // Count directory nodes
         let query = "MATCH (n:DirectoryNode) RETURN count(n)";
@@ -207,6 +207,16 @@ impl<'a> NodeDatabaseService<'a> {
             if let Some(row) = result.next() {
                 if let Some(kuzu::Value::Int64(count)) = row.first() {
                     file_count = *count as u32;
+                }
+            }
+        }
+
+        // Count definition nodes
+        let query = "MATCH (n:DefinitionNode) RETURN count(n)";
+        if let Ok(mut result) = connection.query(query) {
+            if let Some(row) = result.next() {
+                if let Some(kuzu::Value::Int64(count)) = row.first() {
+                    definition_count = *count as u32;
                 }
             }
         }
