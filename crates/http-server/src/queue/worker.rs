@@ -174,9 +174,8 @@ impl WorkspaceWorker {
                 workspace_changes,
                 ..
             } => {
-                todo!(
-                    "ReindexWorkspaceFolderWithWatchedFiles {workspace_folder_path:?} {workspace_changes:?}"
-                )
+                self.process_reindex_workspace_job(workspace_folder_path, workspace_changes.clone())
+                    .await
             }
         }
     }
@@ -229,6 +228,56 @@ impl WorkspaceWorker {
                     workspace_folder_path, e
                 );
                 Err(anyhow::anyhow!("Indexing task panicked: {}", e))
+            }
+        }
+    }
+
+    async fn process_reindex_workspace_job(
+        &self,
+        workspace_folder_path: &str,
+        workspace_changes: Vec<PathBuf>,
+    ) -> Result<()> {
+        let workspace_path_buf = PathBuf::from(workspace_folder_path);
+        let threads = 1; // Note: Not doing multi-threaded re-indexing yet (will cause perf issues likely)
+        let config = IndexingConfigBuilder::build(threads);
+        let mut executor = IndexingExecutor::new(
+            Arc::clone(&self.database),
+            Arc::clone(&self.workspace_manager),
+            Arc::clone(&self.event_bus),
+            config,
+        );
+
+        let cancellation_token = CancellationToken::new();
+        let result = tokio::task::spawn_blocking(move || {
+            executor.execute_workspace_reindexing(
+                workspace_path_buf,
+                workspace_changes,
+                Some(cancellation_token),
+            )
+        })
+        .await;
+
+        match result {
+            Ok(Ok(())) => {
+                info!(
+                    "Re-indexing completed successfully for workspace '{}'",
+                    workspace_folder_path
+                );
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                error!(
+                    "Re-indexing failed for workspace '{}': {}",
+                    workspace_folder_path, e
+                );
+                Err(e)
+            }
+            Err(e) => {
+                error!(
+                    "Re-indexing task panicked for workspace '{}': {}",
+                    workspace_folder_path, e
+                );
+                Err(anyhow::anyhow!("Re-indexing task panicked: {}", e))
             }
         }
     }
