@@ -41,5 +41,9 @@ pub enum Commands {
         /// Path to MCP configuration file (example: ~/.gitlab/duo/mcp.json)
         #[arg(long)]
         register_mcp: Option<PathBuf>,
+
+        /// Enable reindexing
+        #[arg(long, default_value_t = false)]
+        enable_reindexing: bool,
     },
 }

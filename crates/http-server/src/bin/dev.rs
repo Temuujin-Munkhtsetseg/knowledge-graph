@@ -15,12 +15,19 @@ async fn main() -> Result<()> {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or_else(|| find_unused_port().unwrap_or(27495));
-
-    println!("🚀 Development server starting on port {port}");
+    let enable_reindexing = std::env::args().any(|arg| arg == "--enable-reindexing");
+    println!("🚀 Development server starting on port {port} with reindexing: {enable_reindexing}");
 
     let workspace_manager = Arc::new(WorkspaceManager::new_system_default().unwrap());
     let event_bus = Arc::new(EventBus::new());
     let database = Arc::new(KuzuDatabase::new());
 
-    run(port, database, workspace_manager, event_bus).await
+    run(
+        port,
+        enable_reindexing,
+        database,
+        workspace_manager,
+        event_bus,
+    )
+    .await
 }

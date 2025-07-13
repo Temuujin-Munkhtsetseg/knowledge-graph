@@ -2,6 +2,7 @@ pub mod api;
 pub mod contract;
 pub mod endpoints;
 pub mod queue;
+pub mod watcher;
 
 #[cfg(test)]
 pub mod testing;
@@ -21,6 +22,7 @@ use crate::{
         workspace_list::{WorkspaceListEndpoint, workspace_list_handler},
     },
     queue::dispatch::JobDispatcher,
+    watcher::Watcher,
 };
 
 use anyhow::Result;
@@ -57,6 +59,7 @@ struct Assets;
 
 pub async fn run(
     port: u16,
+    enable_reindexing: bool,
     database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
@@ -81,6 +84,14 @@ pub async fn run(
 
     let query_service: Arc<dyn QueryingService> =
         Arc::new(DatabaseQueryingService::new(Arc::clone(&database)));
+
+    let watcher = Arc::new(Watcher::new(
+        workspace_manager.clone(),
+        job_dispatcher.clone(),
+    ));
+    if enable_reindexing {
+        watcher.start().await;
+    }
 
     let state = AppState {
         database: Arc::clone(&database),

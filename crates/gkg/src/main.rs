@@ -129,7 +129,11 @@ async fn main() -> anyhow::Result<()> {
 
             executor.execute_workspace_indexing(workspace_path, None)
         }
-        Commands::Server { register_mcp } => {
+        Commands::Server {
+            register_mcp,
+            enable_reindexing,
+            ..
+        } => {
             let instance = get_single_instance()?;
             if instance.is_single() {
                 let port = http_server::find_unused_port()?;
@@ -153,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
 
                 http_server::run(
                     port,
+                    enable_reindexing,
                     Arc::clone(&database),
                     Arc::clone(&workspace_manager),
                     Arc::clone(&event_bus),
