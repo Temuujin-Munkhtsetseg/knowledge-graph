@@ -1,5 +1,13 @@
 use kuzu::Value;
 
+#[derive(Copy, Clone)]
+pub enum QueryNoop {
+    Yes = true as isize,
+    No = false as isize,
+}
+pub type Query = String;
+pub type QueryGeneratorResult = (QueryNoop, Query);
+
 pub enum KuzuNodeType {
     DirectoryNode,
     FileNode,

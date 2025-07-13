@@ -8,6 +8,8 @@ use crate::database::utils::NodeIdGenerator;
 use crate::node_database_service::NodeDatabaseService;
 use crate::parsing::changes::{FileChanges, FileChangesPathType};
 use crate::writer::{WriterResult, WriterService};
+use anyhow::Error;
+use tracing::error;
 
 // HELPERS
 fn flatten_definitions(graph_data: &GraphData) -> Vec<DefinitionNode> {
@@ -59,16 +61,16 @@ impl<'a> KuzuChanges<'a> {
         }
     }
 
-    pub fn sync_changes(&mut self) -> WriterResult {
+    pub fn sync_changes(&mut self) -> Result<WriterResult, Error> {
         // First, delete the old nodes and their relationships
         self.apply_destructive_changes();
 
         // Get the new node ID heads
         let (max_definition_id, max_file_id, max_dir_id) = self.new_node_id_heads();
         let mut node_id_generator = NodeIdGenerator::new();
-        node_id_generator.next_definition_id = max_definition_id + 1;
-        node_id_generator.next_file_id = max_file_id + 1;
-        node_id_generator.next_directory_id = max_dir_id + 1;
+        node_id_generator.next_definition_id = max_definition_id as u32 + 1;
+        node_id_generator.next_file_id = max_file_id as u32 + 1;
+        node_id_generator.next_directory_id = max_dir_id as u32 + 1;
 
         // Clear the ID mappings to ensure new IDs are assigned
         node_id_generator.clear();
@@ -78,7 +80,12 @@ impl<'a> KuzuChanges<'a> {
             .map_err(|e| format!("Failed to create writer service: {e}"))
             .unwrap();
 
-        writer_service.flush_output_directory();
+        // Simple validation to make sure the output directory is flushed
+        if !writer_service.flush_output_directory().unwrap() {
+            // To note: this is a holdover that will be removed in a future MR
+            error!("Output directory not flushed");
+            // return Err(anyhow::anyhow!("Output directory not flushed"));
+        }
 
         let result = writer_service
             .write_graph_data(&self.graph_data, &mut node_id_generator)
@@ -118,24 +125,24 @@ impl<'a> KuzuChanges<'a> {
             .import_graph_data(&self.output_path, SchemaManagerImportMode::Reindexing)
             .expect("Failed to import graph data");
 
-        result
+        Ok(result)
     }
 
-    fn new_node_id_heads(&mut self) -> (u32, u32, u32) {
+    fn new_node_id_heads(&mut self) -> (u64, u64, u64) {
         // Compute the max id of each node type
         let max_definition_id = self
             .node_database_service
-            .agg_node_by(KuzuNodeType::DefinitionNode, "max", "id")
+            .agg_node_by::<DefinitionNodeFromKuzu>("max", "id")
             .unwrap();
 
         let max_file_id = self
             .node_database_service
-            .agg_node_by(KuzuNodeType::FileNode, "max", "id")
+            .agg_node_by::<FileNodeFromKuzu>("max", "id")
             .unwrap();
 
         let max_dir_id = self
             .node_database_service
-            .agg_node_by(KuzuNodeType::DirectoryNode, "max", "id")
+            .agg_node_by::<DirectoryNodeFromKuzu>("max", "id")
             .unwrap();
 
         (max_definition_id, max_file_id, max_dir_id)

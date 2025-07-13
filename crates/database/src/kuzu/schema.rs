@@ -443,7 +443,7 @@ impl<'a> SchemaManager<'a> {
             let file_path = std::path::Path::new(parquet_dir).join(file_name);
             if file_path.exists() {
                 info!("Importing {} from {}", table_name, file_path.display());
-                connection.copy_from_parquet(table_name, file_path.to_str().unwrap())?;
+                connection.copy_nodes_from_parquet(table_name, file_path.to_str().unwrap())?;
             } else {
                 warn!(
                     "Parquet file not found: {}, skipping import",
@@ -467,7 +467,7 @@ impl<'a> SchemaManager<'a> {
         let dir_to_dir_file =
             std::path::Path::new(parquet_dir).join("directory_to_directory_relationships.parquet");
         if dir_to_dir_file.exists() {
-            match connection.copy_relationship_from_parquet(
+            match connection.copy_relationships_from_parquet(
                 "DIRECTORY_RELATIONSHIPS",
                 dir_to_dir_file.to_str().unwrap(),
                 Some("DirectoryNode"),
@@ -487,7 +487,7 @@ impl<'a> SchemaManager<'a> {
         let dir_to_file_file =
             std::path::Path::new(parquet_dir).join("directory_to_file_relationships.parquet");
         if dir_to_file_file.exists() {
-            match connection.copy_relationship_from_parquet(
+            match connection.copy_relationships_from_parquet(
                 "DIRECTORY_RELATIONSHIPS",
                 dir_to_file_file.to_str().unwrap(),
                 Some("DirectoryNode"),
@@ -523,7 +523,7 @@ impl<'a> SchemaManager<'a> {
             let file_path = std::path::Path::new(parquet_dir).join(file_name);
             if file_path.exists() {
                 info!("Importing {} from {}", table_name, file_path.display());
-                match connection.copy_relationship_from_parquet(
+                match connection.copy_relationships_from_parquet(
                     table_name,
                     file_path.to_str().unwrap(),
                     from_table,

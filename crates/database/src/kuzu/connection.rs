@@ -2,6 +2,7 @@ use crate::kuzu::{
     database::KuzuQueryResult,
     types::{DatabaseError, DatabaseStats},
 };
+
 use anyhow::Error;
 use kuzu::{Connection, Database};
 use serde_json::Map;
@@ -80,7 +81,7 @@ impl<'a> KuzuConnection<'a> {
         Ok(())
     }
 
-    pub fn copy_from_parquet(
+    pub fn copy_nodes_from_parquet(
         &self,
         table_name: &str,
         file_path: &str,
@@ -101,7 +102,7 @@ impl<'a> KuzuConnection<'a> {
     }
 
     /// Bulk import relationships from a Parquet file with specific FROM/TO types
-    pub fn copy_relationship_from_parquet(
+    pub fn copy_relationships_from_parquet(
         &self,
         table_name: &str,
         file_path: &str,
