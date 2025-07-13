@@ -415,7 +415,7 @@ fn setup_reindexing_pipeline(
 
     let node_database_service = NodeDatabaseService::new(&database_instance);
 
-    let all_definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
+    let all_definition_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     println!("all_definition_count: {all_definition_count}");
     assert_eq!(
         all_definition_count, 94,
@@ -493,7 +493,7 @@ async fn test_full_reindexing_pipeline_git_status() {
         .expect("Failed to create database");
     let node_database_service = NodeDatabaseService::new(&database_instance);
 
-    let definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
+    let definition_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     println!("definition_count: {definition_count}");
     assert_eq!(
         definition_count, 95,
@@ -554,7 +554,7 @@ async fn test_full_reindexing_pipeline_watchexec() {
 
     let node_database_service = NodeDatabaseService::new(&database_instance);
 
-    let all_definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
+    let all_definition_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     println!("all_definition_count: {all_definition_count}");
 
     let definitions = node_database_service
@@ -599,7 +599,7 @@ async fn test_full_reindexing_pipeline_watchexec() {
 
     // Check that we have the expected number of definition nodes
     let expected_definition_count = 142;
-    let definition_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
+    let definition_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     assert_eq!(
         definition_count, expected_definition_count,
         "Should have {expected_definition_count} definition nodes"
@@ -1131,12 +1131,12 @@ fn test_simple_end_to_end_kuzu() {
     let node_database_service = NodeDatabaseService::new(&database_instance);
 
     // Get definition node count
-    let defn_node_count = node_database_service.count_nodes(KuzuNodeType::DefinitionNode);
+    let defn_node_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     println!("Definition node count: {defn_node_count}");
     assert_eq!(defn_node_count, 94);
 
     // Get file node count
-    let file_node_count = node_database_service.count_nodes(KuzuNodeType::FileNode);
+    let file_node_count = node_database_service.count_nodes::<FileNodeFromKuzu>();
     println!("File node count: {file_node_count}");
     assert_eq!(file_node_count, 7);
 
@@ -1153,7 +1153,7 @@ fn test_simple_end_to_end_kuzu() {
     assert_eq!(file_defn_rel_count, 96);
 
     // Get directory node count
-    let dir_node_count = node_database_service.count_nodes(KuzuNodeType::DirectoryNode);
+    let dir_node_count = node_database_service.count_nodes::<DirectoryNodeFromKuzu>();
     println!("Directory node count: {dir_node_count}");
     assert_eq!(dir_node_count, 4);
 

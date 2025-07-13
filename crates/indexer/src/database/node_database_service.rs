@@ -1,27 +1,74 @@
+use crate::database::query_builder::QueryBuilder;
 use crate::database::types::{
-    FromKuzuNode, KuzuNodeType, NodeCounts, QuoteEscape, RelationshipCounts,
+    FromKuzuNode, KuzuNodeType, NodeCounts, QueryNoop, QuoteEscape, RelationshipCounts,
 };
-use database::graph::{RelationshipType, RelationshipTypeMapping};
+use anyhow::Error;
+use database::graph::RelationshipType;
 use database::kuzu::{connection::KuzuConnection, types::DatabaseError};
 use kuzu::Database;
+use std::collections::HashMap;
 
 pub struct NodeDatabaseService<'a> {
     database: &'a Database,
-}
-
-fn get_connection(database: &Database) -> KuzuConnection {
-    match KuzuConnection::new(database) {
-        Ok(connection) => connection,
-        Err(connection_error) => {
-            panic!("Failed to create database connection: {connection_error}");
-        }
-    }
+    query_builder: QueryBuilder,
 }
 
 impl<'a> NodeDatabaseService<'a> {
     pub fn new(database: &'a Database) -> Self {
-        Self { database }
+        let query_builder = QueryBuilder::new();
+        Self {
+            database,
+            query_builder,
+        }
     }
+
+    // HELPERS
+    fn get_connection(&self) -> KuzuConnection {
+        match KuzuConnection::new(self.database) {
+            Ok(connection) => connection,
+            Err(connection_error) => {
+                panic!("Failed to create database connection: {connection_error}");
+            }
+        }
+    }
+
+    fn iter_query_result<R: FromKuzuNode>(&self, query_result: kuzu::QueryResult) -> Vec<R> {
+        let mut nodes = Vec::new();
+        for row in query_result {
+            nodes.push(R::from_kuzu_node(row.first().unwrap()));
+        }
+        nodes
+    }
+
+    fn get_scalar_query_result(&self, mut result: kuzu::QueryResult) -> Option<u64> {
+        result.next()?.first().and_then(|value| match value {
+            kuzu::Value::Int64(v) => Some(*v as u64),
+            kuzu::Value::UInt32(v) => Some(*v as u64),
+            _ => None,
+        })
+    }
+
+    fn get_scalar_query_results(
+        &self,
+        mut result: kuzu::QueryResult,
+        columns: Vec<&str>,
+    ) -> Option<HashMap<String, u64>> {
+        result.next().map(|row| {
+            columns
+                .into_iter()
+                .enumerate()
+                .filter_map(|(i, name)| {
+                    row.get(i).and_then(|value| match value {
+                        kuzu::Value::Int64(v) => Some((name.to_string(), *v as u64)),
+                        kuzu::Value::UInt32(v) => Some((name.to_string(), *v as u64)),
+                        _ => None,
+                    })
+                })
+                .collect()
+        })
+    }
+
+    // COMMANDS
 
     /// Delete nodes from a table by a column value
     pub fn delete_by<T: std::fmt::Display + QuoteEscape>(
@@ -30,50 +77,14 @@ impl<'a> NodeDatabaseService<'a> {
         column: &str,
         values: &[T],
     ) -> Result<(), DatabaseError> {
-        let values_str = values
-            .iter()
-            .map(|val| {
-                if val.needs_quotes() {
-                    format!("'{val}'")
-                } else {
-                    format!("{val}")
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let query = format!(
-            "MATCH (n:{}) WHERE n.{column} IN [{values_str}] DETACH DELETE n",
-            node_type.as_str()
-        );
-
-        get_connection(self.database).execute_ddl(&query)?;
-
-        Ok(())
-    }
-
-    pub fn agg_node_by(
-        &self,
-        node_type: KuzuNodeType,
-        agg_func: &str,
-        field: &str,
-    ) -> Result<u32, DatabaseError> {
-        let query = format!(
-            "MATCH (n:{}) RETURN {}(n.{})",
-            node_type.as_str(),
-            agg_func,
-            field
-        );
-
-        let connection = get_connection(self.database);
-        let mut result = connection.query(&query)?;
-        if let Some(row) = result.next() {
-            if let Some(kuzu::Value::UInt32(count)) = row.first() {
-                return Ok(*count);
+        match self.query_builder.delete_by(node_type, column, values) {
+            (QueryNoop::No, query) => {
+                self.query_builder.log_query(&query);
+                self.get_connection().execute_ddl(&query)?;
+                Ok(())
             }
+            (QueryNoop::Yes, _) => Ok(()),
         }
-
-        Ok(0)
     }
 
     pub fn get_by<T: std::fmt::Display + QuoteEscape, R: FromKuzuNode>(
@@ -82,52 +93,38 @@ impl<'a> NodeDatabaseService<'a> {
         column: &str,
         values: &[T],
     ) -> Result<Vec<R>, DatabaseError> {
-        let values_str = values
-            .iter()
-            .map(|val| {
-                if val.needs_quotes() {
-                    format!("'{val}'")
-                } else {
-                    format!("{val}")
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let query = format!(
-            "MATCH (n:{}) WHERE n.{column} IN [{values_str}] RETURN n",
-            node_type.as_str()
-        );
-
-        let connection = get_connection(self.database);
-        let result = connection.query(&query)?;
-        let mut nodes = Vec::new();
-
-        for row in result {
-            if let Some(node_value) = row.first() {
-                nodes.push(R::from_kuzu_node(node_value));
+        match self.query_builder.get_by::<T, R>(node_type, column, values) {
+            (QueryNoop::No, query) => {
+                let connection = self.get_connection();
+                self.query_builder.log_query(&query);
+                let result = connection.query(&query)?;
+                Ok(self.iter_query_result(result))
             }
+            (QueryNoop::Yes, _) => Ok(Vec::new()),
         }
-        Ok(nodes)
     }
 
-    #[cfg(test)]
-    pub fn count_nodes(&self, node_type: KuzuNodeType) -> i64 {
-        let connection = get_connection(self.database);
-        let query = format!("MATCH (n:{}) RETURN COUNT(n)", node_type.as_str());
-        let mut result = match connection.query(&query) {
-            Ok(result) => result,
-            Err(_) => return 0,
-        };
+    pub fn agg_node_by<R: FromKuzuNode>(
+        &self,
+        agg_func: &str,
+        field: &str,
+    ) -> Result<u64, Option<DatabaseError>> {
+        let (_, query) = self.query_builder.agg_node_by::<R>(agg_func, field);
+        let connection = self.get_connection();
+        self.query_builder.log_query(&query);
+        match connection.query(&query) {
+            Ok(result) => self.get_scalar_query_result(result).ok_or(None),
+            Err(e) => Err(Some(e)),
+        }
+    }
 
-        if let Some(row) = result.next() {
-            if let Some(kuzu::Value::Int64(count)) = row.first() {
-                *count
-            } else {
-                0
-            }
-        } else {
-            0
+    pub fn count_nodes<R: FromKuzuNode>(&self) -> u64 {
+        let (_, query) = self.query_builder.count_nodes::<R>();
+        let connection = self.get_connection();
+        self.query_builder.log_query(&query);
+        match connection.query(&query) {
+            Ok(result) => self.get_scalar_query_result(result).unwrap_or(0),
+            Err(_) => 0,
         }
     }
 
@@ -136,206 +133,111 @@ impl<'a> NodeDatabaseService<'a> {
         node_type: KuzuNodeType,
         field: &str,
         values: &[T],
-    ) -> Result<i64, DatabaseError> {
-        let values_str = values
-            .iter()
-            .map(|val| {
-                if val.needs_quotes() {
-                    format!("'{val}'")
-                } else {
-                    format!("{val}")
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let query = format!(
-            "MATCH (n:{}) WHERE n.{} IN [{values_str}] RETURN COUNT(n)",
-            node_type.as_str(),
-            field,
-        );
-
-        let connection = get_connection(self.database);
-        let mut result = connection.query(&query)?;
-
-        if let Some(row) = result.next() {
-            if let Some(kuzu::Value::Int64(count)) = row.first() {
-                return Ok(*count);
+    ) -> Result<i64, Option<DatabaseError>> {
+        match self
+            .query_builder
+            .count_nodes_by::<T>(node_type, field, values)
+        {
+            (QueryNoop::Yes, _) => Ok(0),
+            (QueryNoop::No, query) => {
+                let connection = self.get_connection();
+                let result = connection.query(&query)?;
+                self.get_scalar_query_result(result)
+                    .map(|v| v as i64)
+                    .ok_or(None)
             }
         }
-
-        Ok(0)
     }
 
     pub fn get_all<R: FromKuzuNode>(
         &self,
         kuzu_node_type: KuzuNodeType,
     ) -> Result<Vec<R>, DatabaseError> {
-        let query = format!("MATCH (n:{}) RETURN n", kuzu_node_type.as_str());
-        let connection = get_connection(self.database);
-        let result = connection.query(&query)?;
-        let mut nodes = Vec::new();
-
-        for row in result {
-            if let Some(node_value) = row.first() {
-                nodes.push(R::from_kuzu_node(node_value));
+        match self.query_builder.get_all::<R>(kuzu_node_type) {
+            (QueryNoop::Yes, _) => Ok(Vec::new()),
+            (QueryNoop::No, query) => {
+                let connection = self.get_connection();
+                self.query_builder.log_query(&query);
+                let result = connection.query(&query)?;
+                Ok(self.iter_query_result(result))
             }
         }
-        Ok(nodes)
     }
 
     /// Get node counts (for database verification)
-    pub fn get_node_counts(&self) -> Result<NodeCounts, DatabaseError> {
-        let connection = get_connection(self.database);
-        let mut directory_count = 0;
-        let mut file_count = 0;
-        let mut definition_count = 0;
-
-        // Count directory nodes
-        let query = "MATCH (n:DirectoryNode) RETURN count(n)";
-        if let Ok(mut result) = connection.query(query) {
-            if let Some(row) = result.next() {
-                if let Some(kuzu::Value::Int64(count)) = row.first() {
-                    directory_count = *count as u32;
+    pub fn get_node_counts(&self) -> Result<NodeCounts, Error> {
+        let connection = self.get_connection();
+        let (_, query) = self.query_builder.get_node_counts();
+        self.query_builder.log_query(&query);
+        match connection.query(&query) {
+            Ok(result) => {
+                match self
+                    .get_scalar_query_results(result, vec!["dir_count", "file_count", "def_count"])
+                {
+                    Some(counts) => Ok(NodeCounts {
+                        directory_count: counts["dir_count"] as u32,
+                        file_count: counts["file_count"] as u32,
+                        definition_count: counts["def_count"] as u32,
+                    }),
+                    None => Err(Error::msg("No node counts found")),
                 }
             }
+            Err(_) => Err(Error::msg("No node counts found")),
         }
-
-        // Count file nodes
-        let query = "MATCH (n:FileNode) RETURN count(n)";
-        if let Ok(mut result) = connection.query(query) {
-            if let Some(row) = result.next() {
-                if let Some(kuzu::Value::Int64(count)) = row.first() {
-                    file_count = *count as u32;
-                }
-            }
-        }
-
-        // Count definition nodes
-        let query = "MATCH (n:DefinitionNode) RETURN count(n)";
-        if let Ok(mut result) = connection.query(query) {
-            if let Some(row) = result.next() {
-                if let Some(kuzu::Value::Int64(count)) = row.first() {
-                    definition_count = *count as u32;
-                }
-            }
-        }
-
-        Ok(NodeCounts {
-            directory_count,
-            file_count,
-            definition_count,
-        })
     }
 
     /// Get relationship counts (for database verification)
-    pub fn get_relationship_counts(&self) -> Result<RelationshipCounts, DatabaseError> {
-        let connection = get_connection(self.database);
-        let mut directory_relationships = 0;
-        let mut file_relationships = 0;
-        let mut definition_relationships = 0;
-
-        // Count directory relationships
-        let query = "MATCH ()-[r:DIRECTORY_RELATIONSHIPS]->() RETURN count(r)";
-        if let Ok(mut result) = connection.query(query) {
-            if let Some(row) = result.next() {
-                if let Some(kuzu::Value::Int64(count)) = row.first() {
-                    directory_relationships = *count as u32;
+    pub fn get_relationship_counts(&self) -> Result<RelationshipCounts, Error> {
+        let connection = self.get_connection();
+        let (_, query) = self.query_builder.get_relationship_counts();
+        self.query_builder.log_query(&query);
+        match connection.query(&query) {
+            Ok(result) => {
+                match self.get_scalar_query_results(
+                    result,
+                    vec!["dir_rel_count", "file_rel_count", "def_rel_count"],
+                ) {
+                    Some(counts) => Ok(RelationshipCounts {
+                        directory_relationships: counts["dir_rel_count"] as u32,
+                        file_relationships: counts["file_rel_count"] as u32,
+                        definition_relationships: counts["def_rel_count"] as u32,
+                    }),
+                    None => Err(Error::msg("No relationship counts found")),
                 }
             }
+            Err(_) => Err(Error::msg("No relationship counts found")),
         }
-
-        // Count file relationships
-        let query = "MATCH ()-[r:FILE_RELATIONSHIPS]->() RETURN count(r)";
-        if let Ok(mut result) = connection.query(query) {
-            if let Some(row) = result.next() {
-                if let Some(kuzu::Value::Int64(count)) = row.first() {
-                    file_relationships = *count as u32;
-                }
-            }
-        }
-
-        // Count definition relationships
-        let query = "MATCH ()-[r:DEFINITION_RELATIONSHIPS]->() RETURN count(r)";
-        if let Ok(mut result) = connection.query(query) {
-            if let Some(row) = result.next() {
-                if let Some(kuzu::Value::Int64(count)) = row.first() {
-                    definition_relationships = *count as u32;
-                }
-            }
-        }
-
-        Ok(RelationshipCounts {
-            directory_relationships,
-            file_relationships,
-            definition_relationships,
-        })
     }
 
     /// Count relationships of a specific type
     pub fn count_relationships_of_type(&self, relationship_type: RelationshipType) -> i64 {
-        let connection = get_connection(self.database);
-
-        // Get the relationship label based on the type
-        let (rel_label, _type_id) = match relationship_type {
-            RelationshipType::DirContainsDir | RelationshipType::DirContainsFile => {
-                ("DIRECTORY_RELATIONSHIPS", relationship_type.as_str())
-            }
-            RelationshipType::FileDefines => ("FILE_RELATIONSHIPS", relationship_type.as_str()),
-            _ => {
-                // All other types are definition relationships
-                ("DEFINITION_RELATIONSHIPS", relationship_type.as_str())
-            }
-        };
-
-        let query = format!(
-            "MATCH (from)-[r:{}]->(to) WHERE r.type = {} RETURN COUNT(DISTINCT [from, to])",
-            rel_label,
-            RelationshipTypeMapping::new().get_type_id(relationship_type)
-        );
-
-        let mut result = match connection.query(&query) {
-            Ok(result) => result,
-            Err(_) => return 0,
-        };
-
-        if let Some(row) = result.next() {
-            if let Some(kuzu::Value::Int64(count)) = row.first() {
-                *count
-            } else {
-                0
-            }
-        } else {
-            0
+        let connection = self.get_connection();
+        let (_, query) = self
+            .query_builder
+            .count_relationships_of_type(relationship_type);
+        self.query_builder.log_query(&query);
+        match connection.query(&query) {
+            Ok(result) => self
+                .get_scalar_query_result(result)
+                .map(|v| v as i64)
+                .unwrap_or(0),
+            Err(_) => 0,
         }
     }
 
     /// Count relationships of a specific node type
     pub fn count_relationships_of_node_type(&self, node_type: KuzuNodeType) -> i64 {
-        let connection = get_connection(self.database);
-
-        // Get the relationship label based on the type
-        let (rel_label, _type_id) = match node_type {
-            KuzuNodeType::DirectoryNode => ("DIRECTORY_RELATIONSHIPS", node_type.as_str()),
-            KuzuNodeType::FileNode => ("FILE_RELATIONSHIPS", node_type.as_str()),
-            KuzuNodeType::DefinitionNode => ("DEFINITION_RELATIONSHIPS", node_type.as_str()),
-        };
-
-        let query = format!("MATCH (from)-[r:{rel_label}]->(to) RETURN COUNT(DISTINCT [from, to])");
-
-        let mut result = match connection.query(&query) {
-            Ok(result) => result,
-            Err(_) => return 0,
-        };
-
-        if let Some(row) = result.next() {
-            if let Some(kuzu::Value::Int64(count)) = row.first() {
-                *count
-            } else {
-                0
-            }
-        } else {
-            0
+        let connection = self.get_connection();
+        let (_, query) = self
+            .query_builder
+            .count_relationships_of_node_type(node_type);
+        self.query_builder.log_query(&query);
+        match connection.query(&query) {
+            Ok(result) => self
+                .get_scalar_query_result(result)
+                .map(|v| v as i64)
+                .unwrap_or(0),
+            Err(_) => 0,
         }
     }
 }

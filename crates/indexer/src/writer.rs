@@ -1,6 +1,6 @@
 use crate::analysis::{DefinitionNode, DirectoryNode, FileNode, GraphData};
 use crate::database::utils::{ConsolidatedRelationship, GraphMapper, NodeIdGenerator};
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use arrow::{
     array::{Int32Array, Int64Array, StringArray, UInt8Array, UInt32Array},
     datatypes::{DataType, Field, Schema},
@@ -61,12 +61,20 @@ impl WriterService {
         Ok(Self { output_directory })
     }
 
-    pub fn flush_output_directory(&self) {
+    pub fn flush_output_directory(&self) -> Result<bool, Error> {
         if let Ok(entries) = std::fs::read_dir(&self.output_directory) {
             for entry in entries.flatten() {
                 let _ = std::fs::remove_file(entry.path());
             }
         }
+
+        // Check if the output directory is empty
+        if let Ok(entries) = std::fs::read_dir(&self.output_directory) {
+            if entries.flatten().count() == 0 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Write graph data to Parquet files with consolidated relationship schema

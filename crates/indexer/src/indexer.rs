@@ -500,22 +500,24 @@ impl RepositoryIndexer {
             &self.path,
             output_path,
         );
-        let writer_result = kuzu_syncer.sync_changes();
 
-        Ok(RepositoryReindexingResult {
-            repository_name: self.name.clone(),
-            repository_path: self.path.clone(),
-            file_results: result.file_results,
-            total_files_processed: result.total_files_processed,
-            total_files_skipped: result.total_files_skipped,
-            total_files_errored: result.total_files_errored,
-            total_processing_time: result.total_processing_time,
-            errors: result.errors,
-            graph_data: None,
-            writer_result: Some(writer_result),
-            database_path: Some(database_path.to_string()),
-            database_loaded: true,
-        })
+        kuzu_syncer
+            .sync_changes()
+            .map(|writer_result| RepositoryReindexingResult {
+                repository_name: self.name.clone(),
+                repository_path: self.path.clone(),
+                file_results: result.file_results,
+                total_files_processed: result.total_files_processed,
+                total_files_skipped: result.total_files_skipped,
+                total_files_errored: result.total_files_errored,
+                total_processing_time: result.total_processing_time,
+                errors: result.errors,
+                graph_data: None,
+                writer_result: Some(writer_result),
+                database_path: Some(database_path.to_string()),
+                database_loaded: true,
+            })
+            .map_err(|e| format!("Failed to sync incremental changes to database: {e}"))
     }
 
     /// Load Parquet data into Kuzu database
