@@ -31,6 +31,11 @@ impl KuzuDatabase {
         }
     }
 
+    pub fn get_database_keys(&self) -> Vec<String> {
+        let databases_guard = self.databases.lock().unwrap();
+        databases_guard.keys().cloned().collect()
+    }
+
     pub fn get_or_create_database(&self, database_path: &str) -> Option<Arc<Database>> {
         let mut databases_guard = self.databases.lock().unwrap();
 
@@ -40,6 +45,10 @@ impl KuzuDatabase {
 
         let database = Database::new(database_path, SystemConfig::default());
         if database.is_err() {
+            info!(
+                "KuzuDatabase::get_or_create_database - Failed to create database error: {:?}",
+                database.err()
+            );
             return None;
         }
 

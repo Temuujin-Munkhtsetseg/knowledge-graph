@@ -13,12 +13,20 @@ run = "cargo build --release -p gkg && cargo install --path crates/gkg"
 [tasks.server-dev]
 run = "cargo run --bin dev-server"
 
+# Same thing as server-dev, but with reindexing enabled
+[tasks.server-dev-reindexing]
+run = "cargo run --bin dev-server -- --enable-reindexing"
+
 # runs the http server in debug mode with auto-reload on file changes
 # serves at http://localhost:27495
 # only watches crates/* for changes
 # useful for pairing with the frontend
 [tasks.server-watch]
 run = "cargo watch -w crates -x 'run --bin dev-server'"
+
+# Same thing as server-watch, but with reindexing enabled
+[tasks.server-watch-reindexing]
+run = "cargo watch -w crates -x 'run --bin dev-server -- --enable-reindexing'"
 
 # generates the typescript bindings from rust to
 # packages/gkg/src/**/*

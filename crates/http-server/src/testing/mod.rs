@@ -4,6 +4,7 @@ use event_bus::EventBus;
 use indexer::execution::{config::IndexingConfigBuilder, executor::IndexingExecutor};
 use std::{path::PathBuf, sync::Arc};
 use tempfile::TempDir;
+use tracing::info;
 use workspace_manager::WorkspaceManager;
 
 pub struct TestServerBuilderDependencies {
@@ -78,6 +79,13 @@ pub fn index_data(app_state: &AppState, workspace_folder_paths: Vec<PathBuf>) {
     );
 
     for workspace_folder_path in workspace_folder_paths {
-        let _ = executor.execute_workspace_indexing(workspace_folder_path, None);
+        match executor.execute_workspace_indexing(workspace_folder_path.clone(), None) {
+            Ok(()) => {
+                info!("Successfully indexed workspace: {workspace_folder_path:?}");
+            }
+            Err(e) => {
+                panic!("Failed to index workspace {workspace_folder_path:?}: {e}");
+            }
+        }
     }
 }
