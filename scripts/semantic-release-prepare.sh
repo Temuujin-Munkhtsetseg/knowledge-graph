@@ -124,12 +124,9 @@ if [ -f "Cargo.toml" ]; then
         echo "✅ Updated testing to version $NEW_VERSION"
     fi
 
-    # Update Cargo.lock with new workspace versions
-    echo "🔄 Updating Cargo.lock..."
-    cargo update --workspace
-    echo "✅ Updated Cargo.lock"
+    echo "✅ Updated all Cargo.toml files to version $NEW_VERSION"
 else
     echo "⚠️  Cargo.toml not found, skipping Cargo updates"
 fi
 
-echo "🎉 All Cargo versions updated to $NEW_VERSION!" 
+echo "🎉 All packages updated to $NEW_VERSION!" 
