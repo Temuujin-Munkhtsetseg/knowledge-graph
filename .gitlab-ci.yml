@@ -11,18 +11,12 @@ variables:
   tags:
     - saas-linux-large-amd64
   image: registry.gitlab.com/gitlab-org/rust/build-images/rust-kuzu:1.88.0-0.10.1-linux-x86_64
-  needs: 
-    - frontend-build
   before_script:
     - rustup set auto-self-update disable
-  only:
-    - main
-    - merge_requests
 
 mr-title-check:
   image: ${GITLAB_DEPENDENCY_PROXY}node:lts-alpine
   stage: lint
-  needs: []
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   before_script:
@@ -32,21 +26,25 @@ mr-title-check:
 
 rust-fmt-check:
   stage: lint
-  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   script:
     - cargo fmt --check
   extends: .rust-job-template
 
 rust-lint-check:
   stage: lint
-  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   script:
     - cargo clippy --all-targets --all-features -- -D warnings  
   extends: .rust-job-template
 
 xtask-version-check:
   stage: lint
-  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
     - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
   extends: .rust-job-template
@@ -54,7 +52,9 @@ xtask-version-check:
 frontend-build:
   stage: build
   image: node:22.17.0
-  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   before_script:
     - npm ci
   script:
@@ -63,14 +63,13 @@ frontend-build:
   artifacts:
     paths:
       - packages/frontend/dist/
-    expire_in: 1 hour
-  only:
-    - main
-    - merge_requests
-    - tags
+    expire_in: 24 hours
 
 rust-unit-test-report:
   stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   variables:
     RUST_BACKTRACE: 1
   needs:
@@ -84,14 +83,100 @@ rust-unit-test-report:
       junit:
         - target/nextest/ci/junit.xml
 
+cargo-update:
+  stage: deploy
+  extends: .rust-job-template
+  script:
+    - cargo update --workspace
+    - cp Cargo.lock Cargo.lock.new
+  artifacts:
+    paths:
+      - Cargo.lock.new
+    expire_in: 7 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+.linux-build-template:
+  image: rust:1.88.0-bookworm
+  stage: deploy
+  needs:
+    - frontend-build
+    - cargo-update
+  before_script:
+    - rm -f Cargo.lock
+    - mv Cargo.lock.new Cargo.lock
+  script:
+    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
+    - rustup target add ${ARCH}-unknown-linux-gnu
+    - cargo build --release --bin gkg --target ${ARCH}-unknown-linux-gnu --locked
+    - tar -czvf gkg-linux-${ARCH}.tar.gz -C target/${ARCH}-unknown-linux-gnu/release gkg
+  artifacts:
+    paths:
+      - ./gkg-linux-${ARCH}.tar.gz
+    expire_in: 7 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+.darwin-build-template:
+  image: macos-15-xcode-16
+  tags:
+    - saas-macos-large-m2pro
+  stage: deploy
+  needs:
+    - frontend-build
+    - cargo-update
+  before_script:
+    - rm -f Cargo.lock
+    - mv Cargo.lock.new Cargo.lock
+  script:
+    - brew install cmake python
+    - rustup target add ${ARCH}-apple-darwin
+    - cargo build --release --bin gkg --target ${ARCH}-apple-darwin --locked
+    - tar -czvf gkg-darwin-${ARCH}.tar.gz -C target/${ARCH}-apple-darwin/release gkg
+  artifacts:
+    paths:
+      - ./gkg-darwin-${ARCH}.tar.gz
+    expire_in: 7 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+build:linux-aarch64-gnu:
+  extends: .linux-build-template
+  tags:
+    - saas-linux-large-arm64
+  variables:
+    ARCH: aarch64
+
+build:linux-x86_64-gnu:
+  extends: .linux-build-template
+  tags:
+    - saas-linux-large-amd64
+  variables:
+    ARCH: x86_64
+
+build:darwin-aarch64:
+  extends: .darwin-build-template
+  variables:
+    ARCH: aarch64
+
+build:darwin-x86_64:
+  extends: .darwin-build-template
+  variables:
+    ARCH: x86_64
+
 publish-release::manual:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
   stage: deploy
-  variables:
-    # Prevent rustup from auto-updating to avoid cross-device link issues in Docker
-    RUSTUP_UPDATE_ROOT: "false"
-    RUSTUP_DISABLE_AUTOUPDATE: "1"
+  needs:
+    - build:linux-aarch64-gnu
+    - build:linux-x86_64-gnu
+    - build:darwin-aarch64
+    - build:darwin-x86_64
+    - cargo-update
   before_script:
+    # Use the new Cargo.lock from cargo-update step
+    - rm -f Cargo.lock
+    - mv Cargo.lock.new Cargo.lock
     # Validate that the repository contains a package.json and extract a few values from it.
     - |
       if [[ ! -f package.json ]]; then
@@ -112,8 +197,9 @@ publish-release::manual:
   script:
     - npm ci
     - PREVIOUS_VERSION=$(node -p "require('./package.json').version")
+    # Generate SHA256 checksums for all binaries
+    - for file in *.tar.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
     - npm run semantic-release
-    - echo "PACKAGE_VERSION=$(node -p "require('./package.json').version")" >> ./build.env
   when: manual
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

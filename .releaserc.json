@@ -137,7 +137,21 @@
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ],
-    "@semantic-release/gitlab",
+    [
+      "@semantic-release/gitlab",
+      {
+        "assets": [
+          { "path": "gkg-linux-aarch64.tar.gz", "type": "package", "target": "generic_package", "filepath": "/gkg-linux-aarch64.tar.gz", "label": "gkg-linux-aarch64.tar.gz"},
+          { "path": "gkg-linux-aarch64.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/gkg-linux-aarch64.tar.gz.sha256", "label": "gkg-linux-aarch64.tar.gz.sha256"},
+          { "path": "gkg-linux-x86_64.tar.gz", "type": "package", "target": "generic_package", "filepath": "/gkg-linux-x86_64.tar.gz", "label": "gkg-linux-x86_64.tar.gz"},
+          { "path": "gkg-linux-x86_64.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/gkg-linux-x86_64.tar.gz.sha256", "label": "gkg-linux-x86_64.tar.gz.sha256"},
+          { "path": "gkg-darwin-aarch64.tar.gz", "type": "package", "target": "generic_package", "filepath": "/gkg-darwin-aarch64.tar.gz", "label": "gkg-darwin-aarch64.tar.gz"},
+          { "path": "gkg-darwin-aarch64.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/gkg-darwin-aarch64.tar.gz.sha256", "label": "gkg-darwin-aarch64.tar.gz.sha256"},
+          { "path": "gkg-darwin-x86_64.tar.gz", "type": "package", "target": "generic_package", "filepath": "/gkg-darwin-x86_64.tar.gz", "label": "gkg-darwin-x86_64.tar.gz"},
+          { "path": "gkg-darwin-x86_64.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/gkg-darwin-x86_64.tar.gz.sha256", "label": "gkg-darwin-x86_64.tar.gz.sha256"}
+        ]
+      }
+    ],
     [
       "semantic-release-slack-bot",
       {
