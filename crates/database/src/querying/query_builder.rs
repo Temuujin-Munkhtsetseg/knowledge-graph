@@ -1,7 +1,7 @@
-use crate::database::types::{
+use crate::graph::{RelationshipType, RelationshipTypeMapping};
+use crate::kuzu::types::{
     FromKuzuNode, KuzuNodeType, QueryGeneratorResult, QueryNoop, QuoteEscape,
 };
-use database::graph::{RelationshipType, RelationshipTypeMapping};
 use tracing::info;
 
 #[derive(Default)]

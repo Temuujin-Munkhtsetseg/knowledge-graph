@@ -1,7 +1,4 @@
 use crate::database::node_database_service::NodeDatabaseService;
-use crate::database::types::{
-    DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, KuzuNodeType,
-};
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
@@ -12,6 +9,9 @@ use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;
 use database::kuzu::schema::SchemaManager;
 use database::kuzu::schema::SchemaManagerImportMode;
+use database::kuzu::types::{
+    DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, KuzuNodeType,
+};
 use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
 use kuzu::{Database, SystemConfig};
 use miette::Result;

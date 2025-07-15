@@ -1,16 +1,16 @@
-use crate::database::query_builder::QueryBuilder;
-use crate::database::types::{
-    FromKuzuNode, KuzuNodeType, NodeCounts, QueryNoop, QuoteEscape, RelationshipCounts,
-};
+use crate::types::{NodeCounts, RelationshipCounts};
 use anyhow::Error;
 use database::graph::RelationshipType;
+use database::kuzu::types::{FromKuzuNode, KuzuNodeType, QueryNoop, QuoteEscape};
 use database::kuzu::{connection::KuzuConnection, types::DatabaseError};
+use database::querying::query_builder::QueryBuilder;
 use kuzu::Database;
 use std::collections::HashMap;
 
 pub struct NodeDatabaseService<'a> {
     database: &'a Database,
     query_builder: QueryBuilder,
+    pub transaction_conn: Option<KuzuConnection<'a>>,
 }
 
 impl<'a> NodeDatabaseService<'a> {
@@ -19,7 +19,31 @@ impl<'a> NodeDatabaseService<'a> {
         Self {
             database,
             query_builder,
+            transaction_conn: None,
         }
+    }
+
+    pub fn new_with_transaction(database: &'a Database) -> Self {
+        let query_builder = QueryBuilder::new();
+        let transaction_conn = KuzuConnection::new(database).unwrap();
+        Self {
+            database,
+            query_builder,
+            transaction_conn: Some(transaction_conn),
+        }
+    }
+
+    pub fn transaction(
+        &mut self,
+        f: impl FnOnce(&mut NodeDatabaseService) -> Result<(), DatabaseError>,
+    ) -> Result<(), DatabaseError> {
+        if self.transaction_conn.is_none() {
+            return Err(DatabaseError::Kuzu(kuzu::Error::FailedQuery(
+                "No transaction connection available".to_string(),
+            )));
+        }
+        f(self)?;
+        Ok(())
     }
 
     // HELPERS
@@ -80,7 +104,10 @@ impl<'a> NodeDatabaseService<'a> {
         match self.query_builder.delete_by(node_type, column, values) {
             (QueryNoop::No, query) => {
                 self.query_builder.log_query(&query);
-                self.get_connection().execute_ddl(&query)?;
+                match self.transaction_conn {
+                    Some(ref conn) => conn.execute_ddl(&query)?,
+                    None => self.get_connection().execute_ddl(&query)?,
+                }
                 Ok(())
             }
             (QueryNoop::Yes, _) => Ok(()),
