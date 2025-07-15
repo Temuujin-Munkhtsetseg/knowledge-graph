@@ -52,6 +52,7 @@ xtask-version-check:
 frontend-build:
   stage: build
   image: node:22.17.0
+  needs: []
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -67,6 +68,7 @@ frontend-build:
 
 rust-unit-test-report:
   stage: test
+  needs: []
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -173,6 +175,8 @@ build:windows-x86_64:
     - cargo-update
   before_script:
     - '.\scripts\windows-prepare.ps1 ${KUZU_VERSION}'
+    - Remove-Item -Path Cargo.lock -ErrorAction SilentlyContinue
+    - Move-Item -Path Cargo.lock.new -Destination Cargo.lock
   script:
     - cargo build --release --bin gkg --locked
     - Copy-Item -Path C:\install\libkuzu\*.dll -Destination target\release\
