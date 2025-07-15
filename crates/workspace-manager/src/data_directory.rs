@@ -9,14 +9,14 @@
 //! ├── gkg_workspace_folders/
 //! │   ├── workspace_folder_1_hash/
 //! │   │   ├── project_1_hash/
-//! │   │   │   ├── kuzu_db/  
+//! │   │   │   ├── db.kuzu
 //! │   │   │   ├── parquet_files/
 //! │   │   ├── project_2_hash/
-//! │   │   │   ├── kuzu_db/
+//! │   │   │   ├── db.kuzu
 //! │   │   │   ├── parquet_files/
 //! │   ├── workspace_folder_2_hash/
 //! │   │   ├── project_1_hash/
-//! │   │   │   ├── kuzu_db/
+//! │   │   │   ├── db.kuzu
 //! │   │   │   ├── parquet_files/
 //! ├── gkg_manifest.json
 //! ```
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 const GKG_DATA_DIR_NAME: &str = ".gkg";
 const GKG_WORKSPACE_FOLDERS_NAME: &str = "gkg_workspace_folders";
 const GKG_MANIFEST_FILE_NAME: &str = "gkg_manifest.json";
-const GKG_KUZU_DB_NAME: &str = "kuzu_db";
+const GKG_KUZU_DB_NAME: &str = "db.kuzu";
 const GKG_PARQUET_FILES_NAME: &str = "parquet_files";
 
 /// Manages the centralized data directory for the Knowledge Graph framework
@@ -147,15 +147,6 @@ impl DataDirectory {
                 }
             })?;
             log::debug!("Created project directory: {}", project_dir.display());
-        }
-
-        let kuzu_dir = self.project_database_path(workspace_folder_name, project_name);
-        if !kuzu_dir.exists() {
-            std::fs::create_dir_all(&kuzu_dir).map_err(|_| {
-                WorkspaceManagerError::DataDirectoryCreationFailed {
-                    path: kuzu_dir.clone(),
-                }
-            })?;
         }
 
         let parquet_dir = self.project_parquet_directory(workspace_folder_name, project_name);
@@ -437,11 +428,6 @@ mod tests {
         assert!(
             data_dir
                 .project_directory(workspace_folder_name, project_name)
-                .exists()
-        );
-        assert!(
-            data_dir
-                .project_database_path(workspace_folder_name, project_name)
                 .exists()
         );
         assert!(

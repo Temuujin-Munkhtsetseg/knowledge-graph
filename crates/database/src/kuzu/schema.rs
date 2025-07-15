@@ -419,7 +419,7 @@ impl<'a> SchemaManager<'a> {
         Ok(())
     }
 
-    /// Import graph data from Parquet files with support for both consolidated and legacy formats
+    /// Import graph data from Parquet files
     pub fn import_graph_data(
         &self,
         parquet_dir: &str,
