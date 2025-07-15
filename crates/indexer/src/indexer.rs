@@ -465,13 +465,12 @@ impl RepositoryIndexer {
             });
         }
 
-        let db_path = database_path;
-        let database_instance = database.get_or_create_database(db_path);
-
+        let database_instance = database.get_or_create_database(database_path, None);
         if database_instance.is_none() {
-            return Err(format!("Failed to create database: {db_path}."));
+            return Err(format!("Failed to create database: {database_path}."));
+        } else {
+            info!("Found database_instance for reindexing: {database_instance:?}");
         }
-
         let database_instance = database_instance.unwrap();
 
         // Run the full processing pipeline
@@ -479,10 +478,6 @@ impl RepositoryIndexer {
         let result = self
             .process_files_full(database, file_source, config, output_path)
             .expect("Failed to process repository");
-
-        for file in &result.file_results {
-            println!("reindex file: {:?}", file.file_path);
-        }
 
         // Create analysis service
         let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
@@ -534,8 +529,10 @@ impl RepositoryIndexer {
             .with_compression(true);
 
         let database_instance = database
-            .create_temporary_database(config)
-            .map_err(|e| format!("Failed to create database: {e:?}"))?;
+            .force_new_database(database_path, Some(config))
+            .ok_or(format!("Failed to create database: {database_path}."))?;
+
+        let database_instance = database_instance;
 
         let schema_manager = SchemaManager::new(&database_instance);
         schema_manager

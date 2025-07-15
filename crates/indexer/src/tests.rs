@@ -390,7 +390,12 @@ fn setup_reindexing_pipeline(
     // Create output directory for this test
     let output_dir = temp_dir.path().join("output");
     let output_path = output_dir.to_str().unwrap();
-    let database_path: String = output_dir.join("kuzu_db").to_str().unwrap().to_string();
+    let database_path: String = temp_dir
+        .path()
+        .join("db.kuzu")
+        .to_str()
+        .unwrap()
+        .to_string();
 
     // Run the full processing pipeline (to index the repo once)
     let indexing_result = indexer
@@ -474,6 +479,14 @@ async fn test_full_reindexing_pipeline_git_status() {
     let reindexer_file_changes = FileChanges::from_git_status(git_status);
     reindexer_file_changes.pretty_print();
 
+    // check if the database path exists
+    assert!(
+        Path::new(&setup.database_path).exists(),
+        "Database path should exist"
+    );
+    println!("database path: {:?}", setup.database_path);
+    println!("database keys: {:?}", database.get_database_keys());
+
     // Run the full processing pipeline (to reindex the repo)
     let result = setup
         .indexer
@@ -489,7 +502,7 @@ async fn test_full_reindexing_pipeline_git_status() {
     println!("result: {:?}", result.writer_result);
 
     let database_instance = database
-        .get_or_create_database(&setup.database_path)
+        .get_or_create_database(&setup.database_path, None)
         .expect("Failed to create database");
     let node_database_service = NodeDatabaseService::new(&database_instance);
 
@@ -549,7 +562,7 @@ async fn test_full_reindexing_pipeline_watchexec() {
 
     // re-open a database connection to verify the definition counts
     let database_instance = database
-        .get_or_create_database(&setup.database_path)
+        .get_or_create_database(&setup.database_path, None)
         .expect("Failed to create database");
 
     let node_database_service = NodeDatabaseService::new(&database_instance);
@@ -606,7 +619,7 @@ async fn test_full_reindexing_pipeline_watchexec() {
     );
 }
 
-fn setup_end_to_end_kuzu(temp_repo: &TempDir) {
+fn setup_end_to_end_kuzu(temp_repo: &TempDir) -> Arc<KuzuDatabase> {
     // Create temporary repository with test files
     let repo_path = temp_repo.path().to_str().unwrap();
 
@@ -635,14 +648,14 @@ fn setup_end_to_end_kuzu(temp_repo: &TempDir) {
         .expect("Failed to process repository");
 
     // Create Kuzu database
-    let db_dir = temp_repo.path().join("kuzu_db");
+    let db_dir = temp_repo.path().join("db.kuzu");
 
     let config = DatabaseConfig::new(db_dir.to_string_lossy())
         .with_buffer_size(512 * 1024 * 1024)
         .with_compression(true);
 
     let database_instance = database
-        .create_temporary_database(config)
+        .force_new_database(&db_dir.to_string_lossy(), Some(config))
         .expect("Failed to create Kuzu database");
 
     // Initialize schema
@@ -657,6 +670,8 @@ fn setup_end_to_end_kuzu(temp_repo: &TempDir) {
         .expect("Failed to import graph data");
 
     println!("✅ Kuzu database created and data imported successfully");
+    println!("database keys: {:?}", database.get_database_keys());
+    database
 }
 
 #[test]
@@ -849,14 +864,14 @@ fn test_full_indexing_pipeline() {
     println!("\n🏗️ === KUZU DATABASE END-TO-END VERIFICATION ===");
 
     // Create Kuzu database
-    let db_dir = temp_repo.path().join("kuzu_db");
+    let db_dir = temp_repo.path().join("db.kuzu");
 
     let config = DatabaseConfig::new(db_dir.to_string_lossy())
         .with_buffer_size(512 * 1024 * 1024)
         .with_compression(true);
 
     let database_instance = database
-        .create_temporary_database(config)
+        .get_or_create_database(&db_dir.to_string_lossy(), Some(config))
         .expect("Failed to create Kuzu database");
 
     // Initialize schema
@@ -1118,12 +1133,11 @@ fn test_inheritance_relationships() {
 fn test_simple_end_to_end_kuzu() {
     // Create temporary repository with test files
     let temp_repo = create_test_repository();
-    setup_end_to_end_kuzu(&temp_repo);
+    let database = setup_end_to_end_kuzu(&temp_repo);
 
-    let db_dir = temp_repo.path().join("kuzu_db");
-    let database = Arc::new(KuzuDatabase::new());
+    let db_dir = temp_repo.path().join("db.kuzu");
     let database_instance = database
-        .get_or_create_database(&db_dir.to_string_lossy())
+        .get_or_create_database(&db_dir.to_string_lossy(), None)
         .expect("Failed to create database");
     let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
 

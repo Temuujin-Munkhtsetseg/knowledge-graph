@@ -89,7 +89,7 @@ impl QueryingService for DatabaseQueryingService {
     ) -> Result<Box<dyn QueryResult>, Error> {
         let database = self
             .database
-            .get_or_create_database(database_path.to_str().unwrap());
+            .get_or_create_database(database_path.to_str().unwrap(), None);
         if database.is_none() {
             return Err(Error::msg(format!(
                 "Database not found for path: {database_path:?}"

@@ -1,13 +1,8 @@
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
-
-use kuzu::{Database, SystemConfig};
-
-use tracing::info;
-
 use crate::kuzu::config::DatabaseConfig;
-use crate::kuzu::types::DatabaseError;
+use kuzu::{Database, SystemConfig};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tracing::info;
 
 pub struct KuzuQueryResult {
     pub column_names: Vec<String>,
@@ -36,20 +31,36 @@ impl KuzuDatabase {
         databases_guard.keys().cloned().collect()
     }
 
-    pub fn get_or_create_database(&self, database_path: &str) -> Option<Arc<Database>> {
+    pub fn get_or_create_database(
+        &self,
+        database_path: &str,
+        config: Option<DatabaseConfig>,
+    ) -> Option<Arc<Database>> {
         let mut databases_guard = self.databases.lock().unwrap();
 
         if databases_guard.contains_key(database_path) {
+            info!(
+                "Found database_instance: {:?}",
+                databases_guard.get(database_path).unwrap()
+            );
             return Some(databases_guard.get(database_path).unwrap().clone());
         }
 
-        let database = Database::new(database_path, SystemConfig::default());
+        let database = if let Some(config) = config {
+            let system_config = config.fmt_kuzu_database_config();
+            Database::new(database_path, system_config)
+        } else {
+            Database::new(database_path, SystemConfig::default())
+        };
+
         if database.is_err() {
             info!(
                 "KuzuDatabase::get_or_create_database - Failed to create database error: {:?}",
                 database.err()
             );
             return None;
+        } else {
+            info!("KuzuDatabase::get_or_create_database - Database created at: {database_path}");
         }
 
         let database_arc = Arc::new(database.unwrap());
@@ -57,68 +68,20 @@ impl KuzuDatabase {
         Some(database_arc)
     }
 
-    pub fn create_temporary_database(
+    pub fn force_new_database(
         &self,
-        config: DatabaseConfig,
-    ) -> Result<Database, DatabaseError> {
+        database_path: &str,
+        config: Option<DatabaseConfig>,
+    ) -> Option<Arc<Database>> {
+        // optionally remove the database from the map and the file system, called during a fresh indexing job
         info!(
-            "Creating Kuzu database from config at: {}",
-            config.database_path
+            "KuzuDatabase::get_or_create_database - Force resetting database at: {database_path}"
         );
-
-        // Delete existing database if it exists to start fresh
-        let db_path = Path::new(&config.database_path);
-        if db_path.exists() {
-            info!("Removing existing database at: {}", config.database_path);
-            if db_path.is_dir() {
-                std::fs::remove_dir_all(db_path).map_err(|e| {
-                    DatabaseError::InitializationFailed(format!(
-                        "Failed to remove existing database directory: {e}"
-                    ))
-                })?;
-            } else {
-                std::fs::remove_file(db_path).map_err(|e| {
-                    DatabaseError::InitializationFailed(format!(
-                        "Failed to remove existing database file: {e}"
-                    ))
-                })?;
-            }
+        if std::path::Path::new(database_path).exists() {
+            let mut databases_guard = self.databases.lock().unwrap();
+            databases_guard.remove(database_path);
+            std::fs::remove_file(database_path).unwrap();
         }
-
-        // Create database directory if it doesn't exist
-        if let Some(parent) = Path::new(&config.database_path).parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    DatabaseError::InitializationFailed(format!(
-                        "Failed to create database directory: {e}"
-                    ))
-                })?;
-            }
-        }
-
-        // Configure system settings
-        let mut system_config = SystemConfig::default();
-
-        if let Some(buffer_size) = config.buffer_pool_size {
-            system_config = system_config.buffer_pool_size(buffer_size as u64);
-        }
-
-        if let Some(compression) = config.enable_compression {
-            system_config = system_config.enable_compression(compression);
-        }
-
-        if let Some(read_only) = config.read_only {
-            system_config = system_config.read_only(read_only);
-        }
-
-        if let Some(max_size) = config.max_db_size {
-            system_config = system_config.max_db_size(max_size as u64);
-        }
-
-        // Create database
-        let database = Database::new(&config.database_path, system_config)?;
-        info!("Successfully created Kuzu database");
-
-        Ok(database)
+        self.get_or_create_database(database_path, config)
     }
 }

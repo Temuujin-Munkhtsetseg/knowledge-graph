@@ -320,7 +320,7 @@ mod tests {
             let binding = temp_dir.path().join("test.db");
             let database_path = binding.to_str().unwrap();
             let database = KuzuDatabase::new()
-                .get_or_create_database(database_path)
+                .force_new_database(database_path, None)
                 .unwrap();
             let conection = KuzuConnection::new(&database).unwrap();
 
@@ -359,7 +359,7 @@ mod tests {
             let binding = temp_dir.path().join("test.db");
             let database_path = binding.to_str().unwrap();
             let database = KuzuDatabase::new()
-                .get_or_create_database(database_path)
+                .force_new_database(database_path, None)
                 .unwrap();
             let conection = KuzuConnection::new(&database).unwrap();
 
@@ -396,7 +396,7 @@ mod tests {
             let binding = temp_dir.path().join("test.db");
             let database_path = binding.to_str().unwrap();
             let database = KuzuDatabase::new()
-                .get_or_create_database(database_path)
+                .force_new_database(database_path, None)
                 .unwrap();
             let conection = KuzuConnection::new(&database).unwrap();
 
@@ -436,8 +436,8 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let binding = temp_dir.path().join("test.db");
             let database_path = binding.to_str().unwrap();
-            let database = KuzuDatabase::new()
-                .get_or_create_database(database_path)
+            let database: std::sync::Arc<kuzu::Database> = KuzuDatabase::new()
+                .force_new_database(database_path, None)
                 .unwrap();
             let conection = KuzuConnection::new(&database).unwrap();
 
@@ -475,7 +475,7 @@ mod tests {
             let binding = temp_dir.path().join("test.db");
             let database_path = binding.to_str().unwrap();
             let database = KuzuDatabase::new()
-                .get_or_create_database(database_path)
+                .force_new_database(database_path, None)
                 .unwrap();
             let conection = KuzuConnection::new(&database).unwrap();
 
@@ -502,7 +502,7 @@ mod tests {
             let binding = temp_dir.path().join("test.db");
             let database_path = binding.to_str().unwrap();
             let database = KuzuDatabase::new()
-                .get_or_create_database(database_path)
+                .force_new_database(database_path, None)
                 .unwrap();
             let conection = KuzuConnection::new(&database).unwrap();
 
@@ -529,7 +529,7 @@ mod tests {
             let database_path = binding.to_str().unwrap();
 
             let database = KuzuDatabase::new()
-                .get_or_create_database(database_path)
+                .force_new_database(database_path, None)
                 .unwrap();
             let conection = KuzuConnection::new(&database).unwrap();
 

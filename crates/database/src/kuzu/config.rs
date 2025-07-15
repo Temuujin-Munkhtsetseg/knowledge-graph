@@ -1,3 +1,5 @@
+use kuzu::SystemConfig;
+
 /// Database configuration options
 #[derive(Debug, Clone)]
 pub struct DatabaseConfig {
@@ -51,5 +53,27 @@ impl DatabaseConfig {
     pub fn with_max_size(mut self, size: usize) -> Self {
         self.max_db_size = Some(size);
         self
+    }
+
+    pub fn fmt_kuzu_database_config(&self) -> SystemConfig {
+        // Configure system settings
+        let mut system_config = SystemConfig::default();
+
+        if let Some(buffer_size) = self.buffer_pool_size {
+            system_config = system_config.buffer_pool_size(buffer_size as u64);
+        }
+
+        if let Some(compression) = self.enable_compression {
+            system_config = system_config.enable_compression(compression);
+        }
+
+        if let Some(read_only) = self.read_only {
+            system_config = system_config.read_only(read_only);
+        }
+
+        if let Some(max_size) = self.max_db_size {
+            system_config = system_config.max_db_size(max_size as u64);
+        }
+        system_config
     }
 }
