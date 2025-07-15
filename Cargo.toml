@@ -2,6 +2,7 @@
 members = [
   "crates/indexer",
   "crates/gkg",
+  "crates/indexer-c-bindings",
   "crates/xtask",
   "crates/workspace-manager",
   "crates/http-server",

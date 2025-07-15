@@ -28,6 +28,7 @@ event-bus = { path = "../event-bus" }
 chrono = { workspace = true }
 database = { path = "../database" }
 tempfile = { workspace = true }
+ignore = { workspace = true }
 
 [dev-dependencies]
 miette = { workspace = true }

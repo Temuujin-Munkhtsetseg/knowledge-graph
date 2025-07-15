@@ -1,4 +1,6 @@
 use crate::database::node_database_service::NodeDatabaseService;
+use crate::deployed::executor::DeployedIndexingExecutor;
+use crate::execution::config::IndexingConfigBuilder;
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
@@ -158,6 +160,24 @@ fn create_test_repository() -> TempDir {
         "[core]\n    repositoryformatversion = 0\n",
     )
     .expect("Failed to write git config");
+
+    // Copy fixture files from the existing fixtures directory
+    let fixtures_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("fixtures/test-repo");
+
+    copy_dir_all(&fixtures_path, repo_path).expect("Failed to copy fixture files");
+
+    temp_dir
+}
+
+/// Helper function to create a temporary non-git repository by copying existing fixture files
+fn create_non_git_test_repository() -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let repo_path = temp_dir.path();
 
     // Copy fixture files from the existing fixtures directory
     let fixtures_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1588,6 +1608,34 @@ fn test_detailed_data_inspection() {
     );
 
     println!("✅ All verification checks passed!");
+}
+
+#[test]
+fn test_server_side_repository_processing() {
+    let repository_temp_path = create_non_git_test_repository();
+    // convert repository_temp_path to path_buf. No mode code. 1 line
+    let repository_path = repository_temp_path.path().to_path_buf();
+
+    // Create a new temp direcory and specify database file path within it
+    let database_temp_path = tempfile::tempdir().expect("Failed to create temp directory");
+    let database_path = database_temp_path.path().join("db.kuzu");
+
+    let parquet_temp_path = tempfile::tempdir().expect("Failed to create temp directory");
+    let parquet_path = parquet_temp_path.path().to_path_buf();
+
+    let config = IndexingConfigBuilder::build(0); // Number of CPU Cores will be used instead
+    let server_indexer =
+        DeployedIndexingExecutor::new(repository_path, database_path, parquet_path, config);
+    let result = server_indexer
+        .execute()
+        .expect("Failed to process repository");
+
+    assert!(
+        result.total_files_processed > 0,
+        "Should have processed some files"
+    );
+
+    result.graph_data.expect("Should have graph data");
 }
 
 #[test]

@@ -1,5 +1,6 @@
 pub mod analysis;
 pub mod database;
+pub mod deployed;
 pub mod execution;
 pub mod indexer;
 pub mod parsing;
