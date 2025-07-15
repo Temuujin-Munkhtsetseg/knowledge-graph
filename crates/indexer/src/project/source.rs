@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use crate::indexer::IndexingConfig;
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
+use ignore::WalkBuilder;
 use parser_core::parser::get_supported_extensions;
+use std::sync::{Arc, Mutex};
 
 // File source implementations to support different deployment scenarios:
 //
@@ -44,6 +46,43 @@ impl PathFileSource {
             files,
             supported_extensions,
         }
+    }
+
+    pub fn from_path(path: PathBuf) -> Self {
+        // This is duplicate code that also exists in `::new`. But needed now to filter the files
+        let supported_extensions: HashSet<String> = get_supported_extensions()
+            .iter()
+            .map(|ext| ext.to_string())
+            .collect();
+
+        let files = Arc::new(Mutex::new(Vec::new()));
+
+        WalkBuilder::new(&path)
+            .hidden(false)
+            .git_ignore(false)
+            .git_global(false)
+            .git_exclude(false)
+            .ignore(false)
+            .parents(false)
+            .build_parallel()
+            .run(|| {
+                let files: Arc<Mutex<Vec<FileInfo>>> = Arc::clone(&files);
+                let supported_extensions = supported_extensions.clone();
+
+                Box::new(move |result| {
+                    if let Ok(entry) = result {
+                        if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+                            let file_info = FileInfo::from_path(entry.path().to_path_buf());
+                            if should_process_file_info(&file_info, &supported_extensions) {
+                                files.lock().unwrap().push(file_info);
+                            }
+                        }
+                    }
+                    ignore::WalkState::Continue
+                })
+            });
+
+        Self::new(files.lock().unwrap().clone())
     }
 }
 

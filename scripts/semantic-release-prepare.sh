@@ -116,6 +116,14 @@ if [ -f "Cargo.toml" ]; then
         echo "✅ Updated database to version $NEW_VERSION"
     fi
 
+    # Update indexer-c-bindings
+    if [ -f "crates/indexer-c-bindings/Cargo.toml" ]; then
+        echo "📦 Updating indexer-c-bindings version..."
+        sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "crates/indexer-c-bindings/Cargo.toml"
+        rm -f "crates/indexer-c-bindings/Cargo.toml.bak"
+        echo "✅ Updated indexer-c-bindings to version $NEW_VERSION"
+    fi
+
     # Update testing
     if [ -f "crates/testing/Cargo.toml" ]; then
         echo "📦 Updating testing version..."
