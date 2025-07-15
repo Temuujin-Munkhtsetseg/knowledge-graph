@@ -76,19 +76,19 @@ pub enum SchemaManagerImportMode {
     Reindexing,
 }
 
-fn get_connection(database: &Database) -> KuzuConnection {
-    match KuzuConnection::new(database) {
-        Ok(connection) => connection,
-        Err(e) => panic!("Failed to create database connection: {e}"),
-    }
-}
-
 impl<'a> SchemaManager<'a> {
     pub fn new(database: &'a Database) -> Self {
         Self { database }
     }
 
-    /// Initialize the complete schema for the knowledge graph
+    fn get_connection(&self) -> KuzuConnection {
+        match KuzuConnection::new(self.database) {
+            Ok(connection) => connection,
+            Err(e) => panic!("Failed to create database connection: {e}"),
+        }
+    }
+
+    /// Initialize the complete schema for the knowledge graph, including creating node and relationship tables
     pub fn initialize_schema(&self) -> Result<(), DatabaseError> {
         info!("Initializing knowledge graph schema...");
 
@@ -97,11 +97,13 @@ impl<'a> SchemaManager<'a> {
             return Ok(());
         }
 
-        // Create node tables
-        self.create_node_tables()?;
-
-        // Create relationship tables
-        self.create_relationship_tables()?;
+        self.get_connection().transaction(|conn| {
+            self.create_node_tables(conn)
+                .expect("Failed to create node tables");
+            self.create_relationship_tables(conn)
+                .expect("Failed to create relationship tables");
+            Ok(())
+        })?;
 
         info!("Knowledge graph schema initialized successfully");
         Ok(())
@@ -109,7 +111,7 @@ impl<'a> SchemaManager<'a> {
 
     /// Check if the schema already exists by looking for key tables
     fn schema_exists(&self) -> Result<bool, DatabaseError> {
-        let connection = get_connection(self.database);
+        let connection = self.get_connection();
         let required_tables = vec!["DirectoryNode", "FileNode", "DefinitionNode"];
 
         for table in required_tables {
@@ -122,7 +124,7 @@ impl<'a> SchemaManager<'a> {
     }
 
     /// Create all node tables
-    fn create_node_tables(&self) -> Result<(), DatabaseError> {
+    fn create_node_tables(&self, transaction_conn: &KuzuConnection) -> Result<(), DatabaseError> {
         info!("Creating node tables...");
 
         // Directory nodes
@@ -256,15 +258,18 @@ impl<'a> SchemaManager<'a> {
         };
 
         // Create the tables
-        self.create_node_table(&directory_table)?;
-        self.create_node_table(&file_table)?;
-        self.create_node_table(&definition_table)?;
+        self.create_node_table(transaction_conn, &directory_table)?;
+        self.create_node_table(transaction_conn, &file_table)?;
+        self.create_node_table(transaction_conn, &definition_table)?;
 
         Ok(())
     }
 
     /// Create all relationship tables with consolidated schema
-    fn create_relationship_tables(&self) -> Result<(), DatabaseError> {
+    fn create_relationship_tables(
+        &self,
+        transaction_conn: &KuzuConnection,
+    ) -> Result<(), DatabaseError> {
         info!("Creating consolidated relationship tables...");
 
         // Directory relationships (DIR_CONTAINS_DIR + DIR_CONTAINS_FILE)
@@ -313,16 +318,19 @@ impl<'a> SchemaManager<'a> {
         };
 
         // Create consolidated relationship tables
-        self.create_relationship_table(&directory_relationships)?;
-        self.create_relationship_table(&file_relationships)?;
-        self.create_relationship_table(&definition_relationships)?;
+        self.create_relationship_table(transaction_conn, &directory_relationships)?;
+        self.create_relationship_table(transaction_conn, &file_relationships)?;
+        self.create_relationship_table(transaction_conn, &definition_relationships)?;
 
         Ok(())
     }
 
     /// Create a single node table
-    fn create_node_table(&self, table: &NodeTable) -> Result<(), DatabaseError> {
-        let connection = get_connection(self.database);
+    fn create_node_table(
+        &self,
+        transaction_conn: &KuzuConnection,
+        table: &NodeTable,
+    ) -> Result<(), DatabaseError> {
         let columns_str = table
             .columns
             .iter()
@@ -342,15 +350,18 @@ impl<'a> SchemaManager<'a> {
         );
 
         info!("Creating node table: {}", table.name);
-        connection.execute_ddl(&query)?;
+        transaction_conn.execute_ddl(&query)?;
         info!("Successfully created node table: {}", table.name);
 
         Ok(())
     }
 
     /// Create a single relationship table
-    fn create_relationship_table(&self, table: &RelationshipTable) -> Result<(), DatabaseError> {
-        let connection = get_connection(self.database);
+    fn create_relationship_table(
+        &self,
+        transaction_conn: &KuzuConnection,
+        table: &RelationshipTable,
+    ) -> Result<(), DatabaseError> {
         let mut query = format!("CREATE REL TABLE IF NOT EXISTS {} (", table.name);
 
         // Handle multiple FROM-TO pairs if specified
@@ -384,18 +395,14 @@ impl<'a> SchemaManager<'a> {
         query.push(')');
 
         info!("Creating relationship table: {}", table.name);
-        connection.execute_ddl(&query)?;
+        transaction_conn.execute_ddl(&query)?;
         info!("Successfully created relationship table: {}", table.name);
 
         Ok(())
     }
 
-    /// Import graph data from Parquet files with support for both consolidated and legacy formats
-    pub fn import_graph_data(
-        &self,
-        parquet_dir: &str,
-        mode: SchemaManagerImportMode,
-    ) -> Result<(), DatabaseError> {
+    // Verify that the parquet directory exists and is valid, and log the import
+    fn _init_import_graph_data(&self, parquet_dir: &str) -> Result<(), DatabaseError> {
         info!(
             "Importing graph data from Parquet files in: {}",
             parquet_dir
@@ -409,30 +416,62 @@ impl<'a> SchemaManager<'a> {
             )));
         }
 
-        // Import node data
-        self.import_nodes(parquet_dir)?;
+        Ok(())
+    }
 
-        // Import relationship data (try consolidated format first, fall back to legacy)
-        match self.import_consolidated_relationships(parquet_dir, mode) {
-            Ok(_) => {
-                info!("Successfully imported consolidated relationships");
-            }
-            Err(e) => {
-                warn!("Failed to import consolidated relationships: {}", e);
-                // For now, we'll continue and let the caller decide how to handle this
-                // In the future, you might want to try legacy format or return the error
-                return Err(e);
-            }
-        }
-
+    /// Import graph data from Parquet files with support for both consolidated and legacy formats
+    pub fn import_graph_data(
+        &self,
+        parquet_dir: &str,
+        mode: SchemaManagerImportMode,
+    ) -> Result<(), DatabaseError> {
+        self._init_import_graph_data(parquet_dir)?;
+        self.import_nodes_and_relationships(parquet_dir, mode, None)?;
         info!("Successfully imported graph data from Parquet files");
         Ok(())
     }
 
-    /// Import node data from Parquet files
-    fn import_nodes(&self, parquet_dir: &str) -> Result<(), DatabaseError> {
-        let connection = get_connection(self.database);
+    // Import graph data with an existing connection, this is used for re-indexing and is for preserving transaction guarantees
+    pub fn import_graph_data_with_existing_connection(
+        &self,
+        parquet_dir: &str,
+        mode: SchemaManagerImportMode,
+        existing_connection: &mut KuzuConnection,
+    ) -> Result<(), DatabaseError> {
+        self._init_import_graph_data(parquet_dir)?;
+        self.import_nodes_and_relationships(parquet_dir, mode, Some(existing_connection))?;
+        info!("Successfully imported graph data from Parquet files");
+        Ok(())
+    }
 
+    // Import nodes and relationships in a single transaction
+    fn import_nodes_and_relationships(
+        &self,
+        parquet_dir: &str,
+        mode: SchemaManagerImportMode,
+        existing_connection: Option<&mut KuzuConnection>,
+    ) -> Result<(), DatabaseError> {
+        if let Some(connection) = existing_connection {
+            self.import_nodes(connection, parquet_dir)?;
+            self.import_relationships(connection, parquet_dir, mode)?;
+        } else {
+            self.get_connection().transaction(|conn| {
+                self.import_nodes(conn, parquet_dir)
+                    .expect("Failed to import nodes");
+                self.import_relationships(conn, parquet_dir, mode)
+                    .expect("Failed to import relationships");
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Import node data from Parquet files
+    fn import_nodes(
+        &self,
+        transaction_conn: &KuzuConnection,
+        parquet_dir: &str,
+    ) -> Result<(), DatabaseError> {
         let node_files = vec![
             ("DirectoryNode", "directories.parquet"),
             ("FileNode", "files.parquet"),
@@ -443,7 +482,8 @@ impl<'a> SchemaManager<'a> {
             let file_path = std::path::Path::new(parquet_dir).join(file_name);
             if file_path.exists() {
                 info!("Importing {} from {}", table_name, file_path.display());
-                connection.copy_nodes_from_parquet(table_name, file_path.to_str().unwrap())?;
+                transaction_conn
+                    .copy_nodes_from_parquet(table_name, file_path.to_str().unwrap())?;
             } else {
                 warn!(
                     "Parquet file not found: {}, skipping import",
@@ -456,18 +496,17 @@ impl<'a> SchemaManager<'a> {
     }
 
     /// Import consolidated relationship data from Parquet files
-    fn import_consolidated_relationships(
+    fn import_relationships(
         &self,
+        transaction_conn: &KuzuConnection,
         parquet_dir: &str,
         mode: SchemaManagerImportMode,
     ) -> Result<(), DatabaseError> {
-        let connection = get_connection(self.database);
-
         // Import directory-to-directory relationships
         let dir_to_dir_file =
             std::path::Path::new(parquet_dir).join("directory_to_directory_relationships.parquet");
         if dir_to_dir_file.exists() {
-            match connection.copy_relationships_from_parquet(
+            match transaction_conn.copy_relationships_from_parquet(
                 "DIRECTORY_RELATIONSHIPS",
                 dir_to_dir_file.to_str().unwrap(),
                 Some("DirectoryNode"),
@@ -487,7 +526,7 @@ impl<'a> SchemaManager<'a> {
         let dir_to_file_file =
             std::path::Path::new(parquet_dir).join("directory_to_file_relationships.parquet");
         if dir_to_file_file.exists() {
-            match connection.copy_relationships_from_parquet(
+            match transaction_conn.copy_relationships_from_parquet(
                 "DIRECTORY_RELATIONSHIPS",
                 dir_to_file_file.to_str().unwrap(),
                 Some("DirectoryNode"),
@@ -523,7 +562,7 @@ impl<'a> SchemaManager<'a> {
             let file_path = std::path::Path::new(parquet_dir).join(file_name);
             if file_path.exists() {
                 info!("Importing {} from {}", table_name, file_path.display());
-                match connection.copy_relationships_from_parquet(
+                match transaction_conn.copy_relationships_from_parquet(
                     table_name,
                     file_path.to_str().unwrap(),
                     from_table,
@@ -537,6 +576,7 @@ impl<'a> SchemaManager<'a> {
                     }
                 }
             } else if mode == SchemaManagerImportMode::Reindexing {
+                // TODO: This may no longer work with re-indexing
                 info!(
                     "Relationship file not found: {}, skipping import",
                     file_path.display()
@@ -557,7 +597,7 @@ impl<'a> SchemaManager<'a> {
 
     /// Get schema statistics
     pub fn get_schema_stats(&self) -> Result<SchemaStats, DatabaseError> {
-        let connection = get_connection(self.database);
+        let connection = self.get_connection();
         let db_stats = connection.get_database_stats()?;
         let table_names = connection.get_table_names()?;
 

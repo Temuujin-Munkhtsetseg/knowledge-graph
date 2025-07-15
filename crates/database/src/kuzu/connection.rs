@@ -71,13 +71,46 @@ impl<'a> KuzuConnection<'a> {
     pub fn execute_ddl(&self, query: &str) -> Result<(), DatabaseError> {
         debug!("Executing DDL: {}", query);
 
-        let mut result = self.query(query)?;
+        let mut prepared = self.connection.prepare(query)?;
+        let mut result = self.connection.execute(&mut prepared, vec![])?;
 
         // Consume the result to ensure the query executed
         while result.next().is_some() {
             // DDL queries typically don't return data, but we consume any results
         }
 
+        Ok(())
+    }
+
+    fn start_transaction(&self) -> Result<(), DatabaseError> {
+        let mut prepared = self
+            .connection
+            .prepare("BEGIN TRANSACTION;")
+            .expect("Failed to prepare begin transaction");
+        self.connection
+            .execute(&mut prepared, vec![])
+            .expect("Failed to begin transaction");
+        Ok(())
+    }
+
+    fn commit_transaction(&self) -> Result<(), DatabaseError> {
+        let mut prepared = self
+            .connection
+            .prepare("COMMIT;")
+            .expect("Failed to prepare commit transaction");
+        self.connection
+            .execute(&mut prepared, vec![])
+            .expect("Failed to commit transaction");
+        Ok(())
+    }
+
+    pub fn transaction(
+        &mut self,
+        f: impl FnOnce(&mut KuzuConnection) -> Result<(), DatabaseError>,
+    ) -> Result<(), DatabaseError> {
+        self.start_transaction()?;
+        f(self)?;
+        self.commit_transaction()?;
         Ok(())
     }
 
