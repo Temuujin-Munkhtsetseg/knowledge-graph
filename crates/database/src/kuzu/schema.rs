@@ -70,12 +70,6 @@ pub struct SchemaManager<'a> {
     database: &'a Database,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum SchemaManagerImportMode {
-    Indexing,
-    Reindexing,
-}
-
 impl<'a> SchemaManager<'a> {
     pub fn new(database: &'a Database) -> Self {
         Self { database }
@@ -420,13 +414,9 @@ impl<'a> SchemaManager<'a> {
     }
 
     /// Import graph data from Parquet files
-    pub fn import_graph_data(
-        &self,
-        parquet_dir: &str,
-        mode: SchemaManagerImportMode,
-    ) -> Result<(), DatabaseError> {
+    pub fn import_graph_data(&self, parquet_dir: &str) -> Result<(), DatabaseError> {
         self._init_import_graph_data(parquet_dir)?;
-        self.import_nodes_and_relationships(parquet_dir, mode, None)?;
+        self.import_nodes_and_relationships(parquet_dir, None)?;
         info!("Successfully imported graph data from Parquet files");
         Ok(())
     }
@@ -435,11 +425,10 @@ impl<'a> SchemaManager<'a> {
     pub fn import_graph_data_with_existing_connection(
         &self,
         parquet_dir: &str,
-        mode: SchemaManagerImportMode,
         existing_connection: &mut KuzuConnection,
     ) -> Result<(), DatabaseError> {
         self._init_import_graph_data(parquet_dir)?;
-        self.import_nodes_and_relationships(parquet_dir, mode, Some(existing_connection))?;
+        self.import_nodes_and_relationships(parquet_dir, Some(existing_connection))?;
         info!("Successfully imported graph data from Parquet files");
         Ok(())
     }
@@ -448,17 +437,16 @@ impl<'a> SchemaManager<'a> {
     fn import_nodes_and_relationships(
         &self,
         parquet_dir: &str,
-        mode: SchemaManagerImportMode,
         existing_connection: Option<&mut KuzuConnection>,
     ) -> Result<(), DatabaseError> {
         if let Some(connection) = existing_connection {
             self.import_nodes(connection, parquet_dir)?;
-            self.import_relationships(connection, parquet_dir, mode)?;
+            self.import_relationships(connection, parquet_dir)?;
         } else {
             self.get_connection().transaction(|conn| {
                 self.import_nodes(conn, parquet_dir)
                     .expect("Failed to import nodes");
-                self.import_relationships(conn, parquet_dir, mode)
+                self.import_relationships(conn, parquet_dir)
                     .expect("Failed to import relationships");
                 Ok(())
             })?;
@@ -500,7 +488,6 @@ impl<'a> SchemaManager<'a> {
         &self,
         transaction_conn: &KuzuConnection,
         parquet_dir: &str,
-        mode: SchemaManagerImportMode,
     ) -> Result<(), DatabaseError> {
         // Import directory-to-directory relationships
         let dir_to_dir_file =
@@ -575,19 +562,13 @@ impl<'a> SchemaManager<'a> {
                         return Err(e);
                     }
                 }
-            } else if mode == SchemaManagerImportMode::Reindexing {
-                // TODO: This may no longer work with re-indexing
+            } else {
+                // FILE_RELATIONSHIPS and DEFINITION_RELATIONSHIPS are optional
+                // They won't exist when there are no definitions found during indexing, e.g due to an unimplemented language or when re-indexing
                 info!(
                     "Relationship file not found: {}, skipping import",
                     file_path.display()
                 );
-            } else {
-                let error_msg = format!("Relationship file not found: {}", file_path.display());
-                warn!("{}", error_msg);
-                return Err(DatabaseError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    error_msg,
-                )));
             }
         }
 

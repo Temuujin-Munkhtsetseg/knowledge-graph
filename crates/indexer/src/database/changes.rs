@@ -1,4 +1,4 @@
-use database::kuzu::schema::{SchemaManager, SchemaManagerImportMode};
+use database::kuzu::schema::SchemaManager;
 use kuzu::Database;
 
 use crate::analysis::{DefinitionNode, GraphData};
@@ -134,7 +134,6 @@ impl<'a> KuzuChanges<'a> {
                 schema_manager
                     .import_graph_data_with_existing_connection(
                         &self.output_path,
-                        SchemaManagerImportMode::Reindexing,
                         service.transaction_conn.as_mut().unwrap(),
                     )
                     .expect("Failed to import graph data");

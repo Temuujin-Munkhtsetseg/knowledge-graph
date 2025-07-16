@@ -10,7 +10,6 @@ use database::kuzu::config::DatabaseConfig;
 use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;
 use database::kuzu::schema::SchemaManager;
-use database::kuzu::schema::SchemaManagerImportMode;
 use database::kuzu::types::{
     DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, KuzuNodeType,
 };
@@ -686,7 +685,7 @@ fn setup_end_to_end_kuzu(temp_repo: &TempDir) -> Arc<KuzuDatabase> {
 
     // Import Parquet data
     schema_manager
-        .import_graph_data(output_path, SchemaManagerImportMode::Indexing)
+        .import_graph_data(output_path)
         .expect("Failed to import graph data");
 
     println!("✅ Kuzu database created and data imported successfully");
@@ -903,7 +902,7 @@ fn test_full_indexing_pipeline() {
 
     // Import Parquet data
     schema_manager
-        .import_graph_data(output_path, SchemaManagerImportMode::Indexing)
+        .import_graph_data(output_path)
         .expect("Failed to import graph data");
 
     println!("✅ Kuzu database created and data imported successfully");
