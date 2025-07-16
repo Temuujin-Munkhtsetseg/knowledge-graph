@@ -13,7 +13,7 @@
 //  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
 use database::kuzu::database::KuzuDatabase;
-use database::kuzu::schema::{SchemaManager, SchemaManagerImportMode};
+use database::kuzu::schema::SchemaManager;
 use gitalisk_core::repository::gitalisk_repository::FileInfo;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -540,7 +540,7 @@ impl RepositoryIndexer {
             .map_err(|e| format!("Failed to initialize database schema: {e:?}"))?;
 
         schema_manager
-            .import_graph_data(parquet_directory, SchemaManagerImportMode::Indexing)
+            .import_graph_data(parquet_directory)
             .map_err(|e| format!("Failed to import graph data: {e:?}"))?;
 
         match schema_manager.get_schema_stats() {
