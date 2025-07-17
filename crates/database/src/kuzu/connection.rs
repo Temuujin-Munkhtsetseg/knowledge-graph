@@ -6,7 +6,7 @@ use crate::kuzu::{
 use anyhow::Error;
 use kuzu::{Connection, Database};
 use serde_json::Map;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 pub struct KuzuConnection<'a> {
     connection: Connection<'a>,
@@ -128,7 +128,13 @@ impl<'a> KuzuConnection<'a> {
         let query = format!("COPY {} FROM '{}'", table_name, absolute_path.display());
 
         info!("Importing data into {}: {}", table_name, file_path);
-        self.execute_ddl(&query)?;
+        self.execute_ddl(&query).map_err(|e| {
+            error!(
+                "Failed to import data into table {} from file {}: {}",
+                table_name, file_path, e
+            );
+            e
+        })?;
         info!("Successfully imported data into {}", table_name);
 
         Ok(())
@@ -168,7 +174,13 @@ impl<'a> KuzuConnection<'a> {
             "Importing relationship data into {}: {}",
             table_name, file_path
         );
-        self.execute_ddl(&query)?;
+        self.execute_ddl(&query).map_err(|e| {
+            error!(
+                "Failed to import relationship data into table {} from file {}: {}",
+                table_name, file_path, e
+            );
+            e
+        })?;
         info!(
             "Successfully imported relationship data into {}",
             table_name
