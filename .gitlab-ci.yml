@@ -197,6 +197,7 @@ publish-release::manual:
     - build:linux-x86_64-gnu
     - build:darwin-aarch64
     - build:darwin-x86_64
+    - build:windows-x86_64
     - cargo-update
   before_script:
     # Use the new Cargo.lock from cargo-update step
