@@ -31,6 +31,11 @@ impl KuzuDatabase {
         databases_guard.keys().cloned().collect()
     }
 
+    pub fn drop_database(&self, database_path: &str) {
+        let mut databases_guard = self.databases.lock().unwrap();
+        databases_guard.remove(database_path);
+    }
+
     pub fn get_or_create_database(
         &self,
         database_path: &str,
@@ -40,11 +45,16 @@ impl KuzuDatabase {
 
         if databases_guard.contains_key(database_path) {
             info!(
-                "Found database_instance: {:?}",
+                "KuzuDatabase::get_or_create_database -Found existing arc(database): {:?}",
                 databases_guard.get(database_path).unwrap()
             );
             return Some(databases_guard.get(database_path).unwrap().clone());
         }
+
+        let already_exists = std::path::Path::new(database_path).exists();
+        info!(
+            "KuzuDatabase::get_or_create_database - Database already exists in filesystem: {already_exists}"
+        );
 
         let database = if let Some(config) = config {
             let system_config = config.fmt_kuzu_database_config();
@@ -74,13 +84,14 @@ impl KuzuDatabase {
         config: Option<DatabaseConfig>,
     ) -> Option<Arc<Database>> {
         // optionally remove the database from the map and the file system, called during a fresh indexing job
-        info!(
-            "KuzuDatabase::get_or_create_database - Force resetting database at: {database_path}"
-        );
         if std::path::Path::new(database_path).exists() {
-            let mut databases_guard = self.databases.lock().unwrap();
-            databases_guard.remove(database_path);
+            self.drop_database(database_path);
             std::fs::remove_file(database_path).unwrap();
+            info!(
+                "KuzuDatabase::force_new_database - Force resetting database at: {database_path}"
+            );
+        } else {
+            info!("KuzuDatabase::force_new_database - Database not found at: {database_path}");
         }
         self.get_or_create_database(database_path, config)
     }

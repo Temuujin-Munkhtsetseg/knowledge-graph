@@ -101,6 +101,20 @@ pub async fn delete_handler(
             .into_response();
     }
 
+    // Get all projects in the workspace
+    let all_projects = state.workspace_manager.list_all_projects();
+    let projects = all_projects
+        .iter()
+        .filter(|project| project.workspace_folder_path == payload.workspace_folder_path)
+        .collect::<Vec<_>>();
+
+    // Drop all databases for the projects in the workspace
+    for project in &projects {
+        state
+            .database
+            .drop_database(project.database_path.to_str().unwrap());
+    }
+
     // Attempt to remove the workspace
     match state
         .workspace_manager
@@ -186,7 +200,13 @@ mod tests {
         (TestServer::new(app).unwrap(), temp_data_dir)
     }
 
-    async fn create_test_app_with_workspace() -> (TestServer, TempDir, String) {
+    async fn create_test_app_with_workspace() -> (
+        TestServer,
+        TempDir,
+        String,
+        Arc<WorkspaceManager>,
+        Arc<KuzuDatabase>,
+    ) {
         let temp_workspace = create_test_workspace();
         let temp_data_dir = TempDir::new().unwrap();
 
@@ -208,22 +228,29 @@ mod tests {
             database.clone(),
         ));
         let state = crate::AppState {
-            workspace_manager,
+            workspace_manager: workspace_manager.clone(),
             event_bus,
             job_dispatcher,
-            database,
+            database: database.clone(),
         };
         let app = Router::new()
             .route("/workspace/delete", delete(delete_handler))
             .with_state(state);
         let server = TestServer::new(app).unwrap();
 
-        (server, temp_data_dir, workspace_info.workspace_folder_path)
+        (
+            server,
+            temp_data_dir,
+            workspace_info.workspace_folder_path,
+            workspace_manager.clone(),
+            database.clone(),
+        )
     }
 
     #[tokio::test]
     async fn test_workspace_delete_success() {
-        let (server, _temp_data_dir, workspace_path) = create_test_app_with_workspace().await;
+        let (server, _temp_data_dir, workspace_path, _workspace_manager, _database) =
+            create_test_app_with_workspace().await;
 
         let request_body = WorkspaceDeleteBodyRequest {
             workspace_folder_path: workspace_path.clone(),
@@ -296,7 +323,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_workspace_delete_performance() {
-        let (server, _temp_data_dir, workspace_path) = create_test_app_with_workspace().await;
+        let (server, _temp_data_dir, workspace_path, _workspace_manager, _database) =
+            create_test_app_with_workspace().await;
 
         let request_body = WorkspaceDeleteBodyRequest {
             workspace_folder_path: workspace_path,
@@ -319,7 +347,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_workspace_delete_twice() {
-        let (server, _temp_data_dir, workspace_path) = create_test_app_with_workspace().await;
+        let (server, _temp_data_dir, workspace_path, _workspace_manager, _database) =
+            create_test_app_with_workspace().await;
 
         let request_body = WorkspaceDeleteBodyRequest {
             workspace_folder_path: workspace_path.clone(),
@@ -334,5 +363,39 @@ mod tests {
         response.assert_status(StatusCode::NOT_FOUND);
         let body: StatusResponse = response.json();
         assert_eq!(body.status, "workspace_not_found");
+    }
+
+    #[tokio::test]
+    async fn test_workspace_delete_database_deletion() {
+        let (server, _temp_data_dir, workspace_path, workspace_manager, database) =
+            create_test_app_with_workspace().await;
+
+        // Use the first project's database path to create a database
+        let projects = workspace_manager.list_projects_in_workspace(&workspace_path);
+        assert!(!projects.is_empty(), "Should have at least one project");
+        let test_db_path = projects[0].database_path.to_string_lossy().to_string();
+        let _db = database.get_or_create_database(&test_db_path, None);
+
+        // Verify database is in the active connections
+        let active_dbs_before = database.get_database_keys();
+        assert!(
+            active_dbs_before.contains(&test_db_path),
+            "Database should be active before deletion"
+        );
+
+        let request_body = WorkspaceDeleteBodyRequest {
+            workspace_folder_path: workspace_path.clone(),
+        };
+
+        // Delete the workspace
+        let response = server.delete("/workspace/delete").json(&request_body).await;
+        response.assert_status_ok();
+
+        // Verify database connection has been dropped
+        let active_dbs_after = database.get_database_keys();
+        assert!(
+            !active_dbs_after.contains(&test_db_path),
+            "Database connection should be dropped after workspace deletion"
+        );
     }
 }
