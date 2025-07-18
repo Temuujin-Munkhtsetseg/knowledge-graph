@@ -20,7 +20,6 @@ dirs.workspace = true
 chrono.workspace = true
 sha2.workspace = true
 hex.workspace = true
-uuid.workspace = true
 ignore.workspace = true
 
 [dev-dependencies]

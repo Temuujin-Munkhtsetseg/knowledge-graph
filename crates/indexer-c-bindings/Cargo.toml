@@ -10,5 +10,3 @@ crate-type = ["staticlib"]
 
 [dependencies]
 indexer = { path = "../indexer" }
-anyhow = { workspace = true }
-libc = "0.2.2"
