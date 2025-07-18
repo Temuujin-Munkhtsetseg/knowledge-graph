@@ -1,3 +1,31 @@
+## [0.6.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.5.0...v0.6.0) (2025-07-18)
+
+### :sparkles: Features
+
+* **ci:** build windows binaries ([a22116c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a22116c24dc8e99ec64f77c88bb7f4ef36229e71)) by Bohdan Parkhomchuk
+* **ci:** release binaries ([0551f8a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/0551f8a9469b19fc7735ec1dba4562417cd07a5c)) by Bohdan Parkhomchuk
+* **db:** added atomicity for schema creation, indexing, and reindexing kuzu operations ([eca52a1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/eca52a1324cec36c15997d154ef36513e1b2795c)) by Michael Usachenko
+* **db:** adding server side repository processing with c bindings ([db3146d](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/db3146dee88affa9f57a24b3596a53f8f75081dc)) by Omar Qunsul
+* **db:** decoupling kuzu query generation from execution to support strict transactionality ([faa2cac](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/faa2cac8d0e00f2c5154ca78b6cbf9e449dad251)) by Michael Usachenko
+* **reindexing:** listen for new workspaces in watcher, and remove closed workspaces ([9fd1f1e](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9fd1f1ea210b7f4790e8bde27fca70638ac0f682)) by Michael Usachenko
+* **reindexing:** realtime reindexing MVP integration ([95ed7c4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/95ed7c4fe636133ac80fb273af57bfd75a22761f)) by Michael Usachenko
+* **reindexing:** realtime reindexing MVP pt 1 - basic handling for reindexing events and jobs ([0e54868](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/0e54868fd252b065dd37bc90094ad5237c2135b4)) by Michael Usachenko
+* **reindexing:** reindexing MVP Part 2 - adding reindexing methods to the IndexingExecutor ([7d311b7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7d311b7e1072d8b4a3d98f9957143fe73dcd0762)) by Michael Usachenko
+
+### :bug: Fixes
+
+* **ci:** fix windows builds ([28c8adf](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/28c8adfd6ec6fbbd99ba9c4e84e2e98a7323283b)) by Bohdan Parkhomchuk
+* **db:** indexing regression where parquet relationship file check is too strict ([5a42dd1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5a42dd1f11c702a606072363d01ec9a4c64ceb90)) by Michael Usachenko
+* **db:** not dropping db on workspace delete causes PK conflicts in future indexing runs ([558113a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/558113a7a9bb3afa27c223c5cafa0a2d26bf9df3)) by Michael Usachenko
+
+### :repeat: Chore
+
+* **ci:** add missing windows ci dependency ([6f9a078](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6f9a07850451a78e072edfdbab11a70bc5820b3d)) by Bohdan Parkhomchuk
+* **ci:** do not depend on frontend assets ([ef51947](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ef5194744280e14e83d68332d1df7279905e4be6)) by Bohdan Parkhomchuk
+* **ci:** use medium mac runners ([250a986](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/250a98675e1e4bd3b129835771fc4af51e602208)) by Bohdan Parkhomchuk
+* **db:** bump kuzu version to latest ([e938b36](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e938b36e3eb042a2d9d3a692ec36111f610283af)) by Michael Usachenko
+* **release:** 0.6.0 [skip ci] ([59024c4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/59024c4da2e85a0a8785aa224e203ea712e409fe)) by semantic-release-bot
+
 ## [0.6.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.5.0...v0.6.0) (2025-07-17)
 
 ### :sparkles: Features
