@@ -131,9 +131,11 @@ cargo-update:
     - rm -f Cargo.lock
     - mv Cargo.lock.new Cargo.lock
   script:
-    - brew install cmake python
+    - brew install cmake python jq
     - rustup target add ${ARCH}-apple-darwin
     - cargo build --release --bin gkg --target ${ARCH}-apple-darwin --locked
+    # Sign and notarize the binary
+    - ./scripts/macos-sign-notarize.sh "target/${ARCH}-apple-darwin/release/gkg"
     - tar -czvf gkg-darwin-${ARCH}.tar.gz -C target/${ARCH}-apple-darwin/release gkg
   artifacts:
     paths:
