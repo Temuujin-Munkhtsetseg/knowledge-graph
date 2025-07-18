@@ -14,7 +14,6 @@ mcp = { path = "../mcp" }
 workspace-manager = { path = "../workspace-manager" }
 logging = { path = "../logging" }
 http = { workspace = true }
-once_cell = { workspace = true }
 rust-embed = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -31,10 +30,8 @@ event-bus = { path = "../event-bus" }
 num_cpus = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 urlencoding = { workspace = true }
-tracing-subscriber = { workspace = true }
 watchexec.workspace = true
 watchexec-events.workspace = true
-watchexec-signals.workspace = true
 watchexec-filterer-ignore.workspace = true
 ignore-files = { workspace = true }
 

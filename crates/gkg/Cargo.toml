@@ -11,11 +11,8 @@ http-server = { path = "../http-server" }
 mcp = { path = "../mcp" }
 logging = { path = "../logging" }
 event-bus = { path = "../event-bus" }
-parser-core = { workspace = true }
-gitalisk-core = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
-num_cpus = { workspace = true }
 single-instance = { workspace = true }
 home = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
