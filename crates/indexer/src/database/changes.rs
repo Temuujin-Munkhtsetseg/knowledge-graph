@@ -1,7 +1,7 @@
 use database::kuzu::schema::SchemaManager;
 use kuzu::Database;
 
-use crate::analysis::{DefinitionNode, GraphData};
+use crate::analysis::GraphData;
 use crate::database::utils::NodeIdGenerator;
 use crate::node_database_service::NodeDatabaseService;
 use crate::parsing::changes::{FileChanges, FileChangesPathType};
@@ -11,23 +11,6 @@ use database::kuzu::types::{
     DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, FromKuzuNode, KuzuNodeType,
 };
 use tracing::error;
-
-// HELPERS
-fn flatten_definitions(graph_data: &GraphData) -> Vec<DefinitionNode> {
-    let mut flattened_definitions: Vec<DefinitionNode> = Vec::new();
-    for def in &graph_data.definition_nodes {
-        for file_location in &def.file_locations {
-            let flattened_definition = DefinitionNode {
-                fqn: def.fqn.clone(),
-                definition_type: def.definition_type,
-                name: def.name.clone(),
-                file_locations: vec![file_location.clone()],
-            };
-            flattened_definitions.push(flattened_definition);
-        }
-    }
-    flattened_definitions
-}
 
 #[derive(Debug, Clone)]
 pub struct KuzuChangesIds {
@@ -194,14 +177,12 @@ impl<'a> KuzuChanges<'a> {
             FileChangesPathType::ChangedFiles,
             KuzuNodeType::DefinitionNode,
         );
-        let flattened_definitions = flatten_definitions(&self.graph_data);
 
         let deleted_definitions = changed_def_nodes
             .iter()
             .filter(|kuzu_def| {
-                !flattened_definitions.iter().any(|def| {
-                    def.fqn == kuzu_def.fqn
-                        && def.file_locations[0].file_path == kuzu_def.primary_file_path
+                !self.graph_data.definition_nodes.iter().any(|def| {
+                    def.fqn == kuzu_def.fqn && def.location.file_path == kuzu_def.primary_file_path
                 })
             })
             .cloned()

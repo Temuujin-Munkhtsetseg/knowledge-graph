@@ -1563,7 +1563,6 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.3.1"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.3.1#c872ce0329ec0589e1642f98a3f1b9beac7f4954"
 dependencies = [
  "ignore",
  "serde",
@@ -2421,7 +2420,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3118,7 +3117,6 @@ dependencies = [
 [[package]]
 name = "parser-core"
 version = "0.5.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.5.0#18df2650e141148c88104f2c43526e4eb0a1fc20"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
@@ -3620,7 +3618,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4054,7 +4052,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5094,7 +5092,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

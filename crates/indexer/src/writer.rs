@@ -94,7 +94,7 @@ impl WriterService {
 
         let mut graph_mapper =
             GraphMapper::new(graph_data, node_id_generator, &mut relationship_mapping);
-        let relationships = graph_mapper.map_graph_data();
+        let relationships = graph_mapper.map_graph_data()?;
 
         // Write node tables with integer IDs
         if !graph_data.directory_nodes.is_empty() {
@@ -443,29 +443,20 @@ impl WriterService {
         let mut total_locations_values = Vec::new();
 
         for definition_node in definition_nodes {
-            let total_locations = definition_node.file_locations.len() as i32;
-
-            // Use primary (first) location for the record
-            if let Some(primary_location) = definition_node.primary_location() {
-                id_values.push(
-                    id_generator
-                        .get_definition_id(&definition_node.fqn)
-                        .unwrap(),
-                );
-                fqn_values.push(definition_node.fqn.as_str());
-                name_values.push(definition_node.name.as_str());
-                definition_type_values.push(definition_node.definition_type.as_str());
-                primary_file_path_values.push(primary_location.file_path.as_str());
-                primary_start_byte_values.push(primary_location.start_byte);
-                primary_end_byte_values.push(primary_location.end_byte);
-                primary_line_number_values.push(primary_location.line_number);
-                total_locations_values.push(total_locations);
-            } else {
-                log::warn!(
-                    "Definition '{}' has no locations, skipping",
-                    definition_node.fqn
-                );
-            }
+            let location = definition_node.location.clone();
+            id_values.push(
+                id_generator
+                    .get_definition_id(&definition_node.fqn, &location.file_path)
+                    .unwrap(),
+            );
+            fqn_values.push(definition_node.fqn.as_str());
+            name_values.push(definition_node.name.as_str());
+            definition_type_values.push(definition_node.definition_type.as_str());
+            primary_file_path_values.push(location.file_path.clone());
+            primary_start_byte_values.push(location.start_byte);
+            primary_end_byte_values.push(location.end_byte);
+            primary_line_number_values.push(location.line_number);
+            total_locations_values.push(1);
         }
 
         let total_records = fqn_values.len();
