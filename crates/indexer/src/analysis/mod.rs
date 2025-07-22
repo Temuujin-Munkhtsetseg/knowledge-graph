@@ -83,7 +83,7 @@ pub struct DefinitionNode {
     /// Type of definition (Class, Module, Method, etc.)
     pub definition_type: RubyDefinitionType,
     /// All file locations where this definition is found (for Ruby module reopening)
-    pub file_locations: Vec<DefinitionLocation>,
+    pub location: DefinitionLocation,
 }
 
 impl DefinitionNode {
@@ -98,18 +98,8 @@ impl DefinitionNode {
             fqn,
             name,
             definition_type,
-            file_locations: vec![location],
+            location,
         }
-    }
-
-    /// Add a new file location to this definition (for Ruby module reopening)
-    pub fn add_location(&mut self, location: DefinitionLocation) {
-        self.file_locations.push(location);
-    }
-
-    /// Get the primary (first) file location for this definition
-    pub fn primary_location(&self) -> Option<&DefinitionLocation> {
-        self.file_locations.first()
     }
 }
 
@@ -138,10 +128,10 @@ pub struct FileDefinitionRelationship {
 /// Represents a hierarchical relationship between definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefinitionRelationship {
-    // /// Parent definition file path (foreign key to FileNode.path)
-    // pub from_file_path: String,
-    // /// Child definition file path (foreign key to FileNode.path)
-    // pub to_file_path: String,
+    /// Parent definition file path (foreign key to FileNode.path)
+    pub from_file_path: String,
+    /// Child definition file path (foreign key to FileNode.path)
+    pub to_file_path: String,
     /// Parent definition FQN (foreign key to DefinitionNode.fqn)
     pub from_definition_fqn: String,
     /// Child definition FQN (foreign key to DefinitionNode.fqn)
@@ -254,10 +244,7 @@ impl AnalysisService {
             directory_nodes.len(),
             file_nodes.len(),
             definition_nodes.len(),
-            definition_nodes
-                .iter()
-                .map(|d| d.file_locations.len())
-                .sum::<usize>(),
+            definition_nodes.iter().map(|_d| 1).sum::<usize>(),
             directory_relationships.len()
                 + file_definition_relationships.len()
                 + definition_relationships.len()

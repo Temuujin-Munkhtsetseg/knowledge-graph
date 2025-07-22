@@ -442,8 +442,8 @@ fn setup_reindexing_pipeline(
     let all_definition_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     println!("all_definition_count: {all_definition_count}");
     assert_eq!(
-        all_definition_count, 94,
-        "Should have 94 definitions globally after initial indexing"
+        all_definition_count, 90,
+        "Should have 90 definitions globally after initial indexing"
     );
 
     // file_paths: ["app/models/user_model.rb", "app/models/base_model.rb"]
@@ -528,8 +528,8 @@ async fn test_full_reindexing_pipeline_git_status() {
     let definition_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     println!("definition_count: {definition_count}");
     assert_eq!(
-        definition_count, 95,
-        "Should have 95 definitions globally after reindexing"
+        definition_count, 91,
+        "Should have 91 definitions globally after reindexing"
     );
 
     let file_paths = vec![
@@ -814,19 +814,6 @@ fn test_full_indexing_pipeline() {
         "Should have definition nodes"
     );
 
-    // Verify Authentication module is properly merged (should have multiple file locations)
-    let auth_module = graph_data
-        .definition_nodes
-        .iter()
-        .find(|def| def.fqn == "Authentication")
-        .expect("Should find Authentication module");
-
-    assert!(
-        auth_module.file_locations.len() >= 3,
-        "Authentication module should have multiple file locations (got {})",
-        auth_module.file_locations.len()
-    );
-
     // Check that we have file-definition relationships
     assert!(
         !graph_data.file_definition_relationships.is_empty(),
@@ -936,132 +923,6 @@ fn test_full_indexing_pipeline() {
 }
 
 #[test]
-fn test_module_reopening_merge() {
-    // Create temporary repository with test files
-    let temp_repo = create_test_repository();
-    let repo_path = temp_repo.path().to_str().unwrap();
-
-    // Create a gitalisk repository wrapper
-    let gitalisk_repo = CoreGitaliskRepository::new(repo_path.to_string(), repo_path.to_string());
-
-    // Create our RepositoryIndexer wrapper
-    let indexer = RepositoryIndexer::new("test-repo".to_string(), repo_path.to_string());
-    let file_source = GitaliskFileSource::new(gitalisk_repo);
-
-    // Configure indexing for Ruby files
-    let config = IndexingConfig {
-        worker_threads: 1,
-        max_file_size: 5_000_000,
-        respect_gitignore: false,
-    };
-
-    // Index files and get results
-    let index_result = indexer
-        .index_files(file_source, &config)
-        .expect("Failed to index repository");
-
-    // Verify we have files
-    assert!(
-        index_result.total_files_processed >= 6,
-        "Should have processed at least 6 Ruby files"
-    );
-
-    // Run analysis to get graph data
-    let analysis_service =
-        crate::analysis::AnalysisService::new(indexer.name.clone(), indexer.path.clone());
-
-    let graph_data = analysis_service
-        .analyze_results(&index_result.file_results)
-        .expect("Failed to analyze results");
-
-    // Find the Authentication module definition
-    let auth_definitions: Vec<_> = graph_data
-        .definition_nodes
-        .iter()
-        .filter(|def| def.fqn == "Authentication")
-        .collect();
-
-    // Should have exactly one merged definition for Authentication module
-    assert_eq!(
-        auth_definitions.len(),
-        1,
-        "Should have exactly one Authentication module definition"
-    );
-
-    let auth_def = auth_definitions[0];
-
-    // Should have multiple file locations (from module reopening)
-    assert!(
-        auth_def.file_locations.len() >= 3,
-        "Authentication module should be defined in at least 3 files, got {}",
-        auth_def.file_locations.len()
-    );
-
-    // Verify the file locations include the expected files
-    let file_paths: Vec<_> = auth_def
-        .file_locations
-        .iter()
-        .map(|loc| {
-            Path::new(&loc.file_path)
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-        })
-        .collect();
-
-    assert!(
-        file_paths.contains(&"authentication.rb"),
-        "Should include authentication.rb, got: {file_paths:?}"
-    );
-    assert!(
-        file_paths.contains(&"providers.rb"),
-        "Should include providers.rb, got: {file_paths:?}"
-    );
-    assert!(
-        file_paths.contains(&"tokens.rb"),
-        "Should include tokens.rb, got: {file_paths:?}"
-    );
-
-    // Verify we have Authentication::Providers module
-    let providers_def = graph_data
-        .definition_nodes
-        .iter()
-        .find(|def| def.fqn == "Authentication::Providers")
-        .expect("Should find Authentication::Providers module");
-
-    assert!(
-        !providers_def.file_locations.is_empty(),
-        "Providers module should be defined in at least 1 file"
-    );
-
-    // Verify we have relationships between Authentication and its nested modules
-    let module_relationships: Vec<_> = graph_data
-        .definition_relationships
-        .iter()
-        .filter(|rel| {
-            rel.from_definition_fqn == "Authentication"
-                && rel.relationship_type == "MODULE_TO_MODULE"
-        })
-        .collect();
-
-    assert!(
-        !module_relationships.is_empty(),
-        "Should have MODULE_TO_MODULE relationships from Authentication"
-    );
-
-    println!("✅ Module reopening test completed successfully!");
-    println!(
-        "📊 Authentication module has {} file locations",
-        auth_def.file_locations.len()
-    );
-    println!(
-        "📊 Found {} module-to-module relationships from Authentication",
-        module_relationships.len()
-    );
-}
-
-#[test]
 fn test_inheritance_relationships() {
     // Create temporary repository with test files
     let temp_repo = create_test_repository();
@@ -1166,7 +1027,7 @@ fn test_simple_end_to_end_kuzu() {
     // Get definition node count
     let defn_node_count = node_database_service.count_nodes::<DefinitionNodeFromKuzu>();
     println!("Definition node count: {defn_node_count}");
-    assert_eq!(defn_node_count, 94);
+    assert_eq!(defn_node_count, 90);
 
     // Get file node count
     let file_node_count = node_database_service.count_nodes::<FileNodeFromKuzu>();
@@ -1174,16 +1035,16 @@ fn test_simple_end_to_end_kuzu() {
     assert_eq!(file_node_count, 7);
 
     // Get module -> class relationships count
-    let module_class_rel_count =
-        node_database_service.count_relationships_of_type(RelationshipType::ModuleToClass);
-    println!("Module -> class relationship count: {module_class_rel_count}");
-    assert_eq!(module_class_rel_count, 7);
+    let class_method_rel_count =
+        node_database_service.count_relationships_of_type(RelationshipType::ClassToMethod);
+    println!("Class -> method relationship count: {class_method_rel_count}");
+    assert_eq!(class_method_rel_count, 50);
 
     // Get file definition relationships count
     let file_defn_rel_count =
         node_database_service.count_relationships_of_type(RelationshipType::FileDefines);
     println!("File defines relationship count: {file_defn_rel_count}");
-    assert_eq!(file_defn_rel_count, 96);
+    assert_eq!(file_defn_rel_count, 90);
 
     // Get directory node count
     let dir_node_count = node_database_service.count_nodes::<DirectoryNodeFromKuzu>();
@@ -1206,17 +1067,18 @@ fn test_simple_end_to_end_kuzu() {
     let def_rel_count =
         node_database_service.count_relationships_of_node_type(KuzuNodeType::DefinitionNode);
     println!("Definition relationship count: {def_rel_count}");
-    assert_eq!(def_rel_count, 88);
+    assert_eq!(def_rel_count, 67);
 
     // Get all relationships in the definition_relationships table
-    let m2m_rel_type = relationship_type_map.get_type_id(RelationshipType::ModuleToClass);
-    let query_module_to_class = format!(
+    let m2m_rel_type = relationship_type_map.get_type_id(RelationshipType::ClassToMethod);
+    let query_class_to_method = format!(
         "MATCH (d:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(c:DefinitionNode) WHERE r.type = {m2m_rel_type} RETURN d, c, r.type"
     );
+    println!("Query: {query_class_to_method}");
 
     let result = connection
-        .query(&query_module_to_class)
-        .expect("Failed to query module to class");
+        .query(&query_class_to_method)
+        .expect("Failed to query class to method");
     for row in result {
         if let (Some(from_node_value), Some(to_node_value), Some(kuzu::Value::UInt8(rel_type))) =
             (row.first(), row.get(1), row.get(2))
@@ -1225,17 +1087,30 @@ fn test_simple_end_to_end_kuzu() {
             let to_node = DefinitionNodeFromKuzu::from_kuzu_node(to_node_value);
             let rel_type_name = relationship_type_map.get_type_name(*rel_type);
             println!(
-                "Module to class relationship: {} -[type: {}]-> {}",
+                "Class to method relationship: {} -[type: {}]-> {}",
                 from_node.fqn, rel_type_name, to_node.fqn
             );
-            if from_node.fqn.as_str() == "Authentication::Providers" {
+            if from_node.fqn.as_str() == "Authentication::Providers::LdapProvider" {
                 match to_node.fqn.as_str() {
-                    "Authentication::Providers::LdapProvider" => {
-                        assert_eq!(to_node.definition_type, "Class");
+                    "Authentication::Providers::LdapProvider::verify_credentials" => {
+                        assert_eq!(to_node.definition_type, "Method");
                         assert_eq!(to_node.primary_file_path, "lib/authentication/providers.rb");
                     }
-                    "Authentication::Providers::OAuthProvider" => {
-                        assert_eq!(to_node.definition_type, "Class");
+                    "Authentication::Providers::LdapProvider::authenticate" => {
+                        assert_eq!(to_node.definition_type, "Method");
+                        assert_eq!(to_node.primary_file_path, "lib/authentication/providers.rb");
+                    }
+                    _ => {}
+                }
+            }
+            if from_node.fqn.as_str() == "Authentication::Providers::OAuthProvider" {
+                match to_node.fqn.as_str() {
+                    "Authentication::Providers::OAuthProvider::exchange_code_for_token" => {
+                        assert_eq!(to_node.definition_type, "Method");
+                        assert_eq!(to_node.primary_file_path, "lib/authentication/providers.rb");
+                    }
+                    "Authentication::Providers::OAuthProvider::initializer" => {
+                        assert_eq!(to_node.definition_type, "Method");
                         assert_eq!(to_node.primary_file_path, "lib/authentication/providers.rb");
                     }
                     _ => {}
@@ -1393,65 +1268,7 @@ fn test_detailed_data_inspection() {
 
     // === PART 1: In-memory graph data verification (existing) ===
 
-    // 1. Inspect Authentication module specifically
-    println!("\n📊 Authentication Module Analysis:");
-    let auth_modules: Vec<_> = graph_data
-        .definition_nodes
-        .iter()
-        .filter(|def| def.fqn.contains("Authentication"))
-        .collect();
-
-    for auth_def in &auth_modules {
-        println!(
-            "  📁 FQN: {} ({:?})",
-            auth_def.fqn, auth_def.definition_type
-        );
-        println!("     Locations: {}", auth_def.file_locations.len());
-        for (i, location) in auth_def.file_locations.iter().enumerate() {
-            let file_name = std::path::Path::new(&location.file_path)
-                .file_name()
-                .map(|n| n.to_str().unwrap_or("unknown"))
-                .unwrap_or("unknown");
-            println!(
-                "     [{i}] {file_name} (line: {}, bytes: {}-{})",
-                location.line_number, location.start_byte, location.end_byte
-            );
-        }
-    }
-
-    // 2. Inspect all module definitions and their reopening behavior
-    println!("\n📊 Module Reopening Analysis:");
-    let modules: Vec<_> = graph_data
-        .definition_nodes
-        .iter()
-        .filter(|def| {
-            matches!(
-                def.definition_type,
-                parser_core::ruby::types::RubyDefinitionType::Module
-            )
-        })
-        .collect();
-
-    for module_def in &modules {
-        if module_def.file_locations.len() > 1 {
-            println!(
-                "  🔄 REOPENED: {} ({} locations)",
-                module_def.fqn,
-                module_def.file_locations.len()
-            );
-            for location in &module_def.file_locations {
-                let file_name = std::path::Path::new(&location.file_path)
-                    .file_name()
-                    .map(|n| n.to_str().unwrap_or("unknown"))
-                    .unwrap_or("unknown");
-                println!("      └─ {file_name}");
-            }
-        } else {
-            println!("  📦 Single: {}", module_def.fqn);
-        }
-    }
-
-    // 3. Inspect class hierarchies
+    // 1. Inspect class hierarchies
     println!("\n📊 Class Hierarchy Analysis:");
     let classes: Vec<_> = graph_data
         .definition_nodes
@@ -1492,7 +1309,7 @@ fn test_detailed_data_inspection() {
         }
     }
 
-    // 4. Inspect parent-child relationships
+    // 2. Inspect parent-child relationships
     println!("\n📊 Definition Relationships Analysis:");
     let relationship_counts: std::collections::HashMap<String, usize> = graph_data
         .definition_relationships
@@ -1509,11 +1326,8 @@ fn test_detailed_data_inspection() {
     // 5. Verify specific expected definitions exist
     println!("\n📊 Expected Definitions Verification:");
     let expected_definitions = vec![
-        ("Authentication", "Module"),
-        ("Authentication::Providers", "Module"),
         ("Authentication::Providers::LdapProvider", "Class"),
         ("Authentication::Token", "Class"),
-        ("UserManagement", "Module"),
         ("UserManagement::User", "Class"),
         ("BaseModel", "Class"),
         ("UserModel", "Class"),
@@ -1526,9 +1340,6 @@ fn test_detailed_data_inspection() {
             .find(|d| d.fqn == expected_fqn)
         {
             println!("  ✅ Found: {} ({:?})", expected_fqn, def.definition_type);
-            if expected_type == "Module" && def.file_locations.len() > 1 {
-                println!("     🔄 Reopened in {} files", def.file_locations.len());
-            }
         } else {
             println!("  ❌ Missing: {expected_fqn} ({expected_type})");
         }
@@ -1566,44 +1377,6 @@ fn test_detailed_data_inspection() {
     println!(
         "Total definition relationships: {}",
         graph_data.definition_relationships.len()
-    );
-
-    // Verify the specific Authentication module has exactly 3 locations
-    let auth_main = graph_data
-        .definition_nodes
-        .iter()
-        .find(|def| def.fqn == "Authentication")
-        .expect("Should find Authentication module");
-
-    assert_eq!(
-        auth_main.file_locations.len(),
-        3,
-        "Authentication module should have exactly 3 file locations"
-    );
-
-    let file_names: Vec<_> = auth_main
-        .file_locations
-        .iter()
-        .map(|loc| {
-            std::path::Path::new(&loc.file_path)
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-        })
-        .collect();
-
-    assert!(
-        file_names.contains(&"authentication.rb"),
-        "Should include authentication.rb"
-    );
-    assert!(
-        file_names.contains(&"providers.rb"),
-        "Should include providers.rb"
-    );
-    assert!(
-        file_names.contains(&"tokens.rb"),
-        "Should include tokens.rb"
     );
 
     println!("✅ All verification checks passed!");
@@ -1743,36 +1516,13 @@ fn test_parquet_file_structure() {
     // Verify we have the correct number of records
     let graph_data = result.graph_data.expect("Should have graph data");
     let unique_definitions = graph_data.definition_nodes.len();
-    let total_locations: usize = graph_data
-        .definition_nodes
-        .iter()
-        .map(|d| d.file_locations.len())
-        .sum();
 
     println!("  🔢 Unique definitions: {unique_definitions}");
-    println!("  🔢 Total locations (flattened): {total_locations}");
 
     // The Parquet file should have one record per unique definition (using primary location + ID)
     assert_eq!(
         definitions_file.record_count, unique_definitions,
         "Parquet records should equal unique definitions (one per unique FQN with integer ID)"
-    );
-
-    // Verify Authentication module contributes 1 record (using primary location)
-    let auth_def = graph_data
-        .definition_nodes
-        .iter()
-        .find(|d| d.fqn == "Authentication")
-        .expect("Should find Authentication module");
-
-    println!(
-        "  🔄 Authentication module locations: {}",
-        auth_def.file_locations.len()
-    );
-    assert_eq!(
-        auth_def.file_locations.len(),
-        3,
-        "Authentication should have 3 locations but only 1 Parquet record (with integer ID)"
     );
 
     // Verify consolidated relationship files contain expected data
@@ -1820,12 +1570,6 @@ fn test_parquet_file_structure() {
     println!(
         "  📄 File relationships: {} records",
         file_rels_file.record_count
-    );
-
-    // Should equal total definition locations (one FILE_DEFINES relationship per definition location)
-    assert_eq!(
-        file_rels_file.record_count, total_locations,
-        "File relationships should equal total definition locations"
     );
 
     // Definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)

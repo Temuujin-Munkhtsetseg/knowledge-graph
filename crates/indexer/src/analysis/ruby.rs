@@ -29,49 +29,34 @@ impl RubyAnalyzer {
         &self,
         file_result: &FileProcessingResult,
         relative_file_path: &str,
-        merged_definitions: &mut HashMap<String, (DefinitionNode, RubyFqn)>,
+        definitions_map: &mut HashMap<(String, String), (DefinitionNode, RubyFqn)>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
     ) -> Result<(), String> {
         for definition in &file_result.definitions {
+            if definition.definition_type == RubyDefinitionType::Module {
+                // Modules are not strictly valid definitions per phase 1, so we skip them for now.
+                // TODO: However, we should handle module call definitions eventually.
+                continue;
+            }
+
             if let Some((location, ruby_fqn)) =
                 self.create_definition_location(definition, relative_file_path)?
             {
                 let fqn_string = ruby_fqn_to_string(&ruby_fqn);
 
-                // Check if we already have this definition
-                if let Some((existing_def, _existing_fqn)) = merged_definitions.get_mut(&fqn_string)
-                {
-                    if existing_def.definition_type == definition.definition_type {
-                        // Same type - this is normal in Ruby (method redefinition, module reopening, etc.)
-                        existing_def.add_location(location);
-                        log::debug!(
-                            "Merged definition '{fqn_string}' from file '{relative_file_path}'"
-                        );
-                    } else {
-                        // Different types - this is a true conflict
-                        log::warn!(
-                            "Conflicting definition types for FQN '{}': existing {:?} vs new {:?} in file '{}'",
-                            fqn_string,
-                            existing_def.definition_type,
-                            definition.definition_type,
-                            relative_file_path
-                        );
-                        // Still add the location for completeness
-                        existing_def.add_location(location);
-                    }
-                } else {
-                    // Create new definition
-                    let definition_node = DefinitionNode::new(
-                        fqn_string.clone(),
-                        definition.name.clone(),
-                        definition.definition_type,
-                        location,
-                    );
-                    merged_definitions.insert(fqn_string.clone(), (definition_node, ruby_fqn));
-                }
+                // Create new definition
+                let definition_node = DefinitionNode::new(
+                    fqn_string.clone(),
+                    definition.name.clone(),
+                    definition.definition_type,
+                    location,
+                );
+                definitions_map.insert(
+                    (fqn_string.clone(), relative_file_path.to_string()),
+                    (definition_node, ruby_fqn),
+                );
 
                 // Always create file-definition relationship for this specific location
-                // Use relative path to match FileNode primary keys
                 file_definition_relationships.push(FileDefinitionRelationship {
                     file_path: relative_file_path.to_string(),
                     definition_fqn: fqn_string,
@@ -86,18 +71,18 @@ impl RubyAnalyzer {
     /// Finalize merged definitions and create definition relationships
     pub fn finalize_definitions_and_relationships(
         &self,
-        merged_definitions: HashMap<String, (DefinitionNode, RubyFqn)>,
+        definitions_map: HashMap<(String, String), (DefinitionNode, RubyFqn)>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
     ) -> Vec<DefinitionNode> {
         // Extract final definition nodes
-        let definition_nodes: Vec<DefinitionNode> = merged_definitions
+        let definition_nodes: Vec<DefinitionNode> = definitions_map
             .values()
             .map(|(def_node, _)| def_node.clone())
             .collect();
 
         // Create definition-to-definition relationships using merged definitions
         self.create_definition_relationships_from_merged(
-            &merged_definitions,
+            &definitions_map,
             definition_relationships,
         );
 
@@ -136,19 +121,23 @@ impl RubyAnalyzer {
     /// Create definition-to-definition relationships using merged definitions
     fn create_definition_relationships_from_merged(
         &self,
-        merged_definitions: &HashMap<String, (DefinitionNode, RubyFqn)>,
+        definitions_map: &HashMap<(String, String), (DefinitionNode, RubyFqn)>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
     ) {
-        for (child_fqn_string, (child_def, child_fqn)) in merged_definitions {
+        for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definitions_map {
             // Find parent definition by using FQN parts directly
             if let Some(parent_fqn_string) = self.get_parent_fqn_from_parts(child_fqn) {
-                if let Some((parent_def, _)) = merged_definitions.get(&parent_fqn_string) {
+                if let Some((parent_def, _)) =
+                    definitions_map.get(&(parent_fqn_string.clone(), child_file_path.clone()))
+                {
                     // Determine relationship type based on parent and child types
                     if let Some(relationship_type) = self.get_definition_relationship_type(
                         &parent_def.definition_type,
                         &child_def.definition_type,
                     ) {
                         definition_relationships.push(DefinitionRelationship {
+                            from_file_path: parent_def.location.file_path.clone(),
+                            to_file_path: child_def.location.file_path.clone(),
                             from_definition_fqn: parent_fqn_string,
                             to_definition_fqn: child_fqn_string.clone(),
                             relationship_type,
@@ -188,12 +177,6 @@ impl RubyAnalyzer {
         use RubyDefinitionType::*;
 
         match (parent_type, child_type) {
-            (Module, Class) => Some("MODULE_TO_CLASS".to_string()),
-            (Module, Module) => Some("MODULE_TO_MODULE".to_string()),
-            (Module, Method) => Some("MODULE_TO_METHOD".to_string()),
-            (Module, SingletonMethod) => Some("MODULE_TO_SINGLETON_METHOD".to_string()),
-            (Module, Lambda) => Some("MODULE_TO_LAMBDA".to_string()),
-            (Module, Proc) => Some("MODULE_TO_PROC".to_string()),
             (Class, Method) => Some("CLASS_TO_METHOD".to_string()),
             (Class, SingletonMethod) => Some("CLASS_TO_SINGLETON_METHOD".to_string()),
             (Class, Class) => Some("CLASS_TO_CLASS".to_string()),
