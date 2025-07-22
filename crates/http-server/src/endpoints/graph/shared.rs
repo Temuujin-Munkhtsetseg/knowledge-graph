@@ -107,16 +107,10 @@ pub fn extract_node_data(
 }
 
 pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::error::Error>> {
-    let label = if data.node_type == "DefinitionNode" && !data.fqn.is_empty() {
-        data.fqn.clone()
-    } else {
-        data.name.clone()
-    };
-
     let node = match data.node_type.as_str() {
         "DirectoryNode" => TypedGraphNode::DirectoryNode {
             id: data.id,
-            label,
+            label: data.name,
             properties: DirectoryNodeProperties {
                 path: data.path,
                 absolute_path: data.absolute_path,
@@ -125,7 +119,7 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
         },
         "FileNode" => TypedGraphNode::FileNode {
             id: data.id,
-            label,
+            label: data.name,
             properties: FileNodeProperties {
                 path: data.path,
                 absolute_path: data.absolute_path,
@@ -136,7 +130,7 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
         },
         "DefinitionNode" => TypedGraphNode::DefinitionNode {
             id: data.id,
-            label,
+            label: data.name,
             properties: DefinitionNodeProperties {
                 path: data.path,
                 fqn: data.fqn,
@@ -149,7 +143,7 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
         },
         _ => TypedGraphNode::DirectoryNode {
             id: data.id,
-            label,
+            label: data.name,
             properties: DirectoryNodeProperties {
                 path: data.path,
                 absolute_path: data.absolute_path,
