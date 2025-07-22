@@ -177,6 +177,17 @@ impl WorkspaceWorker {
                 self.process_reindex_workspace_job(workspace_folder_path, workspace_changes.clone())
                     .await
             }
+            Job::ReindexProjectFolderWithWatchedFiles {
+                project_folder_path,
+                project_changes,
+                ..
+            } => {
+                todo!(
+                    "ReindexProjectFolderWithWatchedFiles: {:?}, {:?}",
+                    project_folder_path,
+                    project_changes
+                )
+            }
         }
     }
 

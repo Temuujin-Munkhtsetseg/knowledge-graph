@@ -150,7 +150,7 @@ impl JobDispatcher {
         Ok(sender)
     }
 
-    async fn cancel_existing_jobs_of_type(
+    pub async fn cancel_existing_jobs_of_type(
         &self,
         workspace_path: &str,
         job_type: &str,

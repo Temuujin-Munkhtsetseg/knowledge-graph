@@ -35,6 +35,31 @@ pub enum Job {
         workspace_changes: Vec<PathBuf>,
         priority: JobPriority,
     },
+
+    ReindexProjectFolderWithWatchedFiles {
+        project_folder_path: String,
+        project_changes: Vec<PathBuf>,
+        priority: JobPriority,
+    },
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub enum JobType {
+    IndexWorkspaceFolder,
+    ReindexWorkspaceFolderWithWatchedFiles,
+    ReindexProjectFolderWithWatchedFiles,
+}
+
+impl JobType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            JobType::IndexWorkspaceFolder => "IndexWorkspaceFolder",
+            JobType::ReindexWorkspaceFolderWithWatchedFiles => {
+                "ReindexWorkspaceFolderWithWatchedFiles"
+            }
+            JobType::ReindexProjectFolderWithWatchedFiles => "ReindexProjectFolderWithWatchedFiles",
+        }
+    }
 }
 
 impl Job {
@@ -48,6 +73,10 @@ impl Job {
                 workspace_folder_path,
                 ..
             } => workspace_folder_path,
+            Job::ReindexProjectFolderWithWatchedFiles {
+                project_folder_path,
+                ..
+            } => project_folder_path,
         }
     }
 
@@ -55,14 +84,30 @@ impl Job {
         match self {
             Job::IndexWorkspaceFolder { priority, .. } => priority.clone(),
             Job::ReindexWorkspaceFolderWithWatchedFiles { priority, .. } => priority.clone(),
+            Job::ReindexProjectFolderWithWatchedFiles { priority, .. } => priority.clone(),
         }
     }
 
     pub fn job_type(&self) -> &'static str {
         match self {
-            Job::IndexWorkspaceFolder { .. } => "IndexWorkspaceFolder",
+            Job::IndexWorkspaceFolder { .. } => JobType::IndexWorkspaceFolder.as_str(),
             Job::ReindexWorkspaceFolderWithWatchedFiles { .. } => {
-                "ReindexWorkspaceFolderWithWatchedFiles"
+                JobType::ReindexWorkspaceFolderWithWatchedFiles.as_str()
+            }
+            Job::ReindexProjectFolderWithWatchedFiles { .. } => {
+                JobType::ReindexProjectFolderWithWatchedFiles.as_str()
+            }
+        }
+    }
+
+    pub fn job_type_as_enum(&self) -> JobType {
+        match self {
+            Job::IndexWorkspaceFolder { .. } => JobType::IndexWorkspaceFolder,
+            Job::ReindexWorkspaceFolderWithWatchedFiles { .. } => {
+                JobType::ReindexWorkspaceFolderWithWatchedFiles
+            }
+            Job::ReindexProjectFolderWithWatchedFiles { .. } => {
+                JobType::ReindexProjectFolderWithWatchedFiles
             }
         }
     }

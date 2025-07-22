@@ -122,10 +122,15 @@ impl<'a> NodeDatabaseService<'a> {
     ) -> Result<Vec<R>, DatabaseError> {
         match self.query_builder.get_by::<T, R>(node_type, column, values) {
             (QueryNoop::No, query) => {
-                let connection = self.get_connection();
                 self.query_builder.log_query(&query);
-                let result = connection.query(&query)?;
-                Ok(self.iter_query_result(result))
+                if let Some(ref conn) = self.transaction_conn {
+                    let result = conn.query(&query)?;
+                    Ok(self.iter_query_result(result))
+                } else {
+                    let connection = self.get_connection();
+                    let result = connection.query(&query)?;
+                    Ok(self.iter_query_result(result))
+                }
             }
             (QueryNoop::Yes, _) => Ok(Vec::new()),
         }
@@ -137,11 +142,18 @@ impl<'a> NodeDatabaseService<'a> {
         field: &str,
     ) -> Result<u64, Option<DatabaseError>> {
         let (_, query) = self.query_builder.agg_node_by::<R>(agg_func, field);
-        let connection = self.get_connection();
         self.query_builder.log_query(&query);
-        match connection.query(&query) {
-            Ok(result) => self.get_scalar_query_result(result).ok_or(None),
-            Err(e) => Err(Some(e)),
+        if let Some(ref conn) = self.transaction_conn {
+            match conn.query(&query) {
+                Ok(result) => self.get_scalar_query_result(result).ok_or(None),
+                Err(e) => Err(Some(e)),
+            }
+        } else {
+            let connection = self.get_connection();
+            match connection.query(&query) {
+                Ok(result) => self.get_scalar_query_result(result).ok_or(None),
+                Err(e) => Err(Some(e)),
+            }
         }
     }
 

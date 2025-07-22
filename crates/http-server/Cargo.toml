@@ -34,6 +34,7 @@ watchexec.workspace = true
 watchexec-events.workspace = true
 watchexec-filterer-ignore.workspace = true
 ignore-files = { workspace = true }
+ignore = { workspace = true }
 
 [dev-dependencies]
 axum-test = { workspace = true }

@@ -88,6 +88,7 @@ pub async fn run(
     let watcher = Arc::new(Watcher::new(
         workspace_manager.clone(),
         job_dispatcher.clone(),
+        None,
     ));
     if enable_reindexing {
         watcher.start().await;
