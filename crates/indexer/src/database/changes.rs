@@ -40,7 +40,7 @@ impl<'a> KuzuChanges<'a> {
     ) -> Self {
         Self {
             database,
-            node_database_service: NodeDatabaseService::new_with_transaction(database),
+            node_database_service: NodeDatabaseService::new(database),
             file_changes,
             graph_data,
             repo_path: repo_path.to_string(),
@@ -82,8 +82,9 @@ impl<'a> KuzuChanges<'a> {
         // Import the new nodes from Parquet files
         let schema_manager = SchemaManager::new(self.database);
 
-        // First, delete the old nodes and their relationships
-        self.node_database_service
+        // Create a transaction-enabled service for the modification operations
+        let mut transaction_service = NodeDatabaseService::new_with_transaction(self.database);
+        transaction_service
             .transaction(|service| {
                 // Remove deleted definitions (and their relationships)
                 let _ = service.delete_by(
