@@ -60,7 +60,7 @@ export type InfoResponses = { "200": ServerInfoResponse, };
  * Each job variant represents a different type of work that can be performed.
  * Jobs are routed to workspace-specific queues for sequential processing.
  */
-export type Job = { "type": "IndexWorkspaceFolder", "data": { workspace_folder_path: string, priority: JobPriority, } } | { "type": "ReindexWorkspaceFolderWithWatchedFiles", "data": { workspace_folder_path: string, workspace_changes: Array<string>, priority: JobPriority, } };
+export type Job = { "type": "IndexWorkspaceFolder", "data": { workspace_folder_path: string, priority: JobPriority, } } | { "type": "ReindexWorkspaceFolderWithWatchedFiles", "data": { workspace_folder_path: string, workspace_changes: Array<string>, priority: JobPriority, } } | { "type": "ReindexProjectFolderWithWatchedFiles", "data": { project_folder_path: string, project_changes: Array<string>, priority: JobPriority, } };
 
 export type JobInfo = { id: string, job: Job, created_at: string, started_at: string | null, completed_at: string | null, status: JobStatus, error: string | null, };
 

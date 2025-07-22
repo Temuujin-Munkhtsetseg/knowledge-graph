@@ -107,10 +107,11 @@ export const useGraphRenderer = () => {
       labelFont: 'Inter, system-ui, sans-serif',
       labelSize: 12,
       labelWeight: '500',
+      enableEdgeEvents: true,
       nodeReducer: (_, nodeData) => {
         const res = { ...nodeData };
         if (nodeData.highlighted) {
-          res.size = nodeData.size * 1.3;
+          res.size = nodeData.size * 1.15;
           res.zIndex = 1;
         }
         return res;
@@ -119,7 +120,7 @@ export const useGraphRenderer = () => {
         const res = { ...edgeData };
         if (edgeData.highlighted) {
           res.color = currentTheme.value.edgeHover;
-          res.size = 3;
+          res.size = 2;
           res.zIndex = 1;
         }
         return res;
