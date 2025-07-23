@@ -1,4 +1,4 @@
-use crate::analysis::{DefinitionNode, DirectoryNode, FileNode, GraphData};
+use crate::analysis::types::{DefinitionNode, DirectoryNode, FileNode, GraphData};
 use crate::database::utils::{ConsolidatedRelationship, GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Error, Result};
 use arrow::{
@@ -8,7 +8,6 @@ use arrow::{
 };
 use database::graph::RelationshipTypeMapping;
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
-use parser_core::definitions::DefinitionTypeInfo;
 use std::{
     fs::File,
     path::{Path, PathBuf},

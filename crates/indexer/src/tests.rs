@@ -1,3 +1,4 @@
+use crate::analysis::types::{DefinitionType, GraphData};
 use crate::database::node_database_service::NodeDatabaseService;
 use crate::deployed::executor::DeployedIndexingExecutor;
 use crate::execution::config::IndexingConfigBuilder;
@@ -800,7 +801,7 @@ fn test_full_indexing_pipeline() {
     assert_eq!(result.total_files_errored, 0, "Should have no errors");
 
     // Verify graph data was created
-    let graph_data: crate::analysis::GraphData = result.graph_data.expect("Should have graph data");
+    let graph_data: GraphData = result.graph_data.expect("Should have graph data");
 
     // Check we have the expected file nodes
     assert!(
@@ -968,11 +969,11 @@ fn test_inheritance_relationships() {
 
     assert_eq!(
         base_model.definition_type,
-        parser_core::ruby::types::RubyDefinitionType::Class
+        DefinitionType::Ruby(parser_core::ruby::types::RubyDefinitionType::Class)
     );
     assert_eq!(
         user_model.definition_type,
-        parser_core::ruby::types::RubyDefinitionType::Class
+        DefinitionType::Ruby(parser_core::ruby::types::RubyDefinitionType::Class)
     );
 
     // Verify we have class-to-method relationships
@@ -1276,7 +1277,7 @@ fn test_detailed_data_inspection() {
         .filter(|def| {
             matches!(
                 def.definition_type,
-                parser_core::ruby::types::RubyDefinitionType::Class
+                DefinitionType::Ruby(parser_core::ruby::types::RubyDefinitionType::Class)
             )
         })
         .collect();
