@@ -38,7 +38,6 @@ use crate::project::source::ChangesFileSource;
 const DEFAULT_WORKER_THREADS: usize = 8;
 const WORK_QUEUE_CAPACITY: usize = 10000;
 const RESULT_QUEUE_CAPACITY: usize = 10000;
-const PROGRESS_UPDATE_INTERVAL: usize = 50;
 const RESULT_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Debug, Clone)]
@@ -213,6 +212,7 @@ impl RepositoryIndexer {
         let mut total_files_errored = 0;
         let mut errors = Vec::new();
         let mut messages_received = 0;
+        let mut last_reported_percentage: u8 = 0;
 
         // Use timeout-based result collection to prevent hanging
         loop {
@@ -240,18 +240,24 @@ impl RepositoryIndexer {
                         }
                     }
 
-                    if messages_received % PROGRESS_UPDATE_INTERVAL == 0 {
-                        let progress_pct = stats.progress_percentage(total_files);
+                    // Log progress only on each 5% chunk
+                    let progress_pct = stats.progress_percentage(total_files);
+                    let current_percentage_chunk = (progress_pct / 5.0) as u8 * 5;
+
+                    if current_percentage_chunk > last_reported_percentage
+                        && current_percentage_chunk <= 100
+                    {
                         let completed = stats.total_files_processed();
                         info!(
-                            "🔄 Progress: {:.1}% ({}/{} files) - {} processed, {} skipped, {} errors",
-                            progress_pct,
+                            "🔄 Progress: {}% ({}/{} files) - {} processed, {} skipped, {} errors",
+                            current_percentage_chunk,
                             completed,
                             total_files,
                             stats.files_processed(),
                             stats.files_skipped(),
                             stats.files_errored()
                         );
+                        last_reported_percentage = current_percentage_chunk;
                     }
 
                     match result_msg {
