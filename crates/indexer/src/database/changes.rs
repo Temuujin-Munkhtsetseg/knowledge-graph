@@ -1,7 +1,7 @@
 use database::kuzu::schema::SchemaManager;
 use kuzu::Database;
 
-use crate::analysis::GraphData;
+use crate::analysis::types::GraphData;
 use crate::database::utils::NodeIdGenerator;
 use crate::node_database_service::NodeDatabaseService;
 use crate::parsing::changes::{FileChanges, FileChangesPathType};

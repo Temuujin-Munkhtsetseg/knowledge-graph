@@ -21,7 +21,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 // Simplified imports - file processing is now handled by the File module
-use crate::analysis::{AnalysisService, GraphData};
+use crate::analysis::{AnalysisService, types::GraphData};
 use crate::database::changes::KuzuChanges;
 use database::kuzu::config::DatabaseConfig;
 

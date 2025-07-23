@@ -1,9 +1,13 @@
 pub mod files;
-pub mod ruby;
+pub mod languages;
+pub mod types;
 
+use crate::analysis::types::{
+    DefinitionNode, DefinitionRelationship, DirectoryNode, DirectoryRelationship,
+    FileDefinitionRelationship, FileNode, FqnType, GraphData,
+};
 use crate::parsing::processor::FileProcessingResult;
-use parser_core::{definitions::DefinitionTypeInfo, ruby::types::RubyDefinitionType};
-use serde::{Deserialize, Serialize};
+use parser_core::parser::SupportedLanguage;
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
@@ -11,134 +15,8 @@ use std::{
 
 // Re-export the sub-module functionality
 pub use files::FileSystemAnalyzer;
-pub use ruby::RubyAnalyzer;
-
-/// Structured graph data ready for writing to Parquet files
-#[derive(Debug, Clone)]
-pub struct GraphData {
-    /// Directory nodes to be written to directories.parquet
-    pub directory_nodes: Vec<DirectoryNode>,
-    /// File nodes to be written to files.parquet
-    pub file_nodes: Vec<FileNode>,
-    /// Definition nodes to be written to definitions.parquet  
-    pub definition_nodes: Vec<DefinitionNode>,
-    /// Directory relationships to be written to directory_relationships.parquet
-    pub directory_relationships: Vec<DirectoryRelationship>,
-    /// File-to-definition relationships to be written to file_definition_relationships.parquet
-    pub file_definition_relationships: Vec<FileDefinitionRelationship>,
-    /// Definition-to-definition relationships to be written to definition_relationships.parquet
-    pub definition_relationships: Vec<DefinitionRelationship>,
-}
-
-/// Represents a directory node in the graph
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DirectoryNode {
-    /// Relative path from repository root
-    pub path: String,
-    /// Absolute path on filesystem
-    pub absolute_path: String,
-    /// Repository name
-    pub repository_name: String,
-    /// Directory name (last component of path)
-    pub name: String,
-}
-
-/// Represents a file node in the graph
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileNode {
-    /// Relative path from repository root
-    pub path: String,
-    /// Absolute path on filesystem
-    pub absolute_path: String,
-    /// Programming language detected
-    pub language: String,
-    /// Repository name
-    pub repository_name: String,
-    /// File extension
-    pub extension: String,
-    /// File name (last component of path)
-    pub name: String,
-}
-
-/// Represents a single location where a definition is found
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DefinitionLocation {
-    /// File path where this definition location is found
-    pub file_path: String,
-    /// Start byte position in the file
-    pub start_byte: i64,
-    /// End byte position in the file  
-    pub end_byte: i64,
-    /// Line number where definition starts
-    pub line_number: i32,
-}
-
-/// Represents a definition node in the graph (can span multiple files for Ruby modules/classes)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DefinitionNode {
-    /// Fully qualified name (unique identifier)
-    pub fqn: String,
-    /// Simple name of the definition
-    pub name: String,
-    /// Type of definition (Class, Module, Method, etc.)
-    pub definition_type: RubyDefinitionType,
-    /// All file locations where this definition is found (for Ruby module reopening)
-    pub location: DefinitionLocation,
-}
-
-impl DefinitionNode {
-    /// Create a new DefinitionNode with a single location
-    pub fn new(
-        fqn: String,
-        name: String,
-        definition_type: RubyDefinitionType,
-        location: DefinitionLocation,
-    ) -> Self {
-        Self {
-            fqn,
-            name,
-            definition_type,
-            location,
-        }
-    }
-}
-
-/// Represents a relationship between directories and files
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DirectoryRelationship {
-    /// Source path (directory path)
-    pub from_path: String,
-    /// Target path (directory or file path)
-    pub to_path: String,
-    /// Type of relationship ("DIR_CONTAINS_DIR" or "DIR_CONTAINS_FILE")
-    pub relationship_type: String,
-}
-
-/// Represents a relationship between a file and a definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileDefinitionRelationship {
-    /// File path (foreign key to FileNode.path)
-    pub file_path: String,
-    /// Definition FQN (foreign key to DefinitionNode.fqn)
-    pub definition_fqn: String,
-    /// Type of relationship (always "DEFINES" for now)
-    pub relationship_type: String,
-}
-
-/// Represents a hierarchical relationship between definitions
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DefinitionRelationship {
-    /// Parent definition file path (foreign key to FileNode.path)
-    pub from_file_path: String,
-    /// Child definition file path (foreign key to FileNode.path)
-    pub to_file_path: String,
-    /// Parent definition FQN (foreign key to DefinitionNode.fqn)
-    pub from_definition_fqn: String,
-    /// Child definition FQN (foreign key to DefinitionNode.fqn)
-    pub to_definition_fqn: String,
-    /// Type of relationship (e.g., "MODULE_TO_CLASS", "CLASS_TO_METHOD", etc.)
-    pub relationship_type: String,
-}
+pub use languages::python::PythonAnalyzer;
+pub use languages::ruby::RubyAnalyzer;
 
 /// Analysis service that orchestrates the transformation of parsing results into graph data
 pub struct AnalysisService {
@@ -146,6 +24,7 @@ pub struct AnalysisService {
     repository_path: String,
     filesystem_analyzer: FileSystemAnalyzer,
     ruby_analyzer: RubyAnalyzer,
+    python_analyzer: PythonAnalyzer,
 }
 
 impl AnalysisService {
@@ -154,12 +33,14 @@ impl AnalysisService {
         let filesystem_analyzer =
             FileSystemAnalyzer::new(repository_name.clone(), repository_path.clone());
         let ruby_analyzer = RubyAnalyzer::new();
+        let python_analyzer = PythonAnalyzer::new();
 
         Self {
             repository_name,
             repository_path,
             filesystem_analyzer,
             ruby_analyzer,
+            python_analyzer,
         }
     }
 
@@ -176,66 +57,43 @@ impl AnalysisService {
             self.repository_path
         );
 
-        let mut directory_nodes = Vec::new();
-        let mut file_nodes = Vec::new();
-        let mut directory_relationships = Vec::new();
-        let mut file_definition_relationships = Vec::new();
-        let mut definition_relationships = Vec::new();
+        let mut definition_nodes: Vec<DefinitionNode> = Vec::new();
+        let mut directory_nodes: Vec<DirectoryNode> = Vec::new();
+        let mut file_nodes: Vec<FileNode> = Vec::new();
+        let mut directory_relationships: Vec<DirectoryRelationship> = Vec::new();
+        let mut file_definition_relationships: Vec<FileDefinitionRelationship> = Vec::new();
+        let mut definition_relationships: Vec<DefinitionRelationship> = Vec::new();
 
-        // Track created directories and merged definitions
+        // TODO: Deprecate these. Can make directory_nodes and directory_relationships HashMaps.
         let mut created_directories = HashSet::new();
         let mut created_dir_relationships = HashSet::new();
-        let mut merged_definitions = HashMap::new();
 
-        for file_result in file_results {
-            // Create directory nodes and relationships for this file's path
-            self.filesystem_analyzer.create_directory_hierarchy(
-                &file_result.file_path,
-                &mut directory_nodes,
-                &mut directory_relationships,
-                &mut created_directories,
-                &mut created_dir_relationships,
-            )?;
-
-            // Create file node
-            let file_node = self.filesystem_analyzer.create_file_node(file_result)?;
-
-            // Store the relative path before moving file_node
-            let relative_file_path = file_node.path.clone();
-
-            // Create directory-to-file relationship using the same relative path as the FileNode
-            if let Some(parent_dir) = self
-                .filesystem_analyzer
-                .get_parent_directory(&file_result.file_path)
-            {
-                directory_relationships.push(DirectoryRelationship {
-                    from_path: parent_dir,
-                    to_path: relative_file_path.clone(),
-                    relationship_type: "DIR_CONTAINS_FILE".to_string(),
-                });
-            }
-
-            file_nodes.push(file_node);
-
-            // Process definitions from this file (currently Ruby-specific)
-            // TODO: refactor this so that we have a cleaner architecture on
-            // parsing detection, language detection, indexer language management, etc.
-            if file_result.is_supported {
-                // Pass the relative path to ensure consistency with FileNode primary keys
-                self.ruby_analyzer.process_definitions(
+        let results_by_language = self.group_results_by_language(file_results);
+        for (language, results) in results_by_language {
+            let mut definition_map = HashMap::new();
+            for file_result in results {
+                self.extract_file_system_entities(
                     file_result,
-                    &relative_file_path,
-                    &mut merged_definitions,
+                    &mut file_nodes,
+                    &mut directory_nodes,
+                    &mut directory_relationships,
+                    &mut created_directories,
+                    &mut created_dir_relationships,
+                );
+                self.extract_language_entities(
+                    file_result,
+                    &mut definition_map,
                     &mut file_definition_relationships,
-                )?;
+                );
             }
-        }
 
-        // Extract final definition nodes and create relationships
-        let definition_nodes = self.ruby_analyzer.finalize_definitions_and_relationships(
-            merged_definitions,
-            &mut definition_relationships,
-        );
+            self.add_definition_nodes(&definition_map, &mut definition_nodes);
+            self.add_definition_relationships(
+                language,
+                definition_map,
+                &mut definition_relationships,
+            );
+        }
 
         let analysis_time = start_time.elapsed();
         log::info!(
@@ -258,6 +116,120 @@ impl AnalysisService {
             file_definition_relationships,
             definition_relationships,
         })
+    }
+
+    fn group_results_by_language<'a>(
+        &self,
+        file_results: &'a Vec<FileProcessingResult>,
+    ) -> HashMap<SupportedLanguage, Vec<&'a FileProcessingResult>> {
+        let mut results_by_language = HashMap::new();
+
+        for file_result in file_results {
+            results_by_language
+                .entry(file_result.language)
+                .or_insert_with(Vec::new)
+                .push(file_result);
+        }
+        results_by_language
+    }
+
+    fn extract_file_system_entities(
+        &self,
+        file_result: &FileProcessingResult,
+        file_nodes: &mut Vec<FileNode>,
+        directory_nodes: &mut Vec<DirectoryNode>,
+        directory_relationships: &mut Vec<DirectoryRelationship>,
+        created_directories: &mut HashSet<String>,
+        created_dir_relationships: &mut HashSet<(String, String)>,
+    ) {
+        // Create directory nodes and relationships for this file's path
+        self.filesystem_analyzer.create_directory_hierarchy(
+            &file_result.file_path,
+            directory_nodes,
+            directory_relationships,
+            created_directories,
+            created_dir_relationships,
+        );
+
+        // Create file node
+        let file_node = self.filesystem_analyzer.create_file_node(file_result);
+
+        // Store the relative path before moving file_node
+        let relative_file_path = file_node.path.clone();
+
+        // Create directory-to-file relationship using the same relative path as the FileNode
+        if let Some(parent_dir) = self
+            .filesystem_analyzer
+            .get_parent_directory(&file_result.file_path)
+        {
+            directory_relationships.push(DirectoryRelationship {
+                from_path: parent_dir,
+                to_path: relative_file_path.clone(),
+                relationship_type: "DIR_CONTAINS_FILE".to_string(),
+            });
+        }
+        file_nodes.push(file_node);
+    }
+
+    fn extract_language_entities(
+        &self,
+        file_result: &FileProcessingResult,
+        definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
+        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+    ) {
+        let relative_path = self
+            .filesystem_analyzer
+            .get_relative_path(&file_result.file_path);
+        match file_result.language {
+            SupportedLanguage::Ruby => {
+                let _ = self.ruby_analyzer.process_definitions(
+                    file_result,
+                    &relative_path,
+                    definition_map,
+                    file_definition_relationships,
+                );
+            }
+            SupportedLanguage::Python => {
+                self.python_analyzer.process_definitions(
+                    file_result,
+                    &relative_path,
+                    definition_map,
+                    file_definition_relationships,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    fn add_definition_nodes(
+        &self,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        definition_nodes: &mut Vec<DefinitionNode>,
+    ) {
+        let unrolled_definitions: Vec<DefinitionNode> = definition_map
+            .values()
+            .map(|(def_node, _)| def_node.clone())
+            .collect();
+        definition_nodes.extend(unrolled_definitions);
+    }
+
+    fn add_definition_relationships(
+        &self,
+        language: SupportedLanguage,
+        definition_map: HashMap<(String, String), (DefinitionNode, FqnType)>,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+    ) {
+        match language {
+            SupportedLanguage::Ruby => {
+                self.ruby_analyzer
+                    .add_definition_relationships(&definition_map, definition_relationships);
+            }
+            SupportedLanguage::Python => {
+                self.python_analyzer
+                    .add_definition_relationships(&definition_map, definition_relationships);
+            }
+            _ => {}
+        }
     }
 }
 

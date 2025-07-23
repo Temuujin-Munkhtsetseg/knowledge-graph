@@ -25,7 +25,7 @@ impl FileSystemAnalyzer {
         directory_relationships: &mut Vec<DirectoryRelationship>,
         created_directories: &mut HashSet<String>,
         created_relationships: &mut HashSet<(String, String)>,
-    ) -> Result<(), String> {
+    ) {
         // Convert absolute path to relative path by stripping repository path prefix
         let relative_file_path = self.get_relative_path(file_path);
         let path = Path::new(&relative_file_path);
@@ -86,12 +86,10 @@ impl FileSystemAnalyzer {
                 parent_path = Some(current_path.clone());
             }
         }
-
-        Ok(())
     }
 
     /// Convert absolute path to relative path by stripping repository path prefix
-    fn get_relative_path(&self, file_path: &str) -> String {
+    pub fn get_relative_path(&self, file_path: &str) -> String {
         let file_path_buf = Path::new(file_path);
         let repo_path_buf = Path::new(&self.repository_path);
 
@@ -116,7 +114,7 @@ impl FileSystemAnalyzer {
     }
 
     /// Create a file node from a file processing result
-    pub fn create_file_node(&self, file_result: &FileProcessingResult) -> Result<FileNode, String> {
+    pub fn create_file_node(&self, file_result: &FileProcessingResult) -> FileNode {
         // Convert to relative path for storage
         let relative_path = self.get_relative_path(&file_result.file_path);
 
@@ -140,14 +138,14 @@ impl FileSystemAnalyzer {
             .unwrap_or("unknown")
             .to_string();
 
-        Ok(FileNode {
+        FileNode {
             path: relative_path,
             absolute_path,
             language: format!("{:?}", file_result.language),
             repository_name: self.repository_name.clone(),
             extension,
             name,
-        })
+        }
     }
 
     /// Extract directory name from a path

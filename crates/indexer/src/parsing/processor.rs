@@ -2,6 +2,7 @@ use crate::project::file_info::FileInfo;
 use anyhow::Result;
 use parser_core::{
     parser::{GenericParser, LanguageParser, SupportedLanguage, detect_language_from_extension},
+    python::{analyzer::PythonAnalyzer, types::PythonDefinitionInfo},
     ruby::{analyzer::RubyAnalyzer, definitions::RubyDefinitionInfo},
     rules::{RuleManager, run_rules},
 };
@@ -80,7 +81,7 @@ impl<'a> FileProcessor<'a> {
         self.content = content;
     }
 
-    /// Process the file and extract definitions using Ruby analyzer
+    /// Process the file and extract definitions using a language parser
     pub fn process(&self) -> Result<FileProcessingResult> {
         let start_time = Instant::now();
 
@@ -88,12 +89,16 @@ impl<'a> FileProcessor<'a> {
         let language = detect_language_from_extension(&self.extension)
             .map_err(|e| anyhow::anyhow!("Failed to detect language for '{}': {}", self.path, e))?;
 
-        // For now, only process Ruby files
-        if language != SupportedLanguage::Ruby {
+        // Check if language is supported
+        let is_supported = matches!(
+            language,
+            SupportedLanguage::Ruby | SupportedLanguage::Python
+        );
+        if !is_supported {
             return Ok(FileProcessingResult {
                 file_path: self.path.clone(),
                 language,
-                definitions: Vec::new(),
+                definitions: None,
                 stats: ProcessingStats {
                     total_time: start_time.elapsed(),
                     parse_time: Duration::from_millis(0),
@@ -120,21 +125,49 @@ impl<'a> FileProcessor<'a> {
         let matches = run_rules(&parse_result.ast, Some(&self.path), &rule_manager);
         let rules_time = rules_start.elapsed();
 
-        // 4. Use Ruby analyzer to extract definitions
+        // 4. Use language-specific analyzer to extract definitions
         let analysis_start = Instant::now();
-        let analyzer = RubyAnalyzer::new();
-        let analysis_result = analyzer
-            .analyze(&matches, &parse_result)
-            .map_err(|e| anyhow::anyhow!("Failed to analyze Ruby file '{}': {}", self.path, e))?;
+        let definitions = match language {
+            SupportedLanguage::Ruby => {
+                let analyzer = RubyAnalyzer::new();
+                let analysis_result = analyzer.analyze(&matches, &parse_result).map_err(|e| {
+                    anyhow::anyhow!("Failed to analyze Ruby file '{}': {}", self.path, e)
+                })?;
+                Definitions::Ruby(analysis_result.definitions)
+            }
+            SupportedLanguage::Python => {
+                let analyzer = PythonAnalyzer::new();
+                let analysis_result = analyzer.analyze(&matches, &parse_result).map_err(|e| {
+                    anyhow::anyhow!("Failed to analyze Python file '{}': {}", self.path, e)
+                })?;
+                Definitions::Python(analysis_result.definitions)
+            }
+            _ => {
+                // This should not happen due to the is_supported check above
+                return Ok(FileProcessingResult {
+                    file_path: self.path.clone(),
+                    language,
+                    definitions: None,
+                    stats: ProcessingStats {
+                        total_time: start_time.elapsed(),
+                        parse_time,
+                        rules_time,
+                        analysis_time: Duration::from_millis(0),
+                        rule_matches: matches.len(),
+                        definitions_count: 0,
+                    },
+                    is_supported: false,
+                });
+            }
+        };
         let analysis_time = analysis_start.elapsed();
-
         let total_time = start_time.elapsed();
-        let definitions_count = analysis_result.definitions.len();
+        let definitions_count = definitions.count();
 
         Ok(FileProcessingResult {
             file_path: self.path.clone(),
             language,
-            definitions: analysis_result.definitions,
+            definitions: Some(definitions),
             stats: ProcessingStats {
                 total_time,
                 parse_time,
@@ -148,6 +181,42 @@ impl<'a> FileProcessor<'a> {
     }
 }
 
+/// Enum to hold definitions based on language
+#[derive(Clone, Debug)]
+pub enum Definitions {
+    Ruby(Vec<RubyDefinitionInfo>),
+    Python(Vec<PythonDefinitionInfo>),
+}
+
+impl Definitions {
+    /// Get the count of definitions regardless of type
+    pub fn count(&self) -> usize {
+        match self {
+            Definitions::Ruby(defs) => defs.len(),
+            Definitions::Python(defs) => defs.len(),
+        }
+    }
+
+    /// Check if there are any definitions
+    pub fn is_empty(&self) -> bool {
+        self.count() == 0
+    }
+
+    pub fn iter_python(&self) -> Option<impl Iterator<Item = &PythonDefinitionInfo>> {
+        match self {
+            Definitions::Python(defs) => Some(defs.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_ruby(&self) -> Option<impl Iterator<Item = &RubyDefinitionInfo>> {
+        match self {
+            Definitions::Ruby(defs) => Some(defs.iter()),
+            _ => None,
+        }
+    }
+}
+
 /// Result of processing a single file using Ruby analyzer
 #[derive(Clone)]
 pub struct FileProcessingResult {
@@ -156,7 +225,7 @@ pub struct FileProcessingResult {
     /// Detected language
     pub language: SupportedLanguage,
     /// Extracted definitions from Ruby analyzer
-    pub definitions: Vec<RubyDefinitionInfo>,
+    pub definitions: Option<Definitions>,
     /// Processing statistics
     pub stats: ProcessingStats,
     /// Whether this language is supported for analysis

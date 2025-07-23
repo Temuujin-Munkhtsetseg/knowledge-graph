@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use database::graph::RelationshipTypeMapping;
 
-use crate::analysis::GraphData;
+use crate::analysis::types::GraphData;
 
 /// Consolidated relationship data for efficient storage
 #[derive(Debug, Clone, Default, Copy)]
