@@ -22,12 +22,12 @@ curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install
 
 **Install specific version:**
 ```shell
-curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/.gitlab-ci.yml | bash -s -- --version v0.6.0
+curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.sh | bash -s -- --version v0.6.0
 ```
 
 **Force reinstall:**
 ```shell
-curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/.gitlab-ci.yml | bash -s -- --force
+curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.sh | bash -s -- --force
 ```
 
 </details>
