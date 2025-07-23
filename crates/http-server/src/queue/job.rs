@@ -37,6 +37,7 @@ pub enum Job {
     },
 
     ReindexProjectFolderWithWatchedFiles {
+        workspace_folder_path: String,
         project_folder_path: String,
         project_changes: Vec<PathBuf>,
         priority: JobPriority,
@@ -74,9 +75,9 @@ impl Job {
                 ..
             } => workspace_folder_path,
             Job::ReindexProjectFolderWithWatchedFiles {
-                project_folder_path,
+                workspace_folder_path,
                 ..
-            } => project_folder_path,
+            } => workspace_folder_path,
         }
     }
 

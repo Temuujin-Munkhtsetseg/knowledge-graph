@@ -178,15 +178,17 @@ impl WorkspaceWorker {
                     .await
             }
             Job::ReindexProjectFolderWithWatchedFiles {
+                workspace_folder_path,
                 project_folder_path,
                 project_changes,
                 ..
             } => {
-                todo!(
-                    "ReindexProjectFolderWithWatchedFiles: {:?}, {:?}",
+                self.process_reindex_project_job(
+                    workspace_folder_path,
                     project_folder_path,
-                    project_changes
+                    project_changes.clone(),
                 )
+                .await
             }
         }
     }
@@ -287,6 +289,59 @@ impl WorkspaceWorker {
                 error!(
                     "Re-indexing task panicked for workspace '{}': {}",
                     workspace_folder_path, e
+                );
+                Err(anyhow::anyhow!("Re-indexing task panicked: {}", e))
+            }
+        }
+    }
+
+    async fn process_reindex_project_job(
+        &self,
+        workspace_folder_path: &str,
+        project_folder_path: &str,
+        project_changes: Vec<PathBuf>,
+    ) -> Result<()> {
+        let workspace_path_copy = workspace_folder_path.to_string();
+        let project_path_copy = project_folder_path.to_string();
+        let threads = 1; // Note: Not doing multi-threaded re-indexing yet (will cause perf issues likely)
+        let config = IndexingConfigBuilder::build(threads);
+        let mut executor = IndexingExecutor::new(
+            Arc::clone(&self.database),
+            Arc::clone(&self.workspace_manager),
+            Arc::clone(&self.event_bus),
+            config,
+        );
+
+        let cancellation_token = CancellationToken::new();
+        let result = tokio::task::spawn_blocking(move || {
+            executor.execute_project_reindexing(
+                &workspace_path_copy,
+                &project_path_copy,
+                project_changes,
+                Some(cancellation_token),
+            )
+        })
+        .await;
+
+        match result {
+            Ok(Ok(())) => {
+                info!(
+                    "Re-indexing completed successfully for project '{}' in workspace '{}'",
+                    project_folder_path, workspace_folder_path
+                );
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                error!(
+                    "Re-indexing failed for project '{}' in workspace '{}': {}",
+                    project_folder_path, workspace_folder_path, e
+                );
+                Err(e)
+            }
+            Err(e) => {
+                error!(
+                    "Re-indexing task panicked for project '{}' in workspace '{}': {}",
+                    project_folder_path, workspace_folder_path, e
                 );
                 Err(anyhow::anyhow!("Re-indexing task panicked: {}", e))
             }
