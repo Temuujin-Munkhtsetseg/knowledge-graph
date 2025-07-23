@@ -3,6 +3,7 @@ use crate::analysis::types::{
     FileDefinitionRelationship, FqnType,
 };
 use crate::parsing::processor::FileProcessingResult;
+use database::graph::RelationshipType;
 use parser_core::python::{
     fqn::python_fqn_to_string,
     types::{PythonDefinitionInfo, PythonDefinitionType, PythonFqn},
@@ -52,7 +53,7 @@ impl PythonAnalyzer {
                         file_definition_relationships.push(FileDefinitionRelationship {
                             file_path: relative_file_path.to_string(),
                             definition_fqn: fqn_string,
-                            relationship_type: "FILE_DEFINES".to_string(),
+                            relationship_type: RelationshipType::FileDefines,
                         });
                     }
                 }
@@ -165,7 +166,7 @@ impl PythonAnalyzer {
         &self,
         parent_type: &DefinitionType,
         child_type: &DefinitionType,
-    ) -> Option<String> {
+    ) -> Option<RelationshipType> {
         use PythonDefinitionType::*;
 
         let parent_type = self.simplify_definition_type(parent_type)?;
@@ -173,40 +174,40 @@ impl PythonAnalyzer {
 
         match (parent_type, child_type) {
             (DefinitionType::Python(Class), DefinitionType::Python(Class)) => {
-                Some("CLASS_TO_CLASS".to_string())
+                Some(RelationshipType::ClassToClass)
             }
             (DefinitionType::Python(Class), DefinitionType::Python(Method)) => {
-                Some("CLASS_TO_METHOD".to_string())
+                Some(RelationshipType::ClassToMethod)
             }
             (DefinitionType::Python(Class), DefinitionType::Python(Lambda)) => {
-                Some("CLASS_TO_LAMBDA".to_string())
+                Some(RelationshipType::ClassToLambda)
             }
             (DefinitionType::Python(Method), DefinitionType::Python(Class)) => {
-                Some("METHOD_TO_CLASS".to_string())
+                Some(RelationshipType::MethodToClass)
             }
             (DefinitionType::Python(Method), DefinitionType::Python(Function)) => {
-                Some("METHOD_TO_FUNCTION".to_string())
+                Some(RelationshipType::MethodToFunction)
             }
             (DefinitionType::Python(Method), DefinitionType::Python(Lambda)) => {
-                Some("METHOD_TO_LAMBDA".to_string())
+                Some(RelationshipType::MethodToLambda)
             }
             (DefinitionType::Python(Function), DefinitionType::Python(Function)) => {
-                Some("FUNCTION_TO_FUNCTION".to_string())
+                Some(RelationshipType::FunctionToFunction)
             }
             (DefinitionType::Python(Function), DefinitionType::Python(Class)) => {
-                Some("FUNCTION_TO_CLASS".to_string())
+                Some(RelationshipType::FunctionToClass)
             }
             (DefinitionType::Python(Function), DefinitionType::Python(Lambda)) => {
-                Some("FUNCTION_TO_LAMBDA".to_string())
+                Some(RelationshipType::FunctionToLambda)
             }
             (DefinitionType::Python(Lambda), DefinitionType::Python(Lambda)) => {
-                Some("LAMBDA_TO_LAMBDA".to_string())
+                Some(RelationshipType::LambdaToLambda)
             }
             (DefinitionType::Python(Lambda), DefinitionType::Python(Class)) => {
-                Some("LAMBDA_TO_CLASS".to_string())
+                Some(RelationshipType::LambdaToClass)
             }
             (DefinitionType::Python(Lambda), DefinitionType::Python(Function)) => {
-                Some("LAMBDA_TO_FUNCTION".to_string())
+                Some(RelationshipType::LambdaToFunction)
             }
             _ => None, // Unknown or unsupported relationship
         }

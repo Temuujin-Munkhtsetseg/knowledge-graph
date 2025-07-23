@@ -1,3 +1,4 @@
+use database::graph::RelationshipType;
 use parser_core::{
     definitions::DefinitionTypeInfo,
     python::types::{PythonDefinitionType, PythonFqn},
@@ -128,7 +129,7 @@ pub struct DirectoryRelationship {
     /// Target path (directory or file path)
     pub to_path: String,
     /// Type of relationship ("DIR_CONTAINS_DIR" or "DIR_CONTAINS_FILE")
-    pub relationship_type: String,
+    pub relationship_type: RelationshipType,
 }
 
 /// Represents a relationship between a file and a definition
@@ -139,7 +140,7 @@ pub struct FileDefinitionRelationship {
     /// Definition FQN (foreign key to DefinitionNode.fqn)
     pub definition_fqn: String,
     /// Type of relationship (always "DEFINES" for now)
-    pub relationship_type: String,
+    pub relationship_type: RelationshipType,
 }
 
 /// Represents a hierarchical relationship between definitions
@@ -154,5 +155,5 @@ pub struct DefinitionRelationship {
     /// Child definition FQN (foreign key to DefinitionNode.fqn)
     pub to_definition_fqn: String,
     /// Type of relationship (e.g., "MODULE_TO_CLASS", "CLASS_TO_METHOD", etc.)
-    pub relationship_type: String,
+    pub relationship_type: RelationshipType,
 }

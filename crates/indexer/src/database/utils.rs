@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use database::graph::RelationshipTypeMapping;
-
 use crate::analysis::types::GraphData;
+use database::graph::RelationshipType;
+use database::graph::RelationshipTypeMapping;
 
 /// Consolidated relationship data for efficient storage
 #[derive(Debug, Clone, Default, Copy)]
@@ -189,9 +189,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.register_type(&dir_rel.relationship_type);
+            let relationship_type = relationship_mapping.get_type_id(dir_rel.relationship_type);
 
-            if dir_rel.relationship_type == "DIR_CONTAINS_DIR" {
+            if dir_rel.relationship_type == RelationshipType::DirContainsDir {
                 let Some(target_id) = id_generator.get_directory_id(&dir_rel.to_path) else {
                     dir_not_found += 1;
                     tracing::warn!(
@@ -208,7 +208,7 @@ impl<'a> GraphMapper<'a> {
                         target_id: Some(target_id),
                         relationship_type,
                     });
-            } else if dir_rel.relationship_type == "DIR_CONTAINS_FILE" {
+            } else if dir_rel.relationship_type == RelationshipType::DirContainsFile {
                 let Some(target_id) = id_generator.get_file_id(&dir_rel.to_path) else {
                     file_not_found += 1;
                     tracing::warn!(
@@ -251,7 +251,7 @@ impl<'a> GraphMapper<'a> {
                 );
                 continue;
             };
-            let relationship_type = relationship_mapping.register_type(&file_rel.relationship_type);
+            let relationship_type = relationship_mapping.get_type_id(file_rel.relationship_type);
 
             relationships
                 .file_to_definition
@@ -288,7 +288,7 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.register_type(&def_rel.relationship_type);
+            let relationship_type = relationship_mapping.get_type_id(def_rel.relationship_type);
 
             relationships
                 .definition_to_definition

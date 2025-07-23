@@ -980,7 +980,7 @@ fn test_inheritance_relationships() {
     let class_method_rels: Vec<_> = graph_data
         .definition_relationships
         .iter()
-        .filter(|rel| rel.relationship_type == "CLASS_TO_METHOD")
+        .filter(|rel| rel.relationship_type == RelationshipType::ClassToMethod)
         .collect();
 
     assert!(
@@ -993,7 +993,8 @@ fn test_inheritance_relationships() {
         .definition_relationships
         .iter()
         .filter(|rel| {
-            rel.from_definition_fqn == "BaseModel" && rel.relationship_type == "CLASS_TO_METHOD"
+            rel.from_definition_fqn == "BaseModel"
+                && rel.relationship_type == RelationshipType::ClassToMethod
         })
         .collect();
 
@@ -1291,7 +1292,7 @@ fn test_detailed_data_inspection() {
             .iter()
             .filter(|rel| {
                 rel.from_definition_fqn == class_def.fqn
-                    && rel.relationship_type == "CLASS_TO_METHOD"
+                    && rel.relationship_type == RelationshipType::ClassToMethod
             })
             .collect();
 
@@ -1316,7 +1317,8 @@ fn test_detailed_data_inspection() {
         .definition_relationships
         .iter()
         .fold(std::collections::HashMap::new(), |mut acc, rel| {
-            *acc.entry(rel.relationship_type.clone()).or_insert(0) += 1;
+            *acc.entry(rel.relationship_type.as_str().to_string())
+                .or_insert(0) += 1;
             acc
         });
 

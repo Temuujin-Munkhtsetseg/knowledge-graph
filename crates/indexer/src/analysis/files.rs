@@ -1,5 +1,6 @@
 use super::{DirectoryNode, DirectoryRelationship, FileNode};
 use crate::parsing::processor::FileProcessingResult;
+use database::graph::RelationshipType;
 use std::{collections::HashSet, path::Path};
 
 /// Handles filesystem-related analysis operations
@@ -77,7 +78,7 @@ impl FileSystemAnalyzer {
                         directory_relationships.push(DirectoryRelationship {
                             from_path: parent.clone(),
                             to_path: current_path.clone(),
-                            relationship_type: "DIR_CONTAINS_DIR".to_string(),
+                            relationship_type: RelationshipType::DirContainsDir,
                         });
                         created_relationships.insert(rel_tuple);
                     }

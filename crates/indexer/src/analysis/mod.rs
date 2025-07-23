@@ -7,6 +7,7 @@ use crate::analysis::types::{
     FileDefinitionRelationship, FileNode, FqnType, GraphData,
 };
 use crate::parsing::processor::FileProcessingResult;
+use database::graph::RelationshipType;
 use parser_core::parser::SupportedLanguage;
 use std::{
     collections::{HashMap, HashSet},
@@ -165,7 +166,7 @@ impl AnalysisService {
             directory_relationships.push(DirectoryRelationship {
                 from_path: parent_dir,
                 to_path: relative_file_path.clone(),
-                relationship_type: "DIR_CONTAINS_FILE".to_string(),
+                relationship_type: RelationshipType::DirContainsFile,
             });
         }
         file_nodes.push(file_node);
@@ -245,7 +246,7 @@ pub struct AnalysisStats {
     pub analysis_duration: Duration,
     pub files_by_language: HashMap<String, usize>,
     pub definitions_by_type: HashMap<String, usize>,
-    pub relationships_by_type: HashMap<String, usize>,
+    pub relationships_by_type: HashMap<RelationshipType, usize>,
 }
 
 impl AnalysisStats {
@@ -272,17 +273,17 @@ impl AnalysisStats {
         // Count relationships by type
         for rel in &graph_data.directory_relationships {
             *relationships_by_type
-                .entry(rel.relationship_type.clone())
+                .entry(rel.relationship_type)
                 .or_insert(0) += 1;
         }
         for rel in &graph_data.file_definition_relationships {
             *relationships_by_type
-                .entry(rel.relationship_type.clone())
+                .entry(rel.relationship_type)
                 .or_insert(0) += 1;
         }
         for rel in &graph_data.definition_relationships {
             *relationships_by_type
-                .entry(rel.relationship_type.clone())
+                .entry(rel.relationship_type)
                 .or_insert(0) += 1;
         }
 
@@ -349,7 +350,8 @@ impl AnalysisStats {
         if !self.relationships_by_type.is_empty() {
             result.push_str("  • Relationships by type:\n");
             for (rel_type, count) in &self.relationships_by_type {
-                result.push_str(&format!("    - {rel_type}: {count}\n"));
+                let rel_type_str = rel_type.as_str();
+                result.push_str(&format!("    - {rel_type_str}: {count}\n"));
             }
         }
 
