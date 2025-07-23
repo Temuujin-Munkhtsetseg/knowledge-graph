@@ -1172,7 +1172,9 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "kuzu",
+ "serde",
  "serde_json",
+ "strum",
  "tempfile",
  "thiserror 2.0.12",
  "tracing",
@@ -1551,7 +1553,6 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.4.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.4.0#9032065dfadced1590c96290e7f2fcbfe2e05331"
 dependencies = [
  "ignore",
  "serde",
@@ -3105,7 +3106,6 @@ dependencies = [
 [[package]]
 name = "parser-core"
 version = "0.7.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.7.0#0f6654ee56b8828ce09d69774ba8f31b35372dbd"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
@@ -3982,6 +3982,27 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "subtle"

@@ -3,6 +3,7 @@ use crate::analysis::types::{
     FileDefinitionRelationship, FqnType,
 };
 use crate::parsing::processor::FileProcessingResult;
+use database::graph::RelationshipType;
 use parser_core::ruby::{
     definitions::RubyDefinitionInfo,
     fqn::{RubyFqn, ruby_fqn_to_string},
@@ -63,7 +64,7 @@ impl RubyAnalyzer {
                         file_definition_relationships.push(FileDefinitionRelationship {
                             file_path: relative_file_path.to_string(),
                             definition_fqn: fqn_string,
-                            relationship_type: "FILE_DEFINES".to_string(),
+                            relationship_type: RelationshipType::FileDefines,
                         });
                     }
                 }
@@ -162,24 +163,24 @@ impl RubyAnalyzer {
         &self,
         parent_type: &DefinitionType,
         child_type: &DefinitionType,
-    ) -> Option<String> {
+    ) -> Option<RelationshipType> {
         use RubyDefinitionType::*;
 
         match (parent_type, child_type) {
             (DefinitionType::Ruby(Class), DefinitionType::Ruby(Method)) => {
-                Some("CLASS_TO_METHOD".to_string())
+                Some(RelationshipType::ClassToMethod)
             }
             (DefinitionType::Ruby(Class), DefinitionType::Ruby(SingletonMethod)) => {
-                Some("CLASS_TO_SINGLETON_METHOD".to_string())
+                Some(RelationshipType::ClassToSingletonMethod)
             }
             (DefinitionType::Ruby(Class), DefinitionType::Ruby(Class)) => {
-                Some("CLASS_TO_CLASS".to_string())
+                Some(RelationshipType::ClassToClass)
             }
             (DefinitionType::Ruby(Class), DefinitionType::Ruby(Lambda)) => {
-                Some("CLASS_TO_LAMBDA".to_string())
+                Some(RelationshipType::ClassToLambda)
             }
             (DefinitionType::Ruby(Class), DefinitionType::Ruby(Proc)) => {
-                Some("CLASS_TO_PROC".to_string())
+                Some(RelationshipType::ClassToProc)
             }
             _ => None, // Unknown or unsupported relationship
         }
