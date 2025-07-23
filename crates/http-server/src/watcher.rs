@@ -27,15 +27,31 @@ const MAX_EVENTS_PER_DEBOUNCE_WINDOW: usize = 8192;
 const EXCLUDED_SUBDIRECTORIES: &[&str] = &[".git", ".idea", ".vscode", ".cache"];
 const PERIODIC_REINDEX_INTERVAL: Duration = Duration::from_secs(600); // 10 minutes
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct WatcherConfig {
     periodic_force_index: bool,
+    single_watcher: bool,
 }
 
 impl WatcherConfig {
     pub fn new() -> Self {
         Self {
             periodic_force_index: false,
+            single_watcher: false,
+        }
+    }
+
+    pub fn periodic_force_index(&self, yes: bool) -> Self {
+        Self {
+            periodic_force_index: yes,
+            ..*self
+        }
+    }
+
+    pub fn single_watcher(&self, yes: bool) -> Self {
+        Self {
+            single_watcher: yes,
+            ..*self
         }
     }
 }
@@ -86,7 +102,7 @@ impl Watcher {
         };
 
         watcher.runtime.spawn(async move {
-            Self::process_events(rx, job_dispatcher_clone).await;
+            Self::process_events(rx, job_dispatcher_clone, watcher.watcher_config).await;
         });
 
         watcher
@@ -95,6 +111,7 @@ impl Watcher {
     async fn process_events(
         mut rx: mpsc::Receiver<(PathBuf, PathBuf, Vec<PathBuf>)>,
         job_dispatcher: Arc<JobDispatcher>,
+        watcher_config: WatcherConfig,
     ) {
         while let Some((workspace_path, project_path, changed_paths)) = rx.recv().await {
             if changed_paths.is_empty() {
@@ -106,17 +123,52 @@ impl Watcher {
             info!("changed paths in group: {}", changed_paths.len());
             info!("Changed paths: {changed_paths:?}");
 
-            // TODO: change this to ReindexProjectFolderWithWatchedFiles
-            // TODO: Also allow ReindexWorkspaceFolderWithWatchedFiles with a flag in WatcherConfig
-            let job = Job::ReindexWorkspaceFolderWithWatchedFiles {
-                workspace_folder_path: workspace_path.to_string_lossy().into_owned(),
-                workspace_changes: changed_paths.into_iter().collect(),
-                priority: JobPriority::Normal,
+            let job = if watcher_config.single_watcher {
+                info!(
+                    "Single watcher mode, dispatching re-indexing job for workspace: {:?}",
+                    workspace_path
+                );
+                Job::ReindexWorkspaceFolderWithWatchedFiles {
+                    workspace_folder_path: workspace_path.to_string_lossy().into_owned(),
+                    workspace_changes: changed_paths.into_iter().collect(),
+                    priority: JobPriority::Normal,
+                }
+            } else {
+                info!(
+                    "Multiple watcher mode, dispatching re-indexing job for project: {:?} in workspace: {:?}",
+                    project_path, workspace_path
+                );
+                Job::ReindexProjectFolderWithWatchedFiles {
+                    workspace_folder_path: workspace_path.to_string_lossy().into_owned(),
+                    project_folder_path: project_path.to_string_lossy().into_owned(),
+                    project_changes: changed_paths.into_iter().collect(),
+                    priority: JobPriority::Normal,
+                }
             };
 
-            info!("Watcher dispatching re-indexing job: {:?}", job);
+            info!("Dispatching re-indexing job: {:?}", job);
             let job_id = job_dispatcher.dispatch(job).await.unwrap();
-            info!("Watcher dispatched re-indexing job with id: {:?}", job_id);
+            info!("Dispatched re-indexing job with id: {:?}", job_id);
+        }
+    }
+
+    pub async fn start(self: Arc<Self>) {
+        info!(
+            "Watcher is excluding the following (sub)directories: {:?}",
+            EXCLUDED_SUBDIRECTORIES
+        );
+
+        let watcher_clone = Arc::clone(&self);
+        self.runtime.spawn(async move {
+            Self::monitor_workspace_folders(watcher_clone).await;
+        });
+
+        // Start periodic reindexing thread
+        if self.watcher_config.periodic_force_index {
+            let watcher_clone = Arc::clone(&self);
+            self.runtime.spawn(async move {
+                Self::periodic_force_index(watcher_clone).await;
+            });
         }
     }
 
@@ -148,15 +200,22 @@ impl Watcher {
         }
     }
 
-    async fn monitor_workspace_folders(watcher: Arc<Watcher>) {
-        loop {
-            if watcher.cancellation_token.is_cancelled() {
-                info!("Workspace folder monitoring shutting down");
-                break;
-            }
-
-            // Only proceed with launching watchers if the underlying projects are indexed or being reindexed
-            let active_project_paths: Vec<(PathBuf, PathBuf)> = watcher
+    async fn get_active_paths(watcher: Arc<Watcher>) -> Vec<(PathBuf, PathBuf)> {
+        if watcher.watcher_config.single_watcher {
+            watcher
+                .workspace_manager
+                .list_workspace_folders()
+                .iter()
+                .filter(|w| w.status == Status::Indexed || w.status == Status::Reindexing)
+                .map(|w| {
+                    (
+                        PathBuf::from(&w.workspace_folder_path),
+                        PathBuf::from(&w.workspace_folder_path),
+                    )
+                })
+                .collect::<Vec<_>>()
+        } else {
+            watcher
                 .workspace_manager
                 .list_all_projects()
                 .iter()
@@ -167,7 +226,19 @@ impl Watcher {
                         PathBuf::from(&p.project_path),
                     )
                 })
-                .collect::<Vec<_>>();
+                .collect::<Vec<_>>()
+        }
+    }
+
+    async fn monitor_workspace_folders(watcher: Arc<Watcher>) {
+        loop {
+            if watcher.cancellation_token.is_cancelled() {
+                info!("Workspace folder monitoring shutting down");
+                break;
+            }
+
+            // Only proceed with launching watchers if the underlying projects are indexed or being reindexed
+            let active_project_paths = Self::get_active_paths(watcher.clone()).await;
 
             watcher
                 .stop_abandoned_project_watchers(
@@ -213,26 +284,6 @@ impl Watcher {
                     break;
                 }
             }
-        }
-    }
-
-    pub async fn start(self: Arc<Self>) {
-        info!(
-            "Watcher is excluding the following (sub)directories: {:?}",
-            EXCLUDED_SUBDIRECTORIES
-        );
-
-        let watcher_clone = Arc::clone(&self);
-        self.runtime.spawn(async move {
-            Self::monitor_workspace_folders(watcher_clone).await;
-        });
-
-        // Start periodic reindexing thread
-        if self.watcher_config.periodic_force_index {
-            let watcher_clone = Arc::clone(&self);
-            self.runtime.spawn(async move {
-                Self::periodic_force_index(watcher_clone).await;
-            });
         }
     }
 
@@ -310,10 +361,11 @@ impl Watcher {
 
     fn compute_project_watcher_pathset(
         workspace_manager: &WorkspaceManager,
+        watcher_config: WatcherConfig,
         workspace_path: &Path,
         project_path: &Path,
     ) -> Vec<WatchedPath> {
-        if project_path != workspace_path {
+        if project_path != workspace_path || watcher_config.single_watcher {
             return vec![WatchedPath::recursive(project_path.to_path_buf())];
         }
 
@@ -396,12 +448,18 @@ impl Watcher {
 
             let pathset = Self::compute_project_watcher_pathset(
                 &self.workspace_manager,
+                self.watcher_config,
                 workspace_path,
                 project_path,
             );
+
             debug!(
                 "computed pathset for project: {:?} in workspace: {:?} ->  {:?}",
                 project_path, workspace_path, pathset
+            );
+            debug!(
+                "Launching watcher for project: {:?} in workspace: {:?}",
+                project_path, workspace_path
             );
 
             match Watchexec::new(move |action| {
@@ -539,5 +597,80 @@ impl Drop for Watcher {
         }
 
         info!("Watcher cleanup complete");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use database::kuzu::database::KuzuDatabase;
+    use event_bus::EventBus;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_watcher_config_creation() {
+        let config = WatcherConfig::new();
+        assert!(!config.periodic_force_index);
+        assert!(!config.single_watcher);
+    }
+
+    #[test]
+    fn test_watcher_config_builder_pattern() {
+        let config = WatcherConfig::new()
+            .periodic_force_index(true)
+            .single_watcher(true);
+        assert!(config.periodic_force_index);
+        assert!(config.single_watcher);
+    }
+
+    #[test]
+    fn test_watcher_config_partial_updates() {
+        let config1 = WatcherConfig::new().periodic_force_index(true);
+        assert!(config1.periodic_force_index);
+        assert!(!config1.single_watcher);
+
+        let config2 = WatcherConfig::new().single_watcher(true);
+        assert!(!config2.periodic_force_index);
+        assert!(config2.single_watcher);
+    }
+
+    fn create_test_setup() -> (Arc<WorkspaceManager>, Arc<JobDispatcher>, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_manager =
+            Arc::new(WorkspaceManager::new_with_directory(temp_dir.path().to_path_buf()).unwrap());
+        let event_bus = Arc::new(EventBus::new());
+        let database = Arc::new(KuzuDatabase::new());
+        let job_dispatcher = Arc::new(JobDispatcher::new(
+            workspace_manager.clone(),
+            event_bus,
+            database,
+        ));
+        (workspace_manager, job_dispatcher, temp_dir)
+    }
+
+    #[tokio::test]
+    async fn test_watcher_creation() {
+        let (workspace_manager, job_dispatcher, _temp_dir) = create_test_setup();
+        let watcher = Watcher::new(workspace_manager, job_dispatcher, None);
+
+        assert!(watcher.watched_project_folders.lock().unwrap().is_empty());
+        assert!(watcher.project_events.lock().unwrap().is_empty());
+        assert!(watcher.debounce_windows.lock().unwrap().is_empty());
+        assert!(watcher.watcher_handles.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_watcher_with_custom_config() {
+        let (workspace_manager, job_dispatcher, _temp_dir) = create_test_setup();
+        let config = Some(
+            WatcherConfig::new()
+                .periodic_force_index(true)
+                .single_watcher(true),
+        );
+        let watcher = Watcher::new(workspace_manager, job_dispatcher, config);
+
+        assert!(watcher.watcher_config.periodic_force_index);
+        assert!(watcher.watcher_config.single_watcher);
     }
 }
