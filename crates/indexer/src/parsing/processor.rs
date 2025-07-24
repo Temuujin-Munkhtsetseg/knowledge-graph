@@ -1,6 +1,7 @@
 use crate::project::file_info::FileInfo;
 use anyhow::Result;
 use parser_core::{
+    kotlin::{analyzer::KotlinAnalyzer, types::KotlinDefinitionInfo},
     parser::{GenericParser, LanguageParser, SupportedLanguage, detect_language_from_extension},
     python::{analyzer::PythonAnalyzer, types::PythonDefinitionInfo},
     ruby::{analyzer::RubyAnalyzer, definitions::RubyDefinitionInfo},
@@ -92,7 +93,7 @@ impl<'a> FileProcessor<'a> {
         // Check if language is supported
         let is_supported = matches!(
             language,
-            SupportedLanguage::Ruby | SupportedLanguage::Python
+            SupportedLanguage::Ruby | SupportedLanguage::Python | SupportedLanguage::Kotlin
         );
         if !is_supported {
             return Ok(FileProcessingResult {
@@ -142,6 +143,13 @@ impl<'a> FileProcessor<'a> {
                 })?;
                 Definitions::Python(analysis_result.definitions)
             }
+            SupportedLanguage::Kotlin => {
+                let analyzer = KotlinAnalyzer::new();
+                let analysis_result = analyzer.analyze(&matches, &parse_result).map_err(|e| {
+                    anyhow::anyhow!("Failed to analyze Kotlin file '{}': {}", self.path, e)
+                })?;
+                Definitions::Kotlin(analysis_result.definitions)
+            }
             _ => {
                 // This should not happen due to the is_supported check above
                 return Ok(FileProcessingResult {
@@ -186,6 +194,7 @@ impl<'a> FileProcessor<'a> {
 pub enum Definitions {
     Ruby(Vec<RubyDefinitionInfo>),
     Python(Vec<PythonDefinitionInfo>),
+    Kotlin(Vec<KotlinDefinitionInfo>),
 }
 
 impl Definitions {
@@ -194,6 +203,7 @@ impl Definitions {
         match self {
             Definitions::Ruby(defs) => defs.len(),
             Definitions::Python(defs) => defs.len(),
+            Definitions::Kotlin(defs) => defs.len(),
         }
     }
 
@@ -212,6 +222,13 @@ impl Definitions {
     pub fn iter_ruby(&self) -> Option<impl Iterator<Item = &RubyDefinitionInfo>> {
         match self {
             Definitions::Ruby(defs) => Some(defs.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_kotlin(&self) -> Option<impl Iterator<Item = &KotlinDefinitionInfo>> {
+        match self {
+            Definitions::Kotlin(defs) => Some(defs.iter()),
             _ => None,
         }
     }

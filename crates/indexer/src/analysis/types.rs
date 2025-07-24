@@ -1,6 +1,7 @@
 use database::graph::RelationshipType;
 use parser_core::{
     definitions::DefinitionTypeInfo,
+    kotlin::types::{KotlinDefinitionType, KotlinFqn},
     python::types::{PythonDefinitionType, PythonFqn},
     ruby::{fqn::RubyFqn, types::RubyDefinitionType},
 };
@@ -71,6 +72,7 @@ pub struct DefinitionLocation {
 pub enum DefinitionType {
     Ruby(RubyDefinitionType),
     Python(PythonDefinitionType),
+    Kotlin(KotlinDefinitionType),
     Unsupported(),
 }
 
@@ -79,6 +81,7 @@ impl DefinitionType {
         match self {
             DefinitionType::Ruby(ruby_type) => ruby_type.as_str(),
             DefinitionType::Python(python_type) => python_type.as_str(),
+            DefinitionType::Kotlin(kotlin_type) => kotlin_type.as_str(),
             DefinitionType::Unsupported() => "unsupported",
         }
     }
@@ -89,6 +92,7 @@ impl DefinitionType {
 pub enum FqnType {
     Ruby(RubyFqn),
     Python(PythonFqn),
+    Kotlin(KotlinFqn),
 }
 
 /// Represents a definition node in the graph (can span multiple files for Ruby modules/classes)

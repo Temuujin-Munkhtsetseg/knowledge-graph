@@ -37,6 +37,14 @@ pub enum RelationshipType {
     ClassToLambda,
     #[strum(serialize = "CLASS_TO_PROC")]
     ClassToProc,
+    #[strum(serialize = "CLASS_TO_INTERFACE")]
+    ClassToInterface,
+    #[strum(serialize = "CLASS_TO_PROPERTY")]
+    ClassToProperty,
+    #[strum(serialize = "CLASS_TO_CONSTRUCTOR")]
+    ClassToConstructor,
+    #[strum(serialize = "CLASS_TO_ENUM_ENTRY")]
+    ClassToEnumEntry,
     // Definition relationships - Function
     #[strum(serialize = "FUNCTION_TO_FUNCTION")]
     FunctionToFunction,
@@ -55,6 +63,10 @@ pub enum RelationshipType {
     LambdaToFunction,
     #[strum(serialize = "LAMBDA_TO_PROC")]
     LambdaToProc,
+    #[strum(serialize = "LAMBDA_TO_METHOD")]
+    LambdaToMethod,
+    #[strum(serialize = "LAMBDA_TO_PROPERTY")]
+    LambdaToProperty,
     // Definition relationships - Method
     #[strum(serialize = "METHOD_TO_METHOD")]
     MethodToMethod,
@@ -66,6 +78,19 @@ pub enum RelationshipType {
     MethodToLambda,
     #[strum(serialize = "METHOD_TO_PROC")]
     MethodToProc,
+    #[strum(serialize = "METHOD_TO_PROPERTY")]
+    MethodToProperty,
+    // Interface relationships
+    #[strum(serialize = "INTERFACE_TO_INTERFACE")]
+    InterfaceToInterface,
+    #[strum(serialize = "INTERFACE_TO_CLASS")]
+    InterfaceToClass,
+    #[strum(serialize = "INTERFACE_TO_METHOD")]
+    InterfaceToMethod,
+    #[strum(serialize = "INTERFACE_TO_PROPERTY")]
+    InterfaceToProperty,
+    #[strum(serialize = "INTERFACE_TO_LAMBDA")]
+    InterfaceToLambda,
 }
 
 impl RelationshipType {
