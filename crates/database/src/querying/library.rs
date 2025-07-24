@@ -515,8 +515,6 @@ impl QueryLibrary {
 
         let query = format!("{query} LIMIT $limit");
 
-        tracing::info!("Query: {}", query);
-
         Some(Query {
             name: "get_node_neighbors",
             description: "Get all neighbors for a given node ID and their relationships.",

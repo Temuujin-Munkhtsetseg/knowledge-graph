@@ -67,6 +67,8 @@ pub enum RelationshipType {
     LambdaToMethod,
     #[strum(serialize = "LAMBDA_TO_PROPERTY")]
     LambdaToProperty,
+    #[strum(serialize = "LAMBDA_TO_INTERFACE")]
+    LambdaToInterface,
     // Definition relationships - Method
     #[strum(serialize = "METHOD_TO_METHOD")]
     MethodToMethod,
@@ -80,6 +82,8 @@ pub enum RelationshipType {
     MethodToProc,
     #[strum(serialize = "METHOD_TO_PROPERTY")]
     MethodToProperty,
+    #[strum(serialize = "METHOD_TO_INTERFACE")]
+    MethodToInterface,
     // Interface relationships
     #[strum(serialize = "INTERFACE_TO_INTERFACE")]
     InterfaceToInterface,
