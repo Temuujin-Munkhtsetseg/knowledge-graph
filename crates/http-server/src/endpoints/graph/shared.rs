@@ -40,16 +40,19 @@ pub struct DefinitionNodeProperties {
 pub enum TypedGraphNode {
     DirectoryNode {
         id: String,
+        node_id: String,
         label: String,
         properties: DirectoryNodeProperties,
     },
     FileNode {
         id: String,
+        node_id: String,
         label: String,
         properties: FileNodeProperties,
     },
     DefinitionNode {
         id: String,
+        node_id: String,
         label: String,
         properties: DefinitionNodeProperties,
     },
@@ -69,6 +72,7 @@ pub struct GraphRelationship {
 #[derive(Debug)]
 pub struct NodeData {
     pub id: String,
+    pub node_id: String,
     pub node_type: String,
     pub name: String,
     pub path: String,
@@ -88,9 +92,12 @@ pub fn extract_node_data(
     row: &dyn QueryResultRow,
     start_index: usize,
 ) -> Result<NodeData, Box<dyn std::error::Error>> {
+    let node_id = row.get_string_value(start_index)?;
+    let node_type = row.get_string_value(start_index + 1)?;
     Ok(NodeData {
-        id: row.get_string_value(start_index)?,
-        node_type: row.get_string_value(start_index + 1)?,
+        id: format!("{node_type}_{node_id}"),
+        node_id,
+        node_type,
         name: row.get_string_value(start_index + 2)?,
         path: row.get_string_value(start_index + 3)?,
         absolute_path: row.get_string_value(start_index + 4)?,
@@ -110,6 +117,7 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
     let node = match data.node_type.as_str() {
         "DirectoryNode" => TypedGraphNode::DirectoryNode {
             id: data.id,
+            node_id: data.node_id,
             label: data.name,
             properties: DirectoryNodeProperties {
                 path: data.path,
@@ -119,6 +127,7 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
         },
         "FileNode" => TypedGraphNode::FileNode {
             id: data.id,
+            node_id: data.node_id,
             label: data.name,
             properties: FileNodeProperties {
                 path: data.path,
@@ -130,6 +139,7 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
         },
         "DefinitionNode" => TypedGraphNode::DefinitionNode {
             id: data.id,
+            node_id: data.node_id,
             label: data.name,
             properties: DefinitionNodeProperties {
                 path: data.path,
@@ -143,6 +153,7 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
         },
         _ => TypedGraphNode::DirectoryNode {
             id: data.id,
+            node_id: data.node_id,
             label: data.name,
             properties: DirectoryNodeProperties {
                 path: data.path,

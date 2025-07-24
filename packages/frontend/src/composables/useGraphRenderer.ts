@@ -2,7 +2,7 @@ import { ref, nextTick } from 'vue';
 import Sigma from 'sigma';
 import Graph from 'graphology';
 import { circular } from 'graphology-layout';
-import type { GraphInitialSuccessResponse, TypedGraphNode } from '@gitlab-org/gkg';
+import type { GraphRelationship, TSProjectInfo, TypedGraphNode } from '@gitlab-org/gkg';
 import { useGraphTheme } from './useGraphTheme';
 
 interface MouseCoords {
@@ -23,10 +23,16 @@ export interface GraphEventCallbacks {
   onNodeDoubleClick?: (node: TypedGraphNode, event: MouseCoords) => void;
 }
 
+export interface GraphData {
+  nodes: TypedGraphNode[];
+  relationships: GraphRelationship[];
+  project_info?: TSProjectInfo;
+}
+
 export const useGraphRenderer = () => {
   const graphContainer = ref<HTMLElement>();
   let sigmaInstance: Sigma | null = null;
-  let graphData: GraphInitialSuccessResponse | null = null;
+  let graphData: GraphData | null = null;
   let nodeMap: Map<string, TypedGraphNode> = new Map();
 
   const { currentTheme, getNodeColor, getNodeSize, isDark } = useGraphTheme();
@@ -43,7 +49,7 @@ export const useGraphRenderer = () => {
   };
 
   const initializeGraph = async (
-    data: GraphInitialSuccessResponse,
+    data: GraphData,
     callbacks?: GraphEventCallbacks,
   ): Promise<Sigma | undefined> => {
     if (!graphContainer.value || !data) return undefined;
@@ -336,10 +342,7 @@ export const useGraphRenderer = () => {
   };
   const refresh = () => sigmaInstance?.refresh();
 
-  const addNodesToGraph = async (
-    nodes: TypedGraphNode[],
-    relationships: GraphInitialSuccessResponse['relationships'],
-  ) => {
+  const addNodesToGraph = async (nodes: TypedGraphNode[], relationships: GraphRelationship[]) => {
     if (!sigmaInstance || !graphData) return;
 
     const graph = sigmaInstance.getGraph();

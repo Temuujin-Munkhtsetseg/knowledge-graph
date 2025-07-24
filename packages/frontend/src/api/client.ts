@@ -28,7 +28,8 @@ const endpointPaths = {
   index: '/api/workspace/index',
   events: '/api/events',
   graph_initial: '/api/graph/initial/{workspace_folder_path}/{project_path}',
-  graph_neighbors: '/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}',
+  graph_neighbors:
+    '/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}',
   graph_search: '/api/graph/search/{workspace_folder_path}/{project_path}',
 } satisfies Record<keyof ApiContract, ApiContract[keyof ApiContract]['path']>;
 
@@ -260,6 +261,7 @@ export class ApiClient extends HttpClient {
     workspaceFolderPath: string,
     projectPath: string,
     nodeId: string,
+    nodeType: string,
     limit: number = 100,
   ): Promise<GraphNeighborsSuccessResponse> {
     const queryParams: GraphNeighborsQueryRequest = {
@@ -272,6 +274,7 @@ export class ApiClient extends HttpClient {
       {
         workspace_folder_path: workspaceFolderPath,
         project_path: projectPath,
+        node_type: nodeType,
         node_id: nodeId,
       },
       queryParams,

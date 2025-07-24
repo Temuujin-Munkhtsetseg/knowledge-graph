@@ -129,7 +129,11 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
 
         let mut result = self
             .query_service
-            .execute_query(project_info.database_path, self.query.query, query_params)
+            .execute_query(
+                project_info.database_path,
+                self.query.query.clone(),
+                query_params,
+            )
             .map_err(|e| {
                 rmcp::Error::new(
                     rmcp::model::ErrorCode::INVALID_REQUEST,
@@ -247,7 +251,8 @@ mod tests {
         Query {
             name: "test_query",
             description: "A test query for testing purposes",
-            query: "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit",
+            query: "MATCH (n) WHERE n.fqn = $fqn RETURN n.id as id, n.name as name LIMIT $limit"
+                .to_string(),
             parameters,
             result: HashMap::from([("id", INT_MAPPER), ("name", STRING_MAPPER)]),
         }

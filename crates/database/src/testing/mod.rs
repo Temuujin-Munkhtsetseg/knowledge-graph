@@ -59,7 +59,7 @@ impl QueryingService for MockQueryingService {
     fn execute_query(
         &self,
         project_path: PathBuf,
-        query: &str,
+        query: String,
         params: Map<String, Value>,
     ) -> Result<Box<dyn QueryResult>, Error> {
         if self.should_fail {
@@ -75,7 +75,7 @@ impl QueryingService for MockQueryingService {
             );
         }
         if let Some(expected_query) = &self.expected_query {
-            assert_eq!(query, expected_query, "Query mismatch");
+            assert_eq!(query, *expected_query, "Query mismatch");
         }
         if let Some(expected_params) = &self.expected_params {
             assert_eq!(&params, expected_params, "Parameters mismatch");
