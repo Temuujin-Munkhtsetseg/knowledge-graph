@@ -84,7 +84,7 @@ impl QueryingService for DatabaseQueryingService {
     fn execute_query(
         &self,
         database_path: PathBuf,
-        query: &str,
+        query: String,
         params: Map<String, serde_json::Value>,
     ) -> Result<Box<dyn QueryResult>, Error> {
         let database = self
@@ -106,7 +106,7 @@ impl QueryingService for DatabaseQueryingService {
 
         let connection = connection.unwrap();
 
-        let result = connection.generic_query(query, params)?;
+        let result = connection.generic_query(query.as_str(), params)?;
         Ok(Box::new(DatabaseQueryResult {
             column_names: result.column_names,
             result: result.result,

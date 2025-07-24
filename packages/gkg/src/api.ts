@@ -26,9 +26,9 @@ export type GraphInitialResponses = { "200": GraphInitialSuccessResponse | null,
 
 export type GraphInitialSuccessResponse = { nodes: Array<TypedGraphNode>, relationships: Array<GraphRelationship>, project_info: TSProjectInfo, };
 
-export type GraphNeighborsEndpointDef = { method: HttpMethod, path: "/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}", path_request: GraphNeighborsPathRequest, body_request: EmptyRequest, query_request: GraphNeighborsQueryRequest, responses: GraphNeighborsSuccessResponse, };
+export type GraphNeighborsEndpointDef = { method: HttpMethod, path: "/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}", path_request: GraphNeighborsPathRequest, body_request: EmptyRequest, query_request: GraphNeighborsQueryRequest, responses: GraphNeighborsSuccessResponse, };
 
-export type GraphNeighborsPathRequest = { workspace_folder_path: string, project_path: string, node_id: string, };
+export type GraphNeighborsPathRequest = { workspace_folder_path: string, project_path: string, node_type: string, node_id: string, };
 
 export type GraphNeighborsQueryRequest = { limit: number | null, };
 
@@ -78,7 +78,7 @@ export type ServerInfoResponse = { port: number, version: string, };
 
 export type StatusResponse = { status: string, };
 
-export type TypedGraphNode = { "node_type": "DirectoryNode", id: string, label: string, properties: DirectoryNodeProperties, } | { "node_type": "FileNode", id: string, label: string, properties: FileNodeProperties, } | { "node_type": "DefinitionNode", id: string, label: string, properties: DefinitionNodeProperties, };
+export type TypedGraphNode = { "node_type": "DirectoryNode", id: string, node_id: string, label: string, properties: DirectoryNodeProperties, } | { "node_type": "FileNode", id: string, node_id: string, label: string, properties: FileNodeProperties, } | { "node_type": "DefinitionNode", id: string, node_id: string, label: string, properties: DefinitionNodeProperties, };
 
 export type WorkspaceDeleteBodyRequest = { workspace_folder_path: string, };
 

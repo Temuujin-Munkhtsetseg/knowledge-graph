@@ -473,5 +473,83 @@ mod tests {
                 "DefinitionNode total_locations should be positive"
             );
         }
+
+        // Validate relationships between different node types
+        let directory_node_ids: std::collections::HashSet<String> = body
+            .nodes
+            .iter()
+            .filter_map(|n| match n {
+                TypedGraphNode::DirectoryNode { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect();
+
+        let file_node_ids: std::collections::HashSet<String> = body
+            .nodes
+            .iter()
+            .filter_map(|n| match n {
+                TypedGraphNode::FileNode { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect();
+
+        let definition_node_ids: std::collections::HashSet<String> = body
+            .nodes
+            .iter()
+            .filter_map(|n| match n {
+                TypedGraphNode::DefinitionNode { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect();
+
+        let dir_to_dir_relationships: Vec<_> = body
+            .relationships
+            .iter()
+            .filter(|r| {
+                directory_node_ids.contains(&r.source) && directory_node_ids.contains(&r.target)
+            })
+            .collect();
+
+        assert!(
+            !dir_to_dir_relationships.is_empty(),
+            "Should have at least one Directory to Directory relationship"
+        );
+
+        let dir_to_file_relationships: Vec<_> = body
+            .relationships
+            .iter()
+            .filter(|r| directory_node_ids.contains(&r.source) && file_node_ids.contains(&r.target))
+            .collect();
+
+        assert!(
+            !dir_to_file_relationships.is_empty(),
+            "Should have at least one Directory to File relationship"
+        );
+
+        let file_to_def_relationships: Vec<_> = body
+            .relationships
+            .iter()
+            .filter(|r| {
+                file_node_ids.contains(&r.source) && definition_node_ids.contains(&r.target)
+            })
+            .collect();
+
+        assert!(
+            !file_to_def_relationships.is_empty(),
+            "Should have at least one File to Definition relationship"
+        );
+
+        let def_to_def_relationships: Vec<_> = body
+            .relationships
+            .iter()
+            .filter(|r| {
+                definition_node_ids.contains(&r.source) && definition_node_ids.contains(&r.target)
+            })
+            .collect();
+
+        assert!(
+            !def_to_def_relationships.is_empty(),
+            "Should have at least one Definition to Definition relationship"
+        );
     }
 }

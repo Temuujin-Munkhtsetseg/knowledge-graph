@@ -7,7 +7,7 @@ pub trait QueryingService: Send + Sync {
     fn execute_query(
         &self,
         database_path: PathBuf,
-        query: &str,
+        query: String,
         params: Map<String, serde_json::Value>,
     ) -> Result<Box<dyn QueryResult>, Error>;
 }

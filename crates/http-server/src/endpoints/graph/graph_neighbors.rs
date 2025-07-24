@@ -24,6 +24,7 @@ use urlencoding;
 pub struct GraphNeighborsPathRequest {
     pub workspace_folder_path: String,
     pub project_path: String,
+    pub node_type: String,
     pub node_id: String,
 }
 
@@ -67,8 +68,8 @@ define_endpoint! {
     GraphNeighborsEndpoint,
     GraphNeighborsEndpointDef,
     Get,
-    "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}",
-    ts_path_type = "\"/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}\"",
+    "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}",
+    ts_path_type = "\"/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}\"",
     config = GraphNeighborsEndpointConfig,
     export_to = "../../../packages/gkg/src/api.ts"
 }
@@ -111,6 +112,11 @@ pub async fn graph_neighbors_handler(
         "node_id",
         GraphNeighborsEndpoint::create_error_response
     );
+    let input_node_type = decode_url_param!(
+        &path_params.node_type,
+        "node_type",
+        GraphNeighborsEndpoint::create_error_response
+    );
 
     let limit = query_params.limit.unwrap_or(100);
 
@@ -134,6 +140,16 @@ pub async fn graph_neighbors_handler(
             .into_response();
     }
 
+    if input_node_type.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(GraphNeighborsEndpoint::create_error_response(
+                "empty_node_type".to_string(),
+            )),
+        )
+            .into_response();
+    }
+
     let project_info = match state
         .workspace_manager
         .get_project_info(&input_workspace_folder_path, &input_project_path)
@@ -150,8 +166,19 @@ pub async fn graph_neighbors_handler(
         }
     };
 
-    let query = QueryLibrary::get_node_neighbors_query();
+    let query = QueryLibrary::get_node_neighbors_query(input_node_type.as_str());
 
+    if query.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(GraphNeighborsEndpoint::create_error_response(
+                "invalid_node_type".to_string(),
+            )),
+        )
+            .into_response();
+    }
+
+    let query = query.unwrap();
     let mut query_params = serde_json::Map::new();
     query_params.insert(
         "node_id".to_string(),
@@ -163,7 +190,7 @@ pub async fn graph_neighbors_handler(
 
     let mut query_result = match query_service.execute_query(
         project_info.database_path.clone(),
-        query.query,
+        query.query.clone(),
         query_params,
     ) {
         Ok(result) => result,
@@ -278,6 +305,24 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::TempDir;
 
+    impl TypedGraphNode {
+        pub fn label(&self) -> &String {
+            match self {
+                TypedGraphNode::DirectoryNode { label, .. } => label,
+                TypedGraphNode::FileNode { label, .. } => label,
+                TypedGraphNode::DefinitionNode { label, .. } => label,
+            }
+        }
+
+        pub fn node_type(&self) -> &str {
+            match self {
+                TypedGraphNode::DirectoryNode { .. } => "DirectoryNode",
+                TypedGraphNode::FileNode { .. } => "FileNode",
+                TypedGraphNode::DefinitionNode { .. } => "DefinitionNode",
+            }
+        }
+    }
+
     async fn create_test_app_with_indexed_data() -> (Router, AppState, TempDir) {
         let temp_dir = TempDir::new().unwrap();
 
@@ -304,7 +349,7 @@ mod tests {
 
         let app = Router::new()
             .route(
-                "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}",
+                "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}",
                 get(graph_neighbors_handler),
             )
             .with_state(app_state.clone());
@@ -318,7 +363,7 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let response = server
-            .get("/graph/neighbors/workspace/%20/some_node_id")
+            .get("/graph/neighbors/workspace/%20/DefinitionNode/some_node_id")
             .await;
 
         response.assert_status(StatusCode::BAD_REQUEST);
@@ -331,11 +376,27 @@ mod tests {
         let (app, _app_state, _temp_dir) = create_test_app_with_indexed_data().await;
         let server = TestServer::new(app).unwrap();
 
-        let response = server.get("/graph/neighbors/workspace/project/%20").await;
+        let response = server
+            .get("/graph/neighbors/workspace/project/DefinitionNode/%20")
+            .await;
 
         response.assert_status(StatusCode::BAD_REQUEST);
         let body: StatusResponse = response.json();
         assert_eq!(body.status, "empty_node_id");
+    }
+
+    #[tokio::test]
+    async fn test_graph_neighbors_empty_node_type() {
+        let (app, _app_state, _temp_dir) = create_test_app_with_indexed_data().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .get("/graph/neighbors/workspace/project/%20/some_node_id")
+            .await;
+
+        response.assert_status(StatusCode::BAD_REQUEST);
+        let body: StatusResponse = response.json();
+        assert_eq!(body.status, "empty_node_type");
     }
 
     #[tokio::test]
@@ -404,9 +465,10 @@ mod tests {
         let encoded_project_path = urlencoding::encode(project_path);
         let encoded_workspace_folder_path = urlencoding::encode(workspace_folder_path);
         let encoded_node_id = urlencoding::encode(&first_node_id);
+        let encoded_node_type = urlencoding::encode("DefinitionNode");
 
         let url_string = format!(
-            "/graph/neighbors/{encoded_workspace_folder_path}/{encoded_project_path}/{encoded_node_id}?limit=50"
+            "/graph/neighbors/{encoded_workspace_folder_path}/{encoded_project_path}/{encoded_node_type}/{encoded_node_id}?limit=50"
         );
 
         let response = server.get(&url_string).await;
@@ -447,7 +509,7 @@ mod tests {
 
         let app = Router::new()
             .route(
-                "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}",
+                "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}",
                 axum::routing::get(graph_neighbors_handler),
             )
             .with_state(app_state.clone());
@@ -473,8 +535,10 @@ mod tests {
             let encoded_workspace = urlencoding::encode(&workspace_folder_path);
             let encoded_project = urlencoding::encode(&project_path);
             let encoded_node_id = urlencoding::encode(directory_name);
+            let encoded_node_type = urlencoding::encode("DirectoryNode");
+
             let uri = format!(
-                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_id}?limit=50"
+                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
             );
 
             let response = server.get(&uri).await;
@@ -501,8 +565,10 @@ mod tests {
             let encoded_workspace = urlencoding::encode(&workspace_folder_path);
             let encoded_project = urlencoding::encode(&project_path);
             let encoded_node_id = urlencoding::encode(file_path);
+            let encoded_node_type = urlencoding::encode("FileNode");
+
             let uri = format!(
-                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_id}?limit=50"
+                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
             );
 
             let response = server.get(&uri).await;
@@ -525,8 +591,10 @@ mod tests {
             let encoded_workspace = urlencoding::encode(&workspace_folder_path);
             let encoded_project = urlencoding::encode(&project_path);
             let encoded_node_id = urlencoding::encode(definition_fqn);
+            let encoded_node_type = urlencoding::encode("DefinitionNode");
+
             let uri = format!(
-                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_id}?limit=50"
+                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
             );
 
             let response = server.get(&uri).await;
@@ -570,7 +638,7 @@ mod tests {
 
         let app = Router::new()
             .route(
-                "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_id}",
+                "/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}",
                 axum::routing::get(graph_neighbors_handler),
             )
             .with_state(app_state.clone());
@@ -621,8 +689,9 @@ mod tests {
         let encoded_workspace = urlencoding::encode(workspace_folder_path);
         let encoded_project = urlencoding::encode(project_path);
         let encoded_node_id = urlencoding::encode(&first_node_id);
+        let encoded_node_type = urlencoding::encode("DefinitionNode");
         let uri = format!(
-            "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_id}?limit=50"
+            "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
         );
 
         let response = server.get(&uri).await;
@@ -639,13 +708,186 @@ mod tests {
 
         let encoded_workspace = urlencoding::encode(&workspace_folder_path);
         let encoded_project = urlencoding::encode(&project_path);
-        let encoded_node_id = "%20";
+        let encoded_node_id = urlencoding::encode("%20");
+        let encoded_node_type = urlencoding::encode("DefinitionNode");
         let uri = format!(
-            "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_id}?limit=50"
+            "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
         );
 
         let response = server.get(&uri).await;
 
         response.assert_status(StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_directory_node_finds_directory_and_file_neighbors() {
+        let (app, workspace_folder_path, project_path, _app_state) = setup_test_environment().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Test with root directory that should have both directory and file neighbors
+        let directory_name = "app";
+        let encoded_workspace = urlencoding::encode(&workspace_folder_path);
+        let encoded_project = urlencoding::encode(&project_path);
+        let encoded_node_id = urlencoding::encode(directory_name);
+        let encoded_node_type = urlencoding::encode("DirectoryNode");
+
+        let uri = format!(
+            "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
+        );
+
+        let response = server.get(&uri).await;
+
+        if response.status_code() == StatusCode::OK {
+            let response_json = response.json::<GraphNeighborsSuccessResponse>();
+
+            assert!(
+                !response_json.nodes.is_empty(),
+                "Directory should have neighbors"
+            );
+
+            let neighbor_types: Vec<String> = response_json
+                .nodes
+                .iter()
+                .filter(|node| node.label() != directory_name) // Exclude the query node itself
+                .map(|node| node.node_type().to_string())
+                .collect();
+
+            let has_directory_neighbors = neighbor_types.contains(&"DirectoryNode".to_string());
+            let has_file_neighbors = neighbor_types.contains(&"FileNode".to_string());
+
+            assert!(
+                has_directory_neighbors || has_file_neighbors,
+                "Directory node should have directory or file neighbors, found types: {neighbor_types:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_file_node_finds_directory_and_definition_neighbors() {
+        let (app, workspace_folder_path, project_path, _app_state) = setup_test_environment().await;
+        let server = TestServer::new(app).unwrap();
+
+        let file_path = "main.rb";
+        let encoded_workspace = urlencoding::encode(&workspace_folder_path);
+        let encoded_project = urlencoding::encode(&project_path);
+        let encoded_node_id = urlencoding::encode(file_path);
+        let encoded_node_type = urlencoding::encode("FileNode");
+
+        let uri = format!(
+            "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
+        );
+
+        let response = server.get(&uri).await;
+
+        if response.status_code() == StatusCode::OK {
+            let response_json = response.json::<GraphNeighborsSuccessResponse>();
+
+            assert!(
+                !response_json.nodes.is_empty(),
+                "File should have neighbors"
+            );
+
+            let neighbor_types: Vec<String> = response_json
+                .nodes
+                .iter()
+                .filter(|node| node.label() != file_path) // Exclude the query node itself
+                .map(|node| node.node_type().to_string())
+                .collect();
+
+            let has_directory_neighbors = neighbor_types.contains(&"DirectoryNode".to_string());
+            let has_definition_neighbors = neighbor_types.contains(&"DefinitionNode".to_string());
+
+            assert!(
+                has_directory_neighbors || has_definition_neighbors,
+                "File node should have directory or definition neighbors, found types: {neighbor_types:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_definition_node_finds_file_and_definition_neighbors() {
+        use database::querying::{QueryLibrary, QueryingService, service::DatabaseQueryingService};
+        use std::sync::Arc;
+
+        let (app, workspace_folder_path, project_path, app_state) = setup_test_environment().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First, find a definition node to test with
+        let query_service = DatabaseQueryingService::new(Arc::clone(&app_state.database));
+        let query = QueryLibrary::get_initial_project_graph_query();
+        let mut query_params = serde_json::Map::new();
+        query_params.insert(
+            "directory_limit".to_string(),
+            serde_json::Value::Number(10.into()),
+        );
+        query_params.insert(
+            "file_limit".to_string(),
+            serde_json::Value::Number(10.into()),
+        );
+        query_params.insert(
+            "definition_limit".to_string(),
+            serde_json::Value::Number(10.into()),
+        );
+
+        let project_info = app_state
+            .workspace_manager
+            .get_project_info(&workspace_folder_path, &project_path)
+            .expect("Should have project info");
+
+        let mut initial_result = query_service
+            .execute_query(
+                project_info.database_path.clone(),
+                query.query,
+                query_params,
+            )
+            .expect("Should execute initial query");
+
+        // Find a definition node
+        let mut definition_node_id = None;
+        while let Some(row) = initial_result.next() {
+            let node_type = row.get_string_value(13).unwrap_or_default();
+            if node_type == "DefinitionNode" {
+                definition_node_id = Some(row.get_string_value(0).expect("Should have node ID"));
+                break;
+            }
+        }
+
+        if let Some(definition_id) = definition_node_id {
+            let encoded_workspace = urlencoding::encode(&workspace_folder_path);
+            let encoded_project = urlencoding::encode(&project_path);
+            let encoded_node_id = urlencoding::encode(&definition_id);
+            let encoded_node_type = urlencoding::encode("DefinitionNode");
+
+            let uri = format!(
+                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=50"
+            );
+
+            let response = server.get(&uri).await;
+
+            if response.status_code() == StatusCode::OK {
+                let response_json = response.json::<GraphNeighborsSuccessResponse>();
+
+                assert!(
+                    !response_json.nodes.is_empty(),
+                    "Definition should have neighbors"
+                );
+
+                let neighbor_types: Vec<String> = response_json
+                    .nodes
+                    .iter()
+                    .filter(|node| node.label() != &definition_id) // Exclude the query node itself
+                    .map(|node| node.node_type().to_string())
+                    .collect();
+
+                let has_file_neighbors = neighbor_types.contains(&"FileNode".to_string());
+                let has_definition_neighbors =
+                    neighbor_types.contains(&"DefinitionNode".to_string());
+
+                assert!(
+                    has_file_neighbors || has_definition_neighbors,
+                    "Definition node should have file or definition neighbors, found types: {neighbor_types:?}"
+                );
+            }
+        }
     }
 }

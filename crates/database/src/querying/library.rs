@@ -10,7 +10,7 @@ pub struct QueryLibrary;
 pub struct Query {
     pub name: &'static str,
     pub description: &'static str,
-    pub query: &'static str,
+    pub query: String,
     pub parameters: HashMap<&'static str, QueryParameter>,
     pub result: HashMap<&'static str, QueryResultMapper>,
 }
@@ -47,7 +47,8 @@ impl QueryLibrary {
                     related.primary_file_path as file_path,
                     related.primary_line_number as line_number
                 LIMIT $limit
-            "#,
+            "#
+            .to_string(),
             parameters: HashMap::from([
                 (
                     "fqn",
@@ -94,7 +95,8 @@ impl QueryLibrary {
                     definition.primary_file_path as file_path
                 ORDER BY definition.primary_line_number
                 LIMIT $limit
-            "#,
+            "#
+            .to_string(),
             parameters: HashMap::from([
                 (
                     "file_path",
@@ -140,7 +142,8 @@ impl QueryLibrary {
                     n.primary_line_number as line_number
                 ORDER BY n.fqn
                 LIMIT $limit
-            "#,
+            "#
+            .to_string(),
             parameters: HashMap::from([
                 (
                     "search_string",
@@ -202,6 +205,41 @@ impl QueryLibrary {
                     '' as target_definition_type,
                     '' as target_language,
                     '' as target_extension,
+                    CAST(0 AS INT64) as target_primary_line_number,
+                    CAST(0 AS INT64) as target_primary_start_byte,
+                    CAST(0 AS INT64) as target_primary_end_byte,
+                    CAST(0 AS INT64) as target_total_locations,
+                    'DIRECTORY_RELATIONSHIPS' as relationship_type,
+                    id(r) as relationship_id,
+                    1 as order_priority
+                LIMIT $directory_limit
+                UNION
+                MATCH (n:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]-(f:FileNode)
+                RETURN 
+                    n.id as source_id, 
+                    'DirectoryNode' as source_type,
+                    n.name as source_name,
+                    n.path as source_path,
+                    n.absolute_path as source_absolute_path,
+                    n.repository_name as source_repository_name,
+                    '' as source_fqn,
+                    '' as source_definition_type,
+                    '' as source_language,
+                    '' as source_extension,
+                    CAST(0 AS INT64) as source_primary_line_number,
+                    CAST(0 AS INT64) as source_primary_start_byte,
+                    CAST(0 AS INT64) as source_primary_end_byte,
+                    CAST(0 AS INT64) as source_total_locations,
+                    f.id as target_id,
+                    'FileNode' as target_type,
+                    f.name as target_name,
+                    f.path as target_path,
+                    f.absolute_path as target_absolute_path,
+                    f.repository_name as target_repository_name,
+                    '' as target_fqn,
+                    '' as target_definition_type,
+                    f.language as target_language,
+                    f.extension as target_extension,
                     CAST(0 AS INT64) as target_primary_line_number,
                     CAST(0 AS INT64) as target_primary_start_byte,
                     CAST(0 AS INT64) as target_primary_end_byte,
@@ -280,7 +318,8 @@ impl QueryLibrary {
                     id(r) as relationship_id,
                     3 as order_priority
                 LIMIT $definition_limit
-            "#,
+            "#
+            .to_string(),
             parameters: HashMap::from([
                 (
                     "directory_limit",
@@ -339,121 +378,149 @@ impl QueryLibrary {
                 ("target_primary_start_byte", INT_MAPPER),
                 ("target_primary_end_byte", INT_MAPPER),
                 ("target_total_locations", INT_MAPPER),
-                ("relationship_type", STRING_MAPPER),
+                ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
                 ("relationship_id", STRING_MAPPER),
                 ("order_priority", INT_MAPPER),
             ]),
         }
     }
 
-    pub fn get_node_neighbors_query() -> Query {
-        Query {
+    fn get_node_neighbors_return_values(node_type: &str, alias: &str) -> String {
+        match node_type {
+            "DirectoryNode" => format!(
+                r#"
+                {alias}.id as {alias}_id, 
+                'DirectoryNode' as {alias}_type,
+                {alias}.name as {alias}_name,
+                {alias}.path as {alias}_path,
+                {alias}.absolute_path as {alias}_absolute_path,
+                {alias}.repository_name as {alias}_repository_name,
+                '' as {alias}_fqn,
+                '' as {alias}_definition_type,
+                '' as {alias}_language,
+                '' as {alias}_extension,
+                CAST(0 AS INT64) as {alias}_primary_line_number,
+                CAST(0 AS INT64) as {alias}_primary_start_byte,
+                CAST(0 AS INT64) as {alias}_primary_end_byte,
+                CAST(0 AS INT64) as {alias}_total_locations,
+            "#
+            ),
+            "FileNode" => format!(
+                r#"
+                    {alias}.id as {alias}_id,
+                    'FileNode' as {alias}_type,
+                    {alias}.name as {alias}_name,
+                    {alias}.path as {alias}_path,
+                    {alias}.absolute_path as {alias}_absolute_path,
+                    {alias}.repository_name as {alias}_repository_name,
+                    '' as {alias}_fqn,
+                    '' as {alias}_definition_type,
+                    {alias}.language as {alias}_language,
+                    {alias}.extension as {alias}_extension,
+                    CAST(0 AS INT64) as {alias}_primary_line_number,
+                    CAST(0 AS INT64) as {alias}_primary_start_byte,
+                    CAST(0 AS INT64) as {alias}_primary_end_byte,
+                    CAST(0 AS INT64) as {alias}_total_locations,
+                "#
+            ),
+            "DefinitionNode" => format!(
+                r#"
+                    {alias}.id as {alias}_id,
+                    'DefinitionNode' as {alias}_type,
+                    {alias}.name as {alias}_name,
+                    {alias}.primary_file_path as {alias}_path,
+                    '' as {alias}_absolute_path,
+                    '' as {alias}_repository_name,
+                    {alias}.fqn as {alias}_fqn,
+                    {alias}.definition_type as {alias}_definition_type,
+                    '' as {alias}_language,
+                    '' as {alias}_extension,
+                    CAST({alias}.primary_line_number AS INT64) as {alias}_primary_line_number,
+                    {alias}.primary_start_byte as {alias}_primary_start_byte,
+                    {alias}.primary_end_byte as {alias}_primary_end_byte,
+                    CAST({alias}.total_locations AS INT64) as {alias}_total_locations,
+                "#
+            ),
+            _ => "".to_string(),
+        }
+    }
+
+    pub fn get_node_neighbors_query(node_type: &str) -> Option<Query> {
+        let parts = match node_type {
+            "DirectoryNode" => vec![
+                (
+                    "DirectoryNode",
+                    "DIRECTORY_RELATIONSHIPS",
+                    "DirectoryNode",
+                    "source.id = $node_id",
+                ),
+                (
+                    "DirectoryNode",
+                    "DIRECTORY_RELATIONSHIPS",
+                    "FileNode",
+                    "source.id = $node_id",
+                ),
+            ],
+            "FileNode" => vec![
+                (
+                    "DirectoryNode",
+                    "DIRECTORY_RELATIONSHIPS",
+                    "FileNode",
+                    "target.id = $node_id",
+                ),
+                (
+                    "FileNode",
+                    "FILE_RELATIONSHIPS",
+                    "DefinitionNode",
+                    "source.id = $node_id",
+                ),
+            ],
+            "DefinitionNode" => vec![
+                (
+                    "FileNode",
+                    "FILE_RELATIONSHIPS",
+                    "DefinitionNode",
+                    "target.id = $node_id",
+                ),
+                (
+                    "DefinitionNode",
+                    "DEFINITION_RELATIONSHIPS",
+                    "DefinitionNode",
+                    "source.id = $node_id",
+                ),
+            ],
+            _ => return None,
+        };
+
+        let query = parts.iter().map(|(
+            source_type,
+            relationship_type,
+            target_type,
+            condition,
+        )| {
+            let source_return = Self::get_node_neighbors_return_values(source_type, "source");
+            let target_return = Self::get_node_neighbors_return_values(target_type, "target");
+
+            format!(
+                r#"
+                MATCH (source:{source_type})-[r:{relationship_type}]-(target:{target_type}) WHERE {condition}
+                RETURN 
+                    {source_return}
+                    {target_return}
+                    '{relationship_type}' as relationship_type,
+                    id(r) as relationship_id
+                "#, 
+            )
+        }).collect::<Vec<String>>().join("\nUNION\n");
+
+        let query = format!("{query} LIMIT $limit");
+
+        tracing::info!("Query: {}", query);
+
+        Some(Query {
             name: "get_node_neighbors",
             description: "Get all neighbors for a given node ID and their relationships.",
-            query: r#"
-                MATCH (d:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]-(neighbor:DirectoryNode)
-                WHERE d.id = $node_id
-                RETURN 
-                    d.id as source_id, 
-                    'DirectoryNode' as source_type,
-                    d.name as source_name,
-                    d.path as source_path,
-                    d.absolute_path as source_absolute_path,
-                    d.repository_name as source_repository_name,
-                    '' as source_fqn,
-                    '' as source_definition_type,
-                    '' as source_language,
-                    '' as source_extension,
-                    CAST(0 AS INT64) as source_primary_line_number,
-                    CAST(0 AS INT64) as source_primary_start_byte,
-                    CAST(0 AS INT64) as source_primary_end_byte,
-                    CAST(0 AS INT64) as source_total_locations,
-                    neighbor.id as target_id,
-                    'DirectoryNode' as target_type,
-                    neighbor.name as target_name,
-                    neighbor.path as target_path,
-                    neighbor.absolute_path as target_absolute_path,
-                    neighbor.repository_name as target_repository_name,
-                    '' as target_fqn,
-                    '' as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(0 AS INT64) as target_primary_line_number,
-                    CAST(0 AS INT64) as target_primary_start_byte,
-                    CAST(0 AS INT64) as target_primary_end_byte,
-                    CAST(0 AS INT64) as target_total_locations,
-                    'DIRECTORY_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id
-                UNION
-                MATCH (f:FileNode)-[r:FILE_RELATIONSHIPS]-(d:DefinitionNode)
-                WHERE f.id = $node_id
-                RETURN 
-                    f.id as source_id,
-                    'FileNode' as source_type,
-                    f.name as source_name,
-                    f.path as source_path,
-                    f.absolute_path as source_absolute_path,
-                    f.repository_name as source_repository_name,
-                    '' as source_fqn,
-                    '' as source_definition_type,
-                    f.language as source_language,
-                    f.extension as source_extension,
-                    CAST(0 AS INT64) as source_primary_line_number,
-                    CAST(0 AS INT64) as source_primary_start_byte,
-                    CAST(0 AS INT64) as source_primary_end_byte,
-                    CAST(0 AS INT64) as source_total_locations,
-                    d.id as target_id,
-                    'DefinitionNode' as target_type,
-                    d.name as target_name,
-                    d.primary_file_path as target_path,
-                    '' as target_absolute_path,
-                    '' as target_repository_name,
-                    d.fqn as target_fqn,
-                    d.definition_type as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(d.primary_line_number AS INT64) as target_primary_line_number,
-                    d.primary_start_byte as target_primary_start_byte,
-                    d.primary_end_byte as target_primary_end_byte,
-                    CAST(d.total_locations AS INT64) as target_total_locations,
-                    'FILE_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id
-                UNION
-                MATCH (d1:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]-(d2:DefinitionNode)
-                WHERE d1.id = $node_id
-                RETURN 
-                    d1.id as source_id,
-                    'DefinitionNode' as source_type,
-                    d1.name as source_name,
-                    d1.primary_file_path as source_path,
-                    '' as source_absolute_path,
-                    '' as source_repository_name,
-                    d1.fqn as source_fqn,
-                    d1.definition_type as source_definition_type,
-                    '' as source_language,
-                    '' as source_extension,
-                    CAST(d1.primary_line_number AS INT64) as source_primary_line_number,
-                    d1.primary_start_byte as source_primary_start_byte,
-                    d1.primary_end_byte as source_primary_end_byte,
-                    CAST(d1.total_locations AS INT64) as source_total_locations,
-                    d2.id as target_id,
-                    'DefinitionNode' as target_type,
-                    d2.name as target_name,
-                    d2.primary_file_path as target_path,
-                    '' as target_absolute_path,
-                    '' as target_repository_name,
-                    d2.fqn as target_fqn,
-                    d2.definition_type as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(d2.primary_line_number AS INT64) as target_primary_line_number,
-                    d2.primary_start_byte as target_primary_start_byte,
-                    d2.primary_end_byte as target_primary_end_byte,
-                    CAST(d2.total_locations AS INT64) as target_total_locations,
-                    'DEFINITION_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id
-                LIMIT $limit
-            "#,
+            query,
             parameters: HashMap::from([
                 (
                     "node_id",
@@ -468,7 +535,7 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of neighbor relationships to return.",
+                        description: "The maximum number of neighbors to return.",
                         required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
@@ -503,10 +570,10 @@ impl QueryLibrary {
                 ("target_primary_start_byte", INT_MAPPER),
                 ("target_primary_end_byte", INT_MAPPER),
                 ("target_total_locations", INT_MAPPER),
-                ("relationship_type", STRING_MAPPER),
+                ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
                 ("relationship_id", STRING_MAPPER),
             ]),
-        }
+        })
     }
 
     pub fn get_search_nodes_query() -> Query {
@@ -572,7 +639,8 @@ impl QueryLibrary {
                     CAST(def.total_locations AS INT64) as total_locations
                 ORDER BY node_type, name
                 LIMIT $limit
-            "#,
+            "#
+            .to_string(),
             parameters: HashMap::from([
                 (
                     "search_term",
@@ -610,16 +678,5 @@ impl QueryLibrary {
                 ("total_locations", INT_MAPPER),
             ]),
         }
-    }
-
-    pub fn all_queries() -> Vec<Query> {
-        vec![
-            Self::get_definition_relations_query(),
-            Self::get_file_definitions_query(),
-            Self::get_list_matches_query(),
-            Self::get_initial_project_graph_query(),
-            Self::get_node_neighbors_query(),
-            Self::get_search_nodes_query(),
-        ]
     }
 }

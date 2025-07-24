@@ -12,7 +12,7 @@ import EdgeTooltip from './EdgeTooltip.vue';
 import GraphSearch from './GraphSearch.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGraphTheme } from '@/composables/useGraphTheme';
-import { useGraphRenderer } from '@/composables/useGraphRenderer';
+import { type GraphData, useGraphRenderer } from '@/composables/useGraphRenderer';
 import { apiClient } from '@/api/client';
 
 interface Props {
@@ -44,10 +44,8 @@ const edgeTooltip = ref({
 
 // State for tracking clicked nodes and expanded graph data
 const clickedNodes = ref(new Set<string>());
-const expandedGraphData = ref<{
-  nodes: TypedGraphNode[];
-  relationships: GraphRelationship[];
-}>({
+
+const currentGraphData = ref<GraphData>({
   nodes: [],
   relationships: [],
 });
@@ -76,9 +74,9 @@ const {
   enabled: computed(() => Boolean(props.projectPath) && Boolean(props.workspaceFolderPath)),
 });
 
-const hasData = computed(() => initialGraphData.value && initialGraphData.value.nodes.length > 0);
-const nodeCount = computed(() => initialGraphData.value?.nodes.length || 0);
-const relationshipCount = computed(() => initialGraphData.value?.relationships.length || 0);
+const hasData = computed(() => currentGraphData.value.nodes.length > 0);
+const nodeCount = computed(() => currentGraphData.value.nodes.length);
+const relationshipCount = computed(() => currentGraphData.value.relationships.length);
 
 // Graph event handlers
 const handleNodeHover = (node: TypedGraphNode, event: { x: number; y: number }) => {
@@ -131,29 +129,24 @@ const handleNodeDoubleClick = async (node: TypedGraphNode) => {
     const neighborsData = await apiClient.fetchNodeNeighbors(
       props.workspaceFolderPath,
       props.projectPath,
-      node.id,
+      node.node_id,
+      node.node_type,
       50, // limit
     );
 
     clickedNodes.value.add(node.id);
 
-    const existingNodeIds = new Set(
-      [...(initialGraphData.value?.nodes || []), ...expandedGraphData.value.nodes].map((n) => n.id),
-    );
-    const existingRelationshipIds = new Set(
-      [
-        ...(initialGraphData.value?.relationships || []),
-        ...expandedGraphData.value.relationships,
-      ].map((r) => r.id),
-    );
+    const existingNodeIds = new Set(currentGraphData.value.nodes.map((n) => n.id));
+    const existingRelationshipIds = new Set(currentGraphData.value.relationships.map((r) => r.id));
 
     const newNodes = neighborsData.nodes.filter((n) => !existingNodeIds.has(n.id));
     const newRelationships = neighborsData.relationships.filter(
       (r) => !existingRelationshipIds.has(r.id),
     );
 
-    expandedGraphData.value.nodes.push(...newNodes);
-    expandedGraphData.value.relationships.push(...newRelationships);
+    // Add new nodes and relationships to current graph data
+    currentGraphData.value.nodes.push(...newNodes);
+    currentGraphData.value.relationships.push(...newRelationships);
 
     await addNodesToGraph(newNodes, newRelationships);
 
@@ -166,18 +159,9 @@ const handleNodeDoubleClick = async (node: TypedGraphNode) => {
 };
 
 const initializeGraphWithData = async () => {
-  if (!initialGraphData.value) return;
+  if (currentGraphData.value.nodes.length === 0 || !currentGraphData.value.project_info) return;
 
-  const combinedData = {
-    nodes: [...initialGraphData.value.nodes, ...expandedGraphData.value.nodes],
-    relationships: [
-      ...initialGraphData.value.relationships,
-      ...expandedGraphData.value.relationships,
-    ],
-    project_info: initialGraphData.value.project_info,
-  };
-
-  await initializeGraph(combinedData, {
+  await initializeGraph(currentGraphData.value, {
     onNodeHover: handleNodeHover,
     onNodeLeave: handleNodeLeave,
     onEdgeHover: handleEdgeHover,
@@ -204,23 +188,23 @@ const handleSearchClose = () => {
 
 const handleNodeSelected = async (node: TypedGraphNode) => {
   try {
-    if (!initialGraphData.value?.project_info) {
+    if (!currentGraphData.value.project_info) {
       console.error('No project info available');
       return;
     }
 
     clearGraph();
 
-    const singleNodeData = {
+    // Set current graph data to just the selected node
+    currentGraphData.value = {
       nodes: [node],
       relationships: [],
-      project_info: initialGraphData.value.project_info,
+      project_info: currentGraphData.value.project_info,
     };
 
-    expandedGraphData.value = { nodes: [], relationships: [] };
     clickedNodes.value.clear();
 
-    await initializeGraph(singleNodeData, {
+    await initializeGraph(currentGraphData.value, {
       onNodeHover: handleNodeHover,
       onNodeLeave: handleNodeLeave,
       onEdgeHover: handleEdgeHover,
@@ -239,19 +223,39 @@ watch(
   () => props.projectPath,
   () => {
     clearGraph();
+    currentGraphData.value = { nodes: [], relationships: [] };
+    clickedNodes.value.clear();
     refetch();
   },
 );
 
+// Initialize currentGraphData when initialGraphData is loaded
 watch(initialGraphData, (newData) => {
-  if (newData) initializeGraphWithData();
+  if (newData) {
+    currentGraphData.value = {
+      nodes: [...newData.nodes],
+      relationships: [...newData.relationships],
+      project_info: newData.project_info,
+    };
+    initializeGraphWithData();
+  }
 });
 
 onMounted(() => {
-  if (initialGraphData.value) initializeGraphWithData();
+  if (initialGraphData.value) {
+    currentGraphData.value = {
+      nodes: [...initialGraphData.value.nodes],
+      relationships: [...initialGraphData.value.relationships],
+      project_info: initialGraphData.value.project_info,
+    };
+    initializeGraphWithData();
+  }
 });
 
-onUnmounted(() => clearGraph());
+onUnmounted(() => {
+  clearGraph();
+  currentGraphData.value = { nodes: [], relationships: [] };
+});
 </script>
 
 <template>
