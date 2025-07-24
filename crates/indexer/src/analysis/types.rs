@@ -1,10 +1,12 @@
 use database::graph::RelationshipType;
 use parser_core::{
     definitions::DefinitionTypeInfo,
+    java::types::{JavaDefinitionType, JavaFqn},
     kotlin::types::{KotlinDefinitionType, KotlinFqn},
     python::types::{PythonDefinitionType, PythonFqn},
     ruby::{fqn::RubyFqn, types::RubyDefinitionType},
 };
+
 use serde::{Deserialize, Serialize};
 
 /// Structured graph data ready for writing to Parquet files
@@ -73,6 +75,7 @@ pub enum DefinitionType {
     Ruby(RubyDefinitionType),
     Python(PythonDefinitionType),
     Kotlin(KotlinDefinitionType),
+    Java(JavaDefinitionType),
     Unsupported(),
 }
 
@@ -82,6 +85,7 @@ impl DefinitionType {
             DefinitionType::Ruby(ruby_type) => ruby_type.as_str(),
             DefinitionType::Python(python_type) => python_type.as_str(),
             DefinitionType::Kotlin(kotlin_type) => kotlin_type.as_str(),
+            DefinitionType::Java(java_type) => java_type.as_str(),
             DefinitionType::Unsupported() => "unsupported",
         }
     }
@@ -93,6 +97,7 @@ pub enum FqnType {
     Ruby(RubyFqn),
     Python(PythonFqn),
     Kotlin(KotlinFqn),
+    Java(JavaFqn),
 }
 
 /// Represents a definition node in the graph (can span multiple files for Ruby modules/classes)

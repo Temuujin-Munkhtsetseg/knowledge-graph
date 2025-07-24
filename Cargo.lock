@@ -1553,7 +1553,6 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.4.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.4.0#9032065dfadced1590c96290e7f2fcbfe2e05331"
 dependencies = [
  "ignore",
  "serde",
@@ -3107,7 +3106,6 @@ dependencies = [
 [[package]]
 name = "parser-core"
 version = "0.7.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.7.0#0f6654ee56b8828ce09d69774ba8f31b35372dbd"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",

@@ -16,6 +16,7 @@ use std::{
 
 // Re-export the sub-module functionality
 pub use files::FileSystemAnalyzer;
+pub use languages::java::JavaAnalyzer;
 pub use languages::kotlin::KotlinAnalyzer;
 pub use languages::python::PythonAnalyzer;
 pub use languages::ruby::RubyAnalyzer;
@@ -28,6 +29,7 @@ pub struct AnalysisService {
     ruby_analyzer: RubyAnalyzer,
     python_analyzer: PythonAnalyzer,
     kotlin_analyzer: KotlinAnalyzer,
+    java_analyzer: JavaAnalyzer,
 }
 
 impl AnalysisService {
@@ -38,6 +40,7 @@ impl AnalysisService {
         let ruby_analyzer = RubyAnalyzer::new();
         let python_analyzer = PythonAnalyzer::new();
         let kotlin_analyzer = KotlinAnalyzer::new();
+        let java_analyzer = JavaAnalyzer::new();
 
         Self {
             repository_name,
@@ -46,6 +49,7 @@ impl AnalysisService {
             ruby_analyzer,
             python_analyzer,
             kotlin_analyzer,
+            java_analyzer,
         }
     }
 
@@ -210,6 +214,14 @@ impl AnalysisService {
                     file_definition_relationships,
                 );
             }
+            SupportedLanguage::Java => {
+                self.java_analyzer.process_definitions(
+                    file_result,
+                    &relative_path,
+                    definition_map,
+                    file_definition_relationships,
+                );
+            }
             _ => {}
         }
     }
@@ -243,6 +255,10 @@ impl AnalysisService {
             }
             SupportedLanguage::Kotlin => {
                 self.kotlin_analyzer
+                    .add_definition_relationships(&definition_map, definition_relationships);
+            }
+            SupportedLanguage::Java => {
+                self.java_analyzer
                     .add_definition_relationships(&definition_map, definition_relationships);
             }
             _ => {}

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use parser_core::kotlin::{
-    fqn::kotlin_fqn_to_string,
-    types::{KotlinDefinitionInfo, KotlinDefinitionType, KotlinFqn, KotlinFqnPartType},
+use database::graph::RelationshipType;
+use parser_core::java::{
+    fqn::java_fqn_to_string,
+    types::{JavaDefinitionInfo, JavaDefinitionType, JavaFqn, JavaFqnPartType},
 };
 
 use crate::{
@@ -12,12 +13,11 @@ use crate::{
     },
     indexer::FileProcessingResult,
 };
-use database::graph::RelationshipType;
 
 #[derive(Default)]
-pub struct KotlinAnalyzer;
+pub struct JavaAnalyzer;
 
-impl KotlinAnalyzer {
+impl JavaAnalyzer {
     pub fn new() -> Self {
         Self
     }
@@ -30,16 +30,16 @@ impl KotlinAnalyzer {
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
     ) {
         if let Some(definitions) = &file_result.definitions {
-            if let Some(defs) = definitions.iter_kotlin() {
+            if let Some(defs) = definitions.iter_java() {
                 for definition in defs {
                     if let Ok(Some((location, fqn))) =
                         self.create_definition_location(definition, relative_file_path)
                     {
-                        let fqn_string = kotlin_fqn_to_string(&fqn);
+                        let fqn_string = java_fqn_to_string(&fqn);
                         let definition_node = DefinitionNode::new(
                             fqn_string.clone(),
                             definition.name.clone(),
-                            DefinitionType::Kotlin(definition.definition_type),
+                            DefinitionType::Java(definition.definition_type),
                             location,
                         );
 
@@ -54,7 +54,7 @@ impl KotlinAnalyzer {
 
                         definition_map.insert(
                             (fqn_string.clone(), relative_file_path.to_string()),
-                            (definition_node, FqnType::Kotlin(fqn)),
+                            (definition_node, FqnType::Java(fqn)),
                         );
                     }
                 }
@@ -68,9 +68,9 @@ impl KotlinAnalyzer {
         definition_relationships: &mut Vec<DefinitionRelationship>,
     ) {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
-            if let Some(parent_fqn) = self.get_parent_fqn_string(child_fqn) {
+            if let Some(parent_fqn_string) = self.get_parent_fqn_string(child_fqn) {
                 if let Some((parent_def, _)) =
-                    definition_map.get(&(parent_fqn.clone(), child_file_path.to_string()))
+                    definition_map.get(&(parent_fqn_string.clone(), child_file_path.to_string()))
                 {
                     if let Some(relationship_type) = self.get_definition_relationship_type(
                         &parent_def.definition_type,
@@ -79,7 +79,7 @@ impl KotlinAnalyzer {
                         definition_relationships.push(DefinitionRelationship {
                             from_file_path: parent_def.location.file_path.clone(),
                             to_file_path: child_def.location.file_path.clone(),
-                            from_definition_fqn: parent_fqn,
+                            from_definition_fqn: parent_fqn_string,
                             to_definition_fqn: child_fqn_string.clone(),
                             relationship_type,
                         });
@@ -91,12 +91,12 @@ impl KotlinAnalyzer {
 
     fn get_parent_fqn_string(&self, fqn: &FqnType) -> Option<String> {
         match fqn {
-            FqnType::Kotlin(kotlin_fqn) => {
-                if kotlin_fqn.len() <= 1 {
+            FqnType::Java(java_fqn) => {
+                if java_fqn.len() <= 1 {
                     return None;
                 }
 
-                let parent_parts: Vec<String> = kotlin_fqn[..kotlin_fqn.len() - 1]
+                let parent_parts: Vec<String> = java_fqn[..java_fqn.len() - 1]
                     .iter()
                     .map(|part| part.node_name.clone())
                     .collect();
@@ -116,80 +116,68 @@ impl KotlinAnalyzer {
         parent_type: &DefinitionType,
         child_type: &DefinitionType,
     ) -> Option<RelationshipType> {
-        use KotlinDefinitionType::*;
+        use JavaDefinitionType::*;
 
         let parent_type = self.simplify_definition_type(parent_type)?;
         let child_type = self.simplify_definition_type(child_type)?;
 
         match (parent_type, child_type) {
             // Class relationships
-            (DefinitionType::Kotlin(Class), DefinitionType::Kotlin(Class)) => {
+            (DefinitionType::Java(Class), DefinitionType::Java(Class)) => {
                 Some(RelationshipType::ClassToClass)
             }
-            (DefinitionType::Kotlin(Class), DefinitionType::Kotlin(Interface)) => {
-                Some(RelationshipType::ClassToInterface)
-            }
-            (DefinitionType::Kotlin(Class), DefinitionType::Kotlin(Function)) => {
-                Some(RelationshipType::ClassToMethod)
-            }
-            (DefinitionType::Kotlin(Class), DefinitionType::Kotlin(Property)) => {
-                Some(RelationshipType::ClassToProperty)
-            }
-            (DefinitionType::Kotlin(Class), DefinitionType::Kotlin(Lambda)) => {
-                Some(RelationshipType::ClassToLambda)
-            }
-            (DefinitionType::Kotlin(Class), DefinitionType::Kotlin(Constructor)) => {
+            (DefinitionType::Java(Class), DefinitionType::Java(Constructor)) => {
                 Some(RelationshipType::ClassToConstructor)
             }
-            (DefinitionType::Kotlin(Class), DefinitionType::Kotlin(EnumEntry)) => {
+            (DefinitionType::Java(Class), DefinitionType::Java(Interface)) => {
+                Some(RelationshipType::ClassToInterface)
+            }
+            (DefinitionType::Java(Class), DefinitionType::Java(EnumConstant)) => {
                 Some(RelationshipType::ClassToEnumEntry)
             }
+            (DefinitionType::Java(Class), DefinitionType::Java(Method)) => {
+                Some(RelationshipType::ClassToMethod)
+            }
+            (DefinitionType::Java(Class), DefinitionType::Java(Lambda)) => {
+                Some(RelationshipType::ClassToLambda)
+            }
             // Interface relationships
-            (DefinitionType::Kotlin(Interface), DefinitionType::Kotlin(Interface)) => {
+            (DefinitionType::Java(Interface), DefinitionType::Java(Interface)) => {
                 Some(RelationshipType::InterfaceToInterface)
             }
-            (DefinitionType::Kotlin(Interface), DefinitionType::Kotlin(Class)) => {
+            (DefinitionType::Java(Interface), DefinitionType::Java(Class)) => {
                 Some(RelationshipType::InterfaceToClass)
             }
-            (DefinitionType::Kotlin(Interface), DefinitionType::Kotlin(Function)) => {
+            (DefinitionType::Java(Interface), DefinitionType::Java(Method)) => {
                 Some(RelationshipType::InterfaceToMethod)
             }
-            (DefinitionType::Kotlin(Interface), DefinitionType::Kotlin(Property)) => {
-                Some(RelationshipType::InterfaceToProperty)
-            }
-            (DefinitionType::Kotlin(Interface), DefinitionType::Kotlin(Lambda)) => {
+            (DefinitionType::Java(Interface), DefinitionType::Java(Lambda)) => {
                 Some(RelationshipType::InterfaceToLambda)
             }
-            // Function relationships
-            (DefinitionType::Kotlin(Function), DefinitionType::Kotlin(Function)) => {
+            // Method relationships
+            (DefinitionType::Java(Method), DefinitionType::Java(Method)) => {
                 Some(RelationshipType::MethodToMethod)
             }
-            (DefinitionType::Kotlin(Function), DefinitionType::Kotlin(Property)) => {
-                Some(RelationshipType::MethodToProperty)
-            }
-            (DefinitionType::Kotlin(Function), DefinitionType::Kotlin(Lambda)) => {
-                Some(RelationshipType::MethodToLambda)
-            }
-            (DefinitionType::Kotlin(Function), DefinitionType::Kotlin(Class)) => {
+            (DefinitionType::Java(Method), DefinitionType::Java(Class)) => {
                 Some(RelationshipType::MethodToClass)
             }
-            (DefinitionType::Kotlin(Function), DefinitionType::Kotlin(Interface)) => {
+            (DefinitionType::Java(Method), DefinitionType::Java(Interface)) => {
                 Some(RelationshipType::MethodToInterface)
             }
+            (DefinitionType::Java(Method), DefinitionType::Java(Lambda)) => {
+                Some(RelationshipType::MethodToLambda)
+            }
             // Lambda relationships
-            (DefinitionType::Kotlin(Lambda), DefinitionType::Kotlin(Lambda)) => {
+            (DefinitionType::Java(Lambda), DefinitionType::Java(Lambda)) => {
                 Some(RelationshipType::LambdaToLambda)
             }
-            (DefinitionType::Kotlin(Lambda), DefinitionType::Kotlin(Class)) => {
+            (DefinitionType::Java(Lambda), DefinitionType::Java(Class)) => {
                 Some(RelationshipType::LambdaToClass)
             }
-            (DefinitionType::Kotlin(Lambda), DefinitionType::Kotlin(Function)) => {
+            (DefinitionType::Java(Lambda), DefinitionType::Java(Method)) => {
                 Some(RelationshipType::LambdaToMethod)
             }
-            (DefinitionType::Kotlin(Lambda), DefinitionType::Kotlin(Property)) => {
-                Some(RelationshipType::LambdaToProperty)
-            }
-            (DefinitionType::Kotlin(Lambda), DefinitionType::Kotlin(Interface)) => {
+            (DefinitionType::Java(Lambda), DefinitionType::Java(Interface)) => {
                 Some(RelationshipType::LambdaToInterface)
             }
             _ => None,
@@ -197,31 +185,27 @@ impl KotlinAnalyzer {
     }
 
     fn simplify_definition_type(&self, definition_type: &DefinitionType) -> Option<DefinitionType> {
-        use KotlinDefinitionType::*;
+        use JavaDefinitionType::*;
 
         match definition_type {
-            DefinitionType::Kotlin(Class) => Some(DefinitionType::Kotlin(Class)),
-            DefinitionType::Kotlin(DataClass) => Some(DefinitionType::Kotlin(Class)),
-            DefinitionType::Kotlin(ValueClass) => Some(DefinitionType::Kotlin(Class)),
-            DefinitionType::Kotlin(AnnotationClass) => Some(DefinitionType::Kotlin(Class)),
-            DefinitionType::Kotlin(Object) => Some(DefinitionType::Kotlin(Class)),
-            DefinitionType::Kotlin(CompanionObject) => Some(DefinitionType::Kotlin(Class)),
-            DefinitionType::Kotlin(Enum) => Some(DefinitionType::Kotlin(Class)),
-            DefinitionType::Kotlin(Interface) => Some(DefinitionType::Kotlin(Interface)),
-            DefinitionType::Kotlin(EnumEntry) => Some(DefinitionType::Kotlin(EnumEntry)),
-            DefinitionType::Kotlin(Constructor) => Some(DefinitionType::Kotlin(Constructor)),
-            DefinitionType::Kotlin(Function) => Some(DefinitionType::Kotlin(Function)),
-            DefinitionType::Kotlin(Property) => Some(DefinitionType::Kotlin(Property)),
-            DefinitionType::Kotlin(Lambda) => Some(DefinitionType::Kotlin(Lambda)),
+            DefinitionType::Java(Class) => Some(DefinitionType::Java(Class)),
+            DefinitionType::Java(Enum) => Some(DefinitionType::Java(Class)),
+            DefinitionType::Java(AnnotationDeclaration) => Some(DefinitionType::Java(Class)),
+            DefinitionType::Java(Record) => Some(DefinitionType::Java(Class)),
+            DefinitionType::Java(Interface) => Some(DefinitionType::Java(Interface)),
+            DefinitionType::Java(EnumConstant) => Some(DefinitionType::Java(EnumConstant)),
+            DefinitionType::Java(Method) => Some(DefinitionType::Java(Method)),
+            DefinitionType::Java(Constructor) => Some(DefinitionType::Java(Constructor)),
+            DefinitionType::Java(Lambda) => Some(DefinitionType::Java(Lambda)),
             _ => None,
         }
     }
 
     fn create_definition_location(
         &self,
-        definition: &KotlinDefinitionInfo,
+        definition: &JavaDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, KotlinFqn)>, String> {
+    ) -> Result<Option<(DefinitionLocation, JavaFqn)>, String> {
         if let Some(ref fqn) = definition.fqn {
             let line_number = self.calculate_line_number(definition);
 
@@ -245,11 +229,11 @@ impl KotlinAnalyzer {
         }
     }
 
-    fn calculate_line_number(&self, definition: &KotlinDefinitionInfo) -> i32 {
+    fn calculate_line_number(&self, definition: &JavaDefinitionInfo) -> i32 {
         definition.match_info.range.start.line as i32
     }
 
-    fn is_top_level_definition(&self, fqn: &KotlinFqn) -> bool {
-        fqn.len() == 1 || (fqn.len() == 2 && fqn[0].node_type == KotlinFqnPartType::Package)
+    fn is_top_level_definition(&self, fqn: &JavaFqn) -> bool {
+        fqn.len() == 1 || (fqn.len() == 2 && fqn[0].node_type == JavaFqnPartType::Package)
     }
 }
