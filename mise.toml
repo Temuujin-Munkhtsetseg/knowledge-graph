@@ -2,10 +2,18 @@
 node = "22"
 rust = "stable"
 
+# compiles cli and static library for release
+[tasks.build]
+run = "./scripts/build.sh"
+
 # compiles the cli in release mode and installs it to ~/.cargo/bin
 # this is used to run the production cli from the command line
 [tasks.build-cli-release]
 run = "cargo build --release -p gkg && cargo install --path crates/gkg"
+
+# compiles static knowledge graph library
+[tasks.build-lib]
+run = "CARGO_PARAMS='--release' ./scripts/build.sh lib"
 
 # runs the http server in debug mode
 # serves at http://localhost:27495
@@ -40,6 +48,17 @@ run = "cargo test"
 # runs the tests with nextest
 [tasks.nextest]
 run = "cargo nextest run"
+
+# runs go bindings tests
+[tasks.gotest]
+run = "cd bindings/go/ && go test ./..."
+
+# removes generated artifacts and libs
+[tasks.clean]
+run = [
+    "cargo clean",
+    "rm -rf lib/*/",
+]
 
 # compiles via tsc and builds the frontend in production mode (vite build)
 [tasks.frontend-build]

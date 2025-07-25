@@ -110,11 +110,13 @@ cargo-update:
   script:
     - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
     - rustup target add ${ARCH}-unknown-linux-gnu
-    - cargo build --release --bin gkg --target ${ARCH}-unknown-linux-gnu --locked
-    - tar -czvf gkg-linux-${ARCH}.tar.gz -C target/${ARCH}-unknown-linux-gnu/release gkg
+    - ./scripts/build.sh
+  variables:
+    PLATFORM: Linux
   artifacts:
     paths:
       - ./gkg-linux-${ARCH}.tar.gz
+      - ./lib
     expire_in: 7 days
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -133,13 +135,13 @@ cargo-update:
   script:
     - brew install cmake python jq
     - rustup target add ${ARCH}-apple-darwin
-    - cargo build --release --bin gkg --target ${ARCH}-apple-darwin --locked
-    # Sign and notarize the binary
-    - ./scripts/macos-sign-notarize.sh "target/${ARCH}-apple-darwin/release/gkg"
-    - tar -czvf gkg-darwin-${ARCH}.tar.gz -C target/${ARCH}-apple-darwin/release gkg
+    - ./scripts/build.sh
+  variables:
+    PLATFORM: Darwin
   artifacts:
     paths:
       - ./gkg-darwin-${ARCH}.tar.gz
+      - ./lib
     expire_in: 7 days
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -190,6 +192,56 @@ build:windows-x86_64:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   timeout: 2h
+
+.go-job-template:
+  image: ${GITLAB_DEPENDENCY_PROXY}golang:1.24.5
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+  before_script:
+    - mkdir -p .go
+  cache:
+    key:
+      files:
+        - .gitlab-ci.yml
+    paths:
+      - .go/pkg/mod/
+
+build-bindings:
+  image: rust:1.88.0-bookworm
+  stage: build
+  allow_failure: true
+  when: manual
+  tags:
+    - saas-linux-large-amd64
+  script:
+    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
+    - rustup target add ${ARCH}-unknown-linux-gnu
+    - ./scripts/build.sh lib
+  variables:
+    PLATFORM: Linux
+    ARCH: x86_64
+    CARGO_PARAMS: '--release'
+  artifacts:
+    paths:
+      - ./gkg-linux-${ARCH}.tar.gz
+      - ./lib
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+go-tests:
+  stage: test
+  allow_failure: true
+  needs:
+    - build-bindings
+  script:
+    - cd bindings/go/
+    - go test ./...
+  extends: .go-job-template
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 publish-release::manual:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
