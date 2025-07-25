@@ -150,10 +150,9 @@ pub fn spawn_indexing_task(
         .await;
 
         match result {
-            Ok(Ok(())) => tracing::info!(
-                "Indexing completed successfully for workspace '{}'",
-                workspace_folder_path
-            ),
+            Ok(Ok(_stats)) => {
+                tracing::info!("Workspace indexing succeeded for {}", workspace_folder_path)
+            }
             Ok(Err(e)) => {
                 tracing::error!(
                     "Indexing failed for workspace '{}': {}",

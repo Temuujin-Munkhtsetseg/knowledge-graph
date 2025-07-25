@@ -1,6 +1,6 @@
 use crate::project::file_info::FileInfo;
-use anyhow::Result;
 use parser_core::{
+    definitions::DefinitionTypeInfo,
     java::{analyzer::JavaAnalyzer, types::JavaDefinitionInfo},
     kotlin::{analyzer::KotlinAnalyzer, types::KotlinDefinitionInfo},
     parser::{GenericParser, LanguageParser, SupportedLanguage, detect_language_from_extension},
@@ -9,6 +9,64 @@ use parser_core::{
     rules::{RuleManager, run_rules},
 };
 use std::time::{Duration, Instant};
+
+/// Represents a file that was skipped during processing
+#[derive(Debug, Clone)]
+pub struct SkippedFile {
+    pub file_path: String,
+    pub reason: String,
+    pub file_size: Option<u64>,
+}
+
+/// Represents a file that encountered an error during processing
+#[derive(Debug, Clone)]
+pub struct ErroredFile {
+    pub file_path: String,
+    pub error_message: String,
+    pub error_stage: ProcessingStage,
+}
+
+/// Represents the stage where processing failed
+#[derive(Debug, Clone)]
+pub enum ProcessingStage {
+    FileSystem, // Failed to read file metadata or content
+    Parsing,    // Failed during parsing/analysis
+    Unknown,    // Unknown stage
+}
+
+/// Result of processing a file that can be success, skipped, or error
+#[derive(Debug)]
+pub enum ProcessingResult {
+    Success(FileProcessingResult),
+    Skipped(SkippedFile),
+    Error(ErroredFile),
+}
+
+impl ProcessingResult {
+    /// Check if the result is a success
+    pub fn is_success(&self) -> bool {
+        matches!(self, ProcessingResult::Success(_))
+    }
+
+    /// Check if the result is skipped
+    pub fn is_skipped(&self) -> bool {
+        matches!(self, ProcessingResult::Skipped(_))
+    }
+
+    /// Check if the result is an error
+    pub fn is_error(&self) -> bool {
+        matches!(self, ProcessingResult::Error(_))
+    }
+
+    /// Get the file path regardless of result type
+    pub fn file_path(&self) -> &str {
+        match self {
+            ProcessingResult::Success(result) => &result.file_path,
+            ProcessingResult::Skipped(skipped) => &skipped.file_path,
+            ProcessingResult::Error(errored) => &errored.file_path,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct FileProcessor<'a> {
@@ -83,13 +141,25 @@ impl<'a> FileProcessor<'a> {
         self.content = content;
     }
 
+    pub fn size(&self) -> u64 {
+        self.content.len() as u64
+    }
+
     /// Process the file and extract definitions using a language parser
-    pub fn process(&self) -> Result<FileProcessingResult> {
+    pub fn process(&self) -> ProcessingResult {
         let start_time = Instant::now();
 
         // 1. Detect language using pre-computed extension (avoids duplicate parsing)
-        let language = detect_language_from_extension(&self.extension)
-            .map_err(|e| anyhow::anyhow!("Failed to detect language for '{}': {}", self.path, e))?;
+        let language = match detect_language_from_extension(&self.extension) {
+            Ok(lang) => lang,
+            Err(e) => {
+                return ProcessingResult::Error(ErroredFile {
+                    file_path: self.path.clone(),
+                    error_message: format!("Failed to detect language: {e}"),
+                    error_stage: ProcessingStage::Parsing,
+                });
+            }
+        };
 
         // Check if language is supported
         let is_supported = matches!(
@@ -100,28 +170,26 @@ impl<'a> FileProcessor<'a> {
                 | SupportedLanguage::Java
         );
         if !is_supported {
-            return Ok(FileProcessingResult {
+            return ProcessingResult::Skipped(SkippedFile {
                 file_path: self.path.clone(),
-                language,
-                definitions: None,
-                stats: ProcessingStats {
-                    total_time: start_time.elapsed(),
-                    parse_time: Duration::from_millis(0),
-                    rules_time: Duration::from_millis(0),
-                    analysis_time: Duration::from_millis(0),
-                    rule_matches: 0,
-                    definitions_count: 0,
-                },
-                is_supported: false,
+                reason: format!("Unsupported language: {language:?}"),
+                file_size: None,
             });
         }
 
         // 2. Parse the file
         let parse_start = Instant::now();
         let parser = GenericParser::default_for_language(language);
-        let parse_result = parser
-            .parse(self.content, Some(&self.path))
-            .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {}", self.path, e))?;
+        let parse_result = match parser.parse(self.content, Some(&self.path)) {
+            Ok(result) => result,
+            Err(e) => {
+                return ProcessingResult::Error(ErroredFile {
+                    file_path: self.path.clone(),
+                    error_message: format!("Failed to parse: {e}"),
+                    error_stage: ProcessingStage::Parsing,
+                });
+            }
+        };
         let parse_time = parse_start.elapsed();
 
         // 3. Run rules to find matches
@@ -135,47 +203,62 @@ impl<'a> FileProcessor<'a> {
         let definitions = match language {
             SupportedLanguage::Ruby => {
                 let analyzer = RubyAnalyzer::new();
-                let analysis_result = analyzer.analyze(&matches, &parse_result).map_err(|e| {
-                    anyhow::anyhow!("Failed to analyze Ruby file '{}': {}", self.path, e)
-                })?;
-                Definitions::Ruby(analysis_result.definitions)
+                match analyzer.analyze(&matches, &parse_result) {
+                    Ok(analysis_result) => Definitions::Ruby(analysis_result.definitions),
+                    Err(e) => {
+                        return ProcessingResult::Error(ErroredFile {
+                            file_path: self.path.clone(),
+                            error_message: format!("Failed to analyze Ruby file: {e}"),
+                            error_stage: ProcessingStage::Parsing,
+                        });
+                    }
+                }
             }
             SupportedLanguage::Python => {
                 let analyzer = PythonAnalyzer::new();
-                let analysis_result = analyzer.analyze(&matches, &parse_result).map_err(|e| {
-                    anyhow::anyhow!("Failed to analyze Python file '{}': {}", self.path, e)
-                })?;
-                Definitions::Python(analysis_result.definitions)
+                match analyzer.analyze(&matches, &parse_result) {
+                    Ok(analysis_result) => Definitions::Python(analysis_result.definitions),
+                    Err(e) => {
+                        return ProcessingResult::Error(ErroredFile {
+                            file_path: self.path.clone(),
+                            error_message: format!("Failed to analyze Python file: {e}"),
+                            error_stage: ProcessingStage::Parsing,
+                        });
+                    }
+                }
             }
             SupportedLanguage::Kotlin => {
                 let analyzer = KotlinAnalyzer::new();
-                let analysis_result = analyzer.analyze(&matches, &parse_result).map_err(|e| {
-                    anyhow::anyhow!("Failed to analyze Kotlin file '{}': {}", self.path, e)
-                })?;
-                Definitions::Kotlin(analysis_result.definitions)
+                match analyzer.analyze(&matches, &parse_result) {
+                    Ok(analysis_result) => Definitions::Kotlin(analysis_result.definitions),
+                    Err(e) => {
+                        return ProcessingResult::Error(ErroredFile {
+                            file_path: self.path.clone(),
+                            error_message: format!("Failed to analyze Kotlin file: {e}"),
+                            error_stage: ProcessingStage::Parsing,
+                        });
+                    }
+                }
             }
             SupportedLanguage::Java => {
                 let analyzer = JavaAnalyzer::new();
-                let analysis_result = analyzer.analyze(&matches, &parse_result).map_err(|e| {
-                    anyhow::anyhow!("Failed to analyze Java file '{}': {}", self.path, e)
-                })?;
-                Definitions::Java(analysis_result.definitions)
+                match analyzer.analyze(&matches, &parse_result) {
+                    Ok(analysis_result) => Definitions::Java(analysis_result.definitions),
+                    Err(e) => {
+                        return ProcessingResult::Error(ErroredFile {
+                            file_path: self.path.clone(),
+                            error_message: format!("Failed to analyze Java file: {e}"),
+                            error_stage: ProcessingStage::Parsing,
+                        });
+                    }
+                }
             }
             _ => {
                 // This should not happen due to the is_supported check above
-                return Ok(FileProcessingResult {
+                return ProcessingResult::Skipped(SkippedFile {
                     file_path: self.path.clone(),
-                    language,
-                    definitions: None,
-                    stats: ProcessingStats {
-                        total_time: start_time.elapsed(),
-                        parse_time,
-                        rules_time,
-                        analysis_time: Duration::from_millis(0),
-                        rule_matches: matches.len(),
-                        definitions_count: 0,
-                    },
-                    is_supported: false,
+                    reason: format!("Language not supported: {language:?}"),
+                    file_size: None,
                 });
             }
         };
@@ -183,8 +266,10 @@ impl<'a> FileProcessor<'a> {
         let total_time = start_time.elapsed();
         let definitions_count = definitions.count();
 
-        Ok(FileProcessingResult {
+        ProcessingResult::Success(FileProcessingResult {
             file_path: self.path.clone(),
+            extension: self.extension.clone(),
+            file_size: self.size(),
             language,
             definitions: Some(definitions),
             stats: ProcessingStats {
@@ -225,6 +310,28 @@ impl Definitions {
         self.count() == 0
     }
 
+    /// Get an iterator over definition type strings using the proper DefinitionTypeInfo trait
+    pub fn iter_definition_types(&self) -> Box<dyn Iterator<Item = String> + '_> {
+        match self {
+            Definitions::Ruby(defs) => Box::new(
+                defs.iter()
+                    .map(|def| def.definition_type.as_str().to_string()),
+            ),
+            Definitions::Python(defs) => Box::new(
+                defs.iter()
+                    .map(|def| def.definition_type.as_str().to_string()),
+            ),
+            Definitions::Kotlin(defs) => Box::new(
+                defs.iter()
+                    .map(|def| def.definition_type.as_str().to_string()),
+            ),
+            Definitions::Java(defs) => Box::new(
+                defs.iter()
+                    .map(|def| def.definition_type.as_str().to_string()),
+            ),
+        }
+    }
+
     pub fn iter_python(&self) -> Option<impl Iterator<Item = &PythonDefinitionInfo>> {
         match self {
             Definitions::Python(defs) => Some(defs.iter()),
@@ -255,10 +362,14 @@ impl Definitions {
 }
 
 /// Result of processing a single file using Ruby analyzer
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FileProcessingResult {
     /// File path
     pub file_path: String,
+    /// Extension of the file
+    pub extension: String,
+    /// File size in bytes
+    pub file_size: u64,
     /// Detected language
     pub language: SupportedLanguage,
     /// Extracted definitions from Ruby analyzer
@@ -284,16 +395,4 @@ pub struct ProcessingStats {
     pub rule_matches: usize,
     /// Number of definitions extracted
     pub definitions_count: usize,
-}
-
-/// Process a file from its content with pre-computed file info
-pub fn process_file_info(file_info: FileInfo, content: &str) -> Result<FileProcessingResult> {
-    let file = FileProcessor::from_file_info(file_info, content);
-    file.process()
-}
-
-/// Process a file from its content (legacy method)
-pub fn process_file_content(file_path: &str, content: &str) -> Result<FileProcessingResult> {
-    let file = FileProcessor::new(file_path.to_string(), content);
-    file.process()
 }

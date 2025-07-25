@@ -1,3 +1,7 @@
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::Arc;
+
 use crate::analysis::types::{DefinitionType, GraphData};
 use crate::database::node_database_service::NodeDatabaseService;
 use crate::deployed::executor::DeployedIndexingExecutor;
@@ -7,22 +11,16 @@ use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
 use crate::project::source::{GitaliskFileSource, PathFileSource};
 use database::graph::{RelationshipType, RelationshipTypeMapping};
-use database::kuzu::config::DatabaseConfig;
 use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;
-use database::kuzu::schema::SchemaManager;
 use database::kuzu::types::{
     DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, KuzuNodeType,
 };
 use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
 use kuzu::{Database, SystemConfig};
-use miette::Result;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::Arc;
-
 use tempfile::TempDir;
+
 use watchexec::Watchexec;
 use watchexec_events::{Event, Priority};
 
@@ -424,7 +422,7 @@ fn setup_reindexing_pipeline(
             file_source.clone(),
             &config,
             output_path,
-            Some(&database_path),
+            &database_path,
         )
         .expect("Failed to process repository");
 
@@ -433,7 +431,6 @@ fn setup_reindexing_pipeline(
         indexing_result.graph_data.is_some(),
         "Should have graph data"
     );
-    assert_eq!(*database_path, indexing_result.database_path.unwrap());
 
     let database_instance =
         Database::new(&database_path, SystemConfig::default()).expect("Failed to create database");
@@ -479,7 +476,6 @@ fn setup_reindexing_pipeline(
         output_path: output_path.to_string(),
     }
 }
-
 #[tokio::test]
 async fn test_full_reindexing_pipeline_git_status() {
     let temp_dir: TempDir = TempDir::new().expect("Failed to create temp directory");
@@ -549,7 +545,6 @@ async fn test_full_reindexing_pipeline_git_status() {
         "Should have 34 definitions after reindexing (user_model.rb and base_model.rb)"
     );
 }
-
 // TODO: fix this test https://gitlab.com/gitlab-org/rust/knowledge-graph/-/issues/46
 #[tokio::test]
 #[ignore]
@@ -660,34 +655,20 @@ fn setup_end_to_end_kuzu(temp_repo: &TempDir) -> Arc<KuzuDatabase> {
     // Run full processing pipeline
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
+    let database_path = temp_repo.path().join("db.kuzu");
+    let database_path_str = database_path.to_str().unwrap();
 
     // Create database as done in the working example
     let database = Arc::new(KuzuDatabase::new());
     let _result = indexer
-        .process_files_full(&database, file_source, &config, output_path)
+        .process_files_full_with_database(
+            &database,
+            file_source,
+            &config,
+            output_path,
+            database_path_str,
+        )
         .expect("Failed to process repository");
-
-    // Create Kuzu database
-    let db_dir = temp_repo.path().join("db.kuzu");
-
-    let config = DatabaseConfig::new(db_dir.to_string_lossy())
-        .with_buffer_size(512 * 1024 * 1024)
-        .with_compression(true);
-
-    let database_instance = database
-        .force_new_database(&db_dir.to_string_lossy(), Some(config))
-        .expect("Failed to create Kuzu database");
-
-    // Initialize schema
-    let schema_manager = SchemaManager::new(&database_instance);
-    schema_manager
-        .initialize_schema()
-        .expect("Failed to initialize schema");
-
-    // Import Parquet data
-    schema_manager
-        .import_graph_data(output_path)
-        .expect("Failed to import graph data");
 
     println!("✅ Kuzu database created and data imported successfully");
     println!("database keys: {:?}", database.get_database_keys());
@@ -710,18 +691,24 @@ fn test_new_indexer_with_gitalisk_file_source() {
         respect_gitignore: false,
     };
 
+    let temp_output_dir = temp_repo.path().join("output");
+    let output_path = temp_output_dir.to_str().unwrap();
+    let temp_db_path = temp_repo.path().join("db.kuzu");
+    let db_path = temp_db_path.to_str().unwrap();
+    let database = Arc::new(KuzuDatabase::new());
+
     let result = indexer
-        .index_files(file_source, &config)
+        .index_files(&database, output_path, db_path, file_source, &config)
         .expect("Failed to index files");
 
     assert!(
-        result.total_files_processed > 0,
+        !result.file_results.is_empty(),
         "Should have processed some files"
     );
-    assert_eq!(result.total_files_errored, 0, "Should have no errors");
+    assert_eq!(result.errored_files.len(), 0, "Should have no errors");
 
     println!("✅ New indexer test completed successfully!");
-    println!("📊 Processed {} files", result.total_files_processed);
+    println!("📊 Processed {} files", result.file_results.len());
 }
 
 #[test]
@@ -749,18 +736,24 @@ fn test_new_indexer_with_path_file_source() {
         respect_gitignore: false,
     };
 
+    let temp_output_dir = temp_repo.path().join("output");
+    let output_path = temp_output_dir.to_str().unwrap();
+    let temp_db_path = temp_repo.path().join("db.kuzu");
+    let db_path = temp_db_path.to_str().unwrap();
+    let database = Arc::new(KuzuDatabase::new());
+
     let result = indexer
-        .index_files(file_source, &config)
+        .index_files(&database, output_path, db_path, file_source, &config)
         .expect("Failed to index files");
 
     assert!(
-        result.total_files_processed > 0,
+        !result.file_results.is_empty(),
         "Should have processed some files"
     );
-    assert_eq!(result.total_files_errored, 0, "Should have no errors");
+    assert_eq!(result.errored_files.len(), 0, "Should have no errors");
 
     println!("✅ Path file source test completed successfully!");
-    println!("📊 Processed {} files", result.total_files_processed);
+    println!("📊 Processed {} files", result.file_results.len());
 }
 
 #[test]
@@ -786,19 +779,27 @@ fn test_full_indexing_pipeline() {
     // Create output directory for this test
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
+    let database_path = temp_repo.path().join("db.kuzu");
+    let database_path_str = database_path.to_str().unwrap();
 
     // Run the full processing pipeline
     let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(&database, file_source, &config, output_path)
+        .process_files_full_with_database(
+            &database,
+            file_source,
+            &config,
+            output_path,
+            database_path_str,
+        )
         .expect("Failed to process repository");
 
     // Verify we processed files
     assert!(
-        result.total_files_processed > 0,
+        !result.file_results.is_empty(),
         "Should have processed some files"
     );
-    assert_eq!(result.total_files_errored, 0, "Should have no errors");
+    assert_eq!(result.errored_files.len(), 0, "Should have no errors");
 
     // Verify graph data was created
     let graph_data: GraphData = result.graph_data.expect("Should have graph data");
@@ -849,7 +850,7 @@ fn test_full_indexing_pipeline() {
     }
 
     println!("✅ Test completed successfully!");
-    println!("📊 Processed {} files", result.total_files_processed);
+    println!("📊 Processed {} files", result.file_results.len());
     println!(
         "📊 Created {} definition nodes",
         graph_data.definition_nodes.len()
@@ -870,33 +871,10 @@ fn test_full_indexing_pipeline() {
     // === PART 2: End-to-end Kuzu database verification ===
     println!("\n🏗️ === KUZU DATABASE END-TO-END VERIFICATION ===");
 
-    // Create Kuzu database
-    let db_dir = temp_repo.path().join("db.kuzu");
-
-    let config = DatabaseConfig::new(db_dir.to_string_lossy())
-        .with_buffer_size(512 * 1024 * 1024)
-        .with_compression(true);
-
+    // The database is already set up by process_files_full_with_database, so we just connect to it
     let database_instance = database
-        .get_or_create_database(&db_dir.to_string_lossy(), Some(config))
-        .expect("Failed to create Kuzu database");
-
-    // Initialize schema
-    let schema_manager = SchemaManager::new(&database_instance);
-
-    schema_manager
-        .initialize_schema()
-        .expect("Failed to initialize schema");
-
-    // Import Parquet data
-    schema_manager
-        .import_graph_data(output_path)
-        .expect("Failed to import graph data");
-
-    println!("✅ Kuzu database created and data imported successfully");
-
-    // Verify basic node counts
-    println!("\n📊 Kuzu Database Node Counts:");
+        .get_or_create_database(database_path_str, None)
+        .expect("Failed to get database instance");
     let node_database_service = NodeDatabaseService::new(&database_instance);
     let node_counts = node_database_service
         .get_node_counts()
@@ -946,10 +924,18 @@ fn test_inheritance_relationships() {
     // Run full processing
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
+    let database_path = temp_repo.path().join("db.kuzu");
+    let database_path_str = database_path.to_str().unwrap();
 
     let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(&database, file_source, &config, output_path)
+        .process_files_full_with_database(
+            &database,
+            file_source,
+            &config,
+            output_path,
+            database_path_str,
+        )
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -1258,10 +1244,18 @@ fn test_detailed_data_inspection() {
     // Run full processing pipeline
     let output_dir = temp_repo.path().join("output");
     let output_path = output_dir.to_str().unwrap();
+    let database_path = temp_repo.path().join("db.kuzu");
+    let database_path_str = database_path.to_str().unwrap();
 
     let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(&database, file_source, &config, output_path)
+        .process_files_full_with_database(
+            &database,
+            file_source,
+            &config,
+            output_path,
+            database_path_str,
+        )
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -1405,12 +1399,13 @@ fn test_server_side_repository_processing() {
         .execute()
         .expect("Failed to process repository");
 
-    assert!(
-        result.total_files_processed > 0,
-        "Should have processed some files"
-    );
+    assert!(!result.total_files > 0, "Should have processed some files");
 
-    result.graph_data.expect("Should have graph data");
+    assert!(result.total_files > 0, "Should have processed some files");
+    assert!(
+        result.total_definitions > 0,
+        "Should have processed some definitions"
+    );
 }
 
 #[test]
@@ -1439,11 +1434,19 @@ fn test_parquet_file_structure() {
     let output_dir = temp_repo.path().join("parquet_test_output");
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
     let output_path = output_dir.to_str().unwrap();
+    let database_path = temp_repo.path().join("db.kuzu");
+    let database_path_str = database_path.to_str().unwrap();
 
     // Run full processing pipeline
     let database = Arc::new(KuzuDatabase::new());
     let result = indexer
-        .process_files_full(&database, file_source, &config, output_path)
+        .process_files_full_with_database(
+            &database,
+            file_source,
+            &config,
+            output_path,
+            database_path_str,
+        )
         .expect("Failed to process repository");
 
     let writer_result = result.writer_result.expect("Should have writer result");
