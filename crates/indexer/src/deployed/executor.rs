@@ -1,5 +1,6 @@
-use crate::indexer::{IndexingConfig, RepositoryIndexer, RepositoryIndexingResult};
+use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::project::source::PathFileSource;
+use crate::stats::{ProjectStatistics, finalize_project_statistics};
 use anyhow::Result;
 use database::kuzu::database::KuzuDatabase;
 use std::path::PathBuf;
@@ -34,7 +35,7 @@ impl DeployedIndexingExecutor {
         }
     }
 
-    pub fn execute(&self) -> Result<RepositoryIndexingResult, String> {
+    pub fn execute(&self) -> Result<ProjectStatistics, String> {
         let repo_name = std::path::Path::new(&self.repository_path)
             .file_name()
             .and_then(|name| name.to_str())
@@ -42,7 +43,7 @@ impl DeployedIndexingExecutor {
             .to_string();
 
         let indexer = RepositoryIndexer::new(
-            repo_name,
+            repo_name.clone(),
             self.repository_path
                 .to_str()
                 .expect("Expected string")
@@ -51,12 +52,25 @@ impl DeployedIndexingExecutor {
         let file_source = PathFileSource::from_path(self.repository_path.clone());
         let database = KuzuDatabase::new();
 
-        indexer.process_files_full_with_database(
-            &database,
-            file_source,
-            &self.config,
-            self.parquet_path.to_str().unwrap(),
-            Some(self.database_path.to_str().unwrap()),
-        )
+        let result = indexer
+            .process_files_full_with_database(
+                &database,
+                file_source,
+                &self.config,
+                self.parquet_path.to_str().unwrap(),
+                self.database_path.to_str().unwrap(),
+            )
+            .map_err(|e| e.to_string());
+
+        match result {
+            Ok(result) => Ok(finalize_project_statistics(
+                repo_name,
+                self.repository_path.to_str().unwrap().to_string(),
+                result.total_processing_time,
+                result.graph_data.as_ref().unwrap(),
+                result.writer_result.as_ref().unwrap(),
+            )),
+            Err(e) => Err(e.to_string()),
+        }
     }
 }

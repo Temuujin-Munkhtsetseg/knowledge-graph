@@ -1,6 +1,7 @@
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::source::GitaliskFileSource;
+use crate::stats::{ProjectStatistics, WorkspaceStatistics, finalize_project_statistics};
 
 use anyhow::Result;
 use chrono::Utc;
@@ -46,7 +47,8 @@ impl IndexingExecutor {
         &mut self,
         workspace_folder_path: PathBuf,
         cancellation_token: Option<CancellationToken>,
-    ) -> Result<()> {
+    ) -> Result<WorkspaceStatistics> {
+        let start_time = std::time::Instant::now();
         self.check_cancellation(&cancellation_token, "before starting")?;
 
         let workspace_folder_info = self
@@ -67,7 +69,13 @@ impl IndexingExecutor {
                     completed_at: Utc::now(),
                 }),
             ));
-            return Ok(());
+
+            // Return empty statistics
+            let indexing_duration = start_time.elapsed().as_secs_f64();
+            return Ok(WorkspaceStatistics::new(
+                workspace_folder_path_str.clone(),
+                indexing_duration,
+            ));
         }
         self.event_bus.send(&GkgEvent::WorkspaceIndexing(
             WorkspaceIndexingEvent::Started(WorkspaceIndexingStarted {
@@ -77,6 +85,11 @@ impl IndexingExecutor {
             }),
         ));
 
+        // Create statistics collector
+        let indexing_duration = start_time.elapsed().as_secs_f64();
+        let mut workspace_stats =
+            WorkspaceStatistics::new(workspace_folder_path_str.clone(), indexing_duration);
+
         for project_discovery in projects.iter() {
             self.check_cancellation(&cancellation_token, "during project iteration")?;
 
@@ -85,9 +98,10 @@ impl IndexingExecutor {
                 &project_discovery.project_path,
                 cancellation_token.clone(),
             ) {
-                Ok(_) => {
+                Ok(project_stats) => {
                     // Event sent inside process_single_project
                     println!("Project reindexed: {}", &project_discovery.project_path);
+                    workspace_stats.add_project(project_stats);
                 }
                 Err(e) => {
                     let error_msg = format!("Failed to index repository: {e}");
@@ -122,7 +136,9 @@ impl IndexingExecutor {
             }),
         ));
 
-        Ok(())
+        // Update duration after all processing
+        workspace_stats.metadata.indexing_duration_seconds = start_time.elapsed().as_secs_f64();
+        Ok(workspace_stats)
     }
 
     pub fn execute_workspace_reindexing(
@@ -225,7 +241,7 @@ impl IndexingExecutor {
         workspace_folder_path: &str,
         project_path: &str,
         cancellation_token: Option<CancellationToken>,
-    ) -> Result<()> {
+    ) -> Result<ProjectStatistics> {
         self.check_cancellation(&cancellation_token, "before starting")?;
 
         self.mark_project_status(workspace_folder_path, project_path, Status::Indexing, None)?;
@@ -250,7 +266,7 @@ impl IndexingExecutor {
             .and_then(|name| name.to_str())
             .unwrap_or("unknown")
             .to_string();
-        let indexer = RepositoryIndexer::new(repo_name, project_info.project_path.clone());
+        let indexer = RepositoryIndexer::new(repo_name.clone(), project_info.project_path.clone());
         let file_source = GitaliskFileSource::new(project_info.repository.clone());
 
         match indexer.process_files_full_with_database(
@@ -258,9 +274,9 @@ impl IndexingExecutor {
             file_source,
             &self.config,
             &parquet_directory,
-            Some(&database_path),
+            &database_path,
         ) {
-            Ok(_) => {
+            Ok(project_stats) => {
                 self.check_cancellation(&cancellation_token, "after re-indexing completed")?;
                 self.mark_project_status(
                     workspace_folder_path,
@@ -275,7 +291,21 @@ impl IndexingExecutor {
                             completed_at: Utc::now(),
                         },
                     )));
-                Ok(())
+                // Use finalize_project_statistics to build ProjectStatistics from written data
+                let stats = finalize_project_statistics(
+                    project_info.project_path.clone(),
+                    project_info.project_path.clone(),
+                    project_stats.total_processing_time,
+                    project_stats
+                        .graph_data
+                        .as_ref()
+                        .expect("graph_data should exist"),
+                    project_stats
+                        .writer_result
+                        .as_ref()
+                        .expect("writer_result should exist"),
+                );
+                Ok(stats)
             }
             Err(e) => {
                 let error_msg = format!("Failed to re-index project: {e}");

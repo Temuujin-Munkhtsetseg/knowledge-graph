@@ -80,7 +80,7 @@ pub fn index_data(app_state: &AppState, workspace_folder_paths: Vec<PathBuf>) {
 
     for workspace_folder_path in workspace_folder_paths {
         match executor.execute_workspace_indexing(workspace_folder_path.clone(), None) {
-            Ok(()) => {
+            Ok(_stats) => {
                 info!("Successfully indexed workspace: {workspace_folder_path:?}");
             }
             Err(e) => {

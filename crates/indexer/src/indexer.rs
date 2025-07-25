@@ -16,7 +16,7 @@ use database::kuzu::database::KuzuDatabase;
 use database::kuzu::schema::SchemaManager;
 use gitalisk_core::repository::gitalisk_repository::FileInfo;
 use log::{debug, error, info, warn};
-use std::sync::Arc;
+use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -25,14 +25,15 @@ use crate::analysis::{AnalysisService, types::GraphData};
 use crate::database::changes::KuzuChanges;
 use database::kuzu::config::DatabaseConfig;
 
-use crate::parsing::processor::process_file_info;
+use crate::parsing::processor::{FileProcessor, ProcessingResult};
 use crate::project::source::FileSource;
-use crate::stats::IndexingStats;
 use crate::writer::{WriterResult, WriterService};
 
 use crate::database::utils::NodeIdGenerator;
 pub use crate::parsing::changes::{FileChanges, FileChangesPathType};
-pub use crate::parsing::processor::{FileProcessingResult, ProcessingStats};
+pub use crate::parsing::processor::{
+    ErroredFile, FileProcessingResult, ProcessingStage, ProcessingStats, SkippedFile,
+};
 use crate::project::source::ChangesFileSource;
 
 const DEFAULT_WORKER_THREADS: usize = 8;
@@ -40,7 +41,14 @@ const WORK_QUEUE_CAPACITY: usize = 10000;
 const RESULT_QUEUE_CAPACITY: usize = 10000;
 const RESULT_TIMEOUT_SECS: u64 = 30;
 
-#[derive(Debug, Clone)]
+type ParseFilesResult = (
+    Vec<FileProcessingResult>,
+    Vec<SkippedFile>,
+    Vec<ErroredFile>,
+    Vec<(String, String)>,
+);
+
+#[derive(Debug)]
 pub struct IndexingConfig {
     pub worker_threads: usize,
     pub max_file_size: usize,
@@ -58,14 +66,13 @@ impl Default for IndexingConfig {
 }
 
 pub struct RepositoryIndexingResult {
+    pub total_processing_time: Duration,
     pub repository_name: String,
     pub repository_path: String,
     pub file_results: Vec<FileProcessingResult>,
-    pub total_files_processed: usize,
-    pub total_files_skipped: usize,
-    pub total_files_errored: usize,
-    pub total_processing_time: Duration,
-    pub errors: Vec<(String, String)>,
+    pub skipped_files: Vec<SkippedFile>,
+    pub errored_files: Vec<ErroredFile>,
+    pub errors: Vec<(String, String)>, // Kept for backward compatibility
     pub graph_data: Option<GraphData>,
     pub writer_result: Option<WriterResult>,
     pub database_path: Option<String>,
@@ -73,18 +80,53 @@ pub struct RepositoryIndexingResult {
 }
 
 pub struct RepositoryReindexingResult {
+    pub total_processing_time: Duration,
     pub repository_name: String,
     pub repository_path: String,
     pub file_results: Vec<FileProcessingResult>,
-    pub total_files_processed: usize,
-    pub total_files_skipped: usize,
-    pub total_files_errored: usize,
-    pub total_processing_time: Duration,
-    pub errors: Vec<(String, String)>,
+    pub skipped_files: Vec<SkippedFile>,
+    pub errored_files: Vec<ErroredFile>,
+    pub errors: Vec<(String, String)>, // Kept for backward compatibility
     pub graph_data: Option<GraphData>,
     pub writer_result: Option<WriterResult>,
     pub database_path: Option<String>,
     pub database_loaded: bool,
+}
+
+#[derive(Debug)]
+pub enum AnalyzeAndWriteErrors {
+    FailedToLoadDatabase(String),
+    FailedToAnalyze(String),
+    FailedToWrite(String),
+}
+
+#[derive(Debug)]
+pub enum FatalIndexingError {
+    FailedToGetFiles(String),
+    FailedToProcessFiles(String),
+    FailedToAnalyze(AnalyzeAndWriteErrors),
+    FailedToWrite(AnalyzeAndWriteErrors),
+    FailedToLoadDatabase(AnalyzeAndWriteErrors),
+    FailedToSyncChanges(String),
+}
+
+impl std::fmt::Display for FatalIndexingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FatalIndexingError::FailedToGetFiles(msg) => write!(f, "Failed to get files: {msg}"),
+            FatalIndexingError::FailedToProcessFiles(msg) => {
+                write!(f, "Failed to process files: {msg}")
+            }
+            FatalIndexingError::FailedToAnalyze(err) => write!(f, "Failed to analyze: {err:?}"),
+            FatalIndexingError::FailedToWrite(err) => write!(f, "Failed to write: {err:?}"),
+            FatalIndexingError::FailedToLoadDatabase(err) => {
+                write!(f, "Failed to load database: {err:?}")
+            }
+            FatalIndexingError::FailedToSyncChanges(msg) => {
+                write!(f, "Failed to sync changes: {msg}")
+            }
+        }
+    }
 }
 
 /// Internal messages for worker communication
@@ -116,34 +158,78 @@ impl RepositoryIndexer {
         &self.path
     }
 
+    /// FIXME: SEPARATE THIS INTO A SEPARATE MODULE/EXECUTOR
     pub fn index_files<F: FileSource>(
         &self,
+        database: &KuzuDatabase,
+        output_directory: &str,
+        database_path: &str,
         file_source: F,
         config: &IndexingConfig,
-    ) -> Result<RepositoryIndexingResult, String> {
+    ) -> Result<RepositoryIndexingResult, FatalIndexingError> {
         let start_time = Instant::now();
         info!("Starting repository indexing for: {}", self.name);
 
         let files = file_source
             .get_files(config)
-            .map_err(|e| format!("Failed to get files: {e}"))?;
+            .map_err(|e| FatalIndexingError::FailedToGetFiles(e.to_string()))?;
 
+        let total_files = files.len();
+
+        let (file_results, skipped_files, errored_files, errors) =
+            self.parse_files(files, config)?;
+
+        let (graph_data, writer_result) = self.analyze_and_write_graph_data(
+            database,
+            &file_results,
+            output_directory,
+            database_path,
+        )?;
+
+        let file_results_len = file_results.len();
+        let skipped_files_len = skipped_files.len();
+        let errored_files_len = errored_files.len();
+
+        let mut indexing_result = RepositoryIndexingResult {
+            total_processing_time: start_time.elapsed(),
+            repository_name: self.name.clone(),
+            repository_path: self.path.clone(),
+            file_results,
+            skipped_files,
+            errored_files,
+            errors,
+            graph_data: None,
+            writer_result: None,
+            database_path: None,
+            database_loaded: false,
+        };
+
+        indexing_result.graph_data = Some(graph_data);
+        indexing_result.writer_result = Some(writer_result);
+
+        info!(
+            "✅ Repository indexing completed for '{}' in {:?}",
+            self.name, indexing_result.total_processing_time
+        );
+        info!(
+            "📊 Final results: {:.1}% complete - {} processed, {} skipped, {} errors",
+            (file_results_len as f64 / total_files as f64) * 100.0,
+            file_results_len,
+            skipped_files_len,
+            errored_files_len
+        );
+
+        Ok(indexing_result)
+    }
+
+    /// FIXME: SEPARATE THIS INTO A SEPARATE MODULE/EXECUTOR
+    pub fn parse_files(
+        &self,
+        files: Vec<FileInfo>,
+        config: &IndexingConfig,
+    ) -> Result<ParseFilesResult, FatalIndexingError> {
         if files.is_empty() {
-            warn!("No files to process in repository: {}", self.name);
-            return Ok(RepositoryIndexingResult {
-                repository_name: self.name.clone(),
-                repository_path: self.path.clone(),
-                file_results: Vec::new(),
-                total_files_processed: 0,
-                total_files_skipped: 0,
-                total_files_errored: 0,
-                total_processing_time: start_time.elapsed(),
-                errors: Vec::new(),
-                graph_data: None,
-                writer_result: None,
-                database_path: None,
-                database_loaded: false,
-            });
+            return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
         }
 
         let num_cores: usize = num_cpus::get();
@@ -159,8 +245,6 @@ impl RepositoryIndexer {
 
         let total_files = files.len();
         info!("Processing {total_files} files using {worker_count} worker threads");
-
-        let stats = Arc::new(IndexingStats::new());
 
         let (work_sender, work_receiver) =
             bounded::<WorkMessage>(WORK_QUEUE_CAPACITY.max(total_files));
@@ -207,12 +291,13 @@ impl RepositoryIndexer {
         drop(result_sender);
 
         let mut file_results = Vec::new();
-        let mut total_files_processed = 0;
-        let mut total_files_skipped = 0;
-        let mut total_files_errored = 0;
         let mut errors = Vec::new();
         let mut messages_received = 0;
         let mut last_reported_percentage: u8 = 0;
+
+        let mut skipped_files = Vec::new();
+        let mut errored_files = Vec::new();
+        let mut processed_files = 0;
 
         // Use timeout-based result collection to prevent hanging
         loop {
@@ -220,57 +305,49 @@ impl RepositoryIndexer {
             match result_receiver.recv_timeout(timeout) {
                 Ok(result_msg) => {
                     messages_received += 1;
-
-                    match &result_msg {
+                    match result_msg {
                         ResultMessage::Success(file_result) => {
-                            let file_extension =
-                                IndexingStats::extract_extension(&file_result.file_path);
-                            stats.increment_file_type_processed(&file_extension);
-                            total_files_processed += 1;
+                            processed_files += 1;
+
+                            file_results.push(file_result);
                         }
-                        ResultMessage::Skipped(file_path, _) => {
-                            let file_extension = IndexingStats::extract_extension(file_path);
-                            stats.increment_file_type_skipped(&file_extension);
-                            total_files_skipped += 1;
+                        ResultMessage::Skipped(file_path, reason) => {
+                            skipped_files.push(SkippedFile {
+                                file_path: file_path.clone(),
+                                reason: reason.clone(),
+                                file_size: None,
+                            });
+                            debug!("Skipped {file_path}: {reason}");
                         }
-                        ResultMessage::Error(file_path, _) => {
-                            let file_extension = IndexingStats::extract_extension(file_path);
-                            stats.increment_file_type_errored(&file_extension);
-                            total_files_errored += 1;
+                        ResultMessage::Error(file_path, error_msg) => {
+                            errored_files.push(ErroredFile {
+                                file_path: file_path.clone(),
+                                error_message: error_msg.clone(),
+                                error_stage: ProcessingStage::Unknown,
+                            });
+                            errors.push((file_path.clone(), error_msg.clone()));
+                            error!("Error processing {file_path}: {error_msg}");
                         }
                     }
 
                     // Log progress only on each 5% chunk
-                    let progress_pct = stats.progress_percentage(total_files);
+                    let progress_pct = (processed_files as f64 / total_files as f64) * 100.0;
                     let current_percentage_chunk = (progress_pct / 5.0) as u8 * 5;
 
                     if current_percentage_chunk > last_reported_percentage
                         && current_percentage_chunk <= 100
                     {
-                        let completed = stats.total_files_processed();
+                        let completed = processed_files;
                         info!(
                             "🔄 Progress: {}% ({}/{} files) - {} processed, {} skipped, {} errors",
                             current_percentage_chunk,
                             completed,
                             total_files,
-                            stats.files_processed(),
-                            stats.files_skipped(),
-                            stats.files_errored()
+                            processed_files,
+                            skipped_files.len(),
+                            errored_files.len()
                         );
                         last_reported_percentage = current_percentage_chunk;
-                    }
-
-                    match result_msg {
-                        ResultMessage::Success(file_result) => {
-                            file_results.push(file_result);
-                        }
-                        ResultMessage::Skipped(file_path, reason) => {
-                            debug!("Skipped {file_path}: {reason}");
-                        }
-                        ResultMessage::Error(file_path, error_msg) => {
-                            errors.push((file_path.clone(), error_msg.clone()));
-                            error!("Error processing {file_path}: {error_msg}");
-                        }
                     }
 
                     if messages_received >= total_files {
@@ -305,61 +382,42 @@ impl RepositoryIndexer {
         }
 
         info!("Waiting for feeder thread to complete...");
-        feeder_handle.join().map_err(|_| "Feeder thread panicked")?;
+        feeder_handle.join().map_err(|_| {
+            FatalIndexingError::FailedToProcessFiles("Feeder thread panicked".to_string())
+        })?;
 
         info!(
             "Waiting for {} worker threads to complete...",
             worker_handles.len()
         );
         for (i, handle) in worker_handles.into_iter().enumerate() {
-            handle
-                .join()
-                .map_err(|_| format!("Worker thread {i} panicked"))?;
+            handle.join().map_err(|_| {
+                FatalIndexingError::FailedToProcessFiles(format!("Worker thread {i} panicked"))
+            })?;
         }
 
-        let total_processing_time = start_time.elapsed();
+        Ok((file_results, skipped_files, errored_files, errors))
+    }
 
-        info!(
-            "✅ Repository indexing completed for '{}' in {:?}",
-            self.name, total_processing_time
-        );
-        info!(
-            "📊 Final results: {:.1}% complete - {} processed, {} skipped, {} errors",
-            stats.progress_percentage(total_files),
-            stats.files_processed(),
-            stats.files_skipped(),
-            stats.files_errored()
-        );
-
-        let file_type_stats = stats.format_file_type_stats();
-        if !file_type_stats.trim().is_empty() {
-            info!("📁 File type breakdown:\n{file_type_stats}");
-        }
-
-        Ok(RepositoryIndexingResult {
-            repository_name: self.name.clone(),
-            repository_path: self.path.clone(),
-            file_results,
-            total_files_processed,
-            total_files_skipped,
-            total_files_errored,
-            total_processing_time,
-            errors,
-            graph_data: None,
-            writer_result: None,
-            database_path: None,
-            database_loaded: false,
-        })
+    fn get_files<F: FileSource>(
+        &self,
+        file_source: F,
+        config: &IndexingConfig,
+    ) -> Result<Vec<FileInfo>, FatalIndexingError> {
+        file_source
+            .get_files(config)
+            .map_err(|e| FatalIndexingError::FailedToGetFiles(e.to_string()))
     }
 
     /// Analyze processed files, write graph data to Parquet files, and load into Kuzu database
+    /// FIXME: SEPARATE THIS INTO A SEPARATE MODULE/EXECUTOR
     pub fn analyze_and_write_graph_data(
         &self,
         database: &KuzuDatabase,
-        indexing_result: &mut RepositoryIndexingResult,
+        file_results: &Vec<FileProcessingResult>,
         output_directory: &str,
-        database_path: Option<&str>,
-    ) -> Result<(), String> {
+        database_path: &str,
+    ) -> Result<(GraphData, WriterResult), FatalIndexingError> {
         info!(
             "Starting analysis and writing phase for repository: {}",
             self.name
@@ -369,8 +427,12 @@ impl RepositoryIndexer {
         let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
         let graph_data = analysis_service
-            .analyze_results(&indexing_result.file_results)
-            .map_err(|e| format!("Analysis failed: {e}"))?;
+            .analyze_results(file_results)
+            .map_err(|e| {
+                FatalIndexingError::FailedToAnalyze(AnalyzeAndWriteErrors::FailedToAnalyze(
+                    e.to_string(),
+                ))
+            })?;
 
         info!(
             "Analysis completed: {} files, {} definitions, {} relationships",
@@ -379,14 +441,19 @@ impl RepositoryIndexer {
             graph_data.file_definition_relationships.len()
         );
 
-        let writer_service = WriterService::new(output_directory)
-            .map_err(|e| format!("Failed to create writer service: {e}"))?;
+        let writer_service = WriterService::new(output_directory).map_err(|e| {
+            FatalIndexingError::FailedToWrite(AnalyzeAndWriteErrors::FailedToWrite(e.to_string()))
+        })?;
 
         let mut node_id_generator = NodeIdGenerator::new();
 
         let writer_result = writer_service
             .write_graph_data(&graph_data, &mut node_id_generator)
-            .map_err(|e| format!("Writing failed: {e}"))?;
+            .map_err(|e| {
+                FatalIndexingError::FailedToWrite(AnalyzeAndWriteErrors::FailedToWrite(
+                    e.to_string(),
+                ))
+            })?;
 
         let analysis_duration = start_time.elapsed();
         info!(
@@ -395,36 +462,15 @@ impl RepositoryIndexer {
             writer_result.files_written.len()
         );
 
-        indexing_result.graph_data = Some(graph_data);
-        indexing_result.writer_result = Some(writer_result);
+        info!("Loading graph data into Kuzu database at: {database_path}");
+        self.load_into_database(database, output_directory, database_path)
+            .map_err(|e| {
+                FatalIndexingError::FailedToLoadDatabase(
+                    AnalyzeAndWriteErrors::FailedToLoadDatabase(e.to_string()),
+                )
+            })?;
 
-        if let Some(db_path) = database_path {
-            info!("Loading graph data into Kuzu database at: {db_path}");
-            match self.load_into_database(database, output_directory, db_path) {
-                Ok(_) => {
-                    info!("✅ Successfully loaded graph data into Kuzu database");
-                    indexing_result.database_path = Some(db_path.to_string());
-                    indexing_result.database_loaded = true;
-                }
-                Err(e) => {
-                    warn!("⚠️ Failed to load graph data into database: {e}");
-                    indexing_result.database_path = Some(db_path.to_string());
-                    indexing_result.database_loaded = false;
-                }
-            }
-        }
-
-        Ok(())
-    }
-    /// Full repository processing pipeline: discover, index, analyze, and write
-    pub fn process_files_full<F: FileSource>(
-        &self,
-        database: &KuzuDatabase,
-        file_source: F,
-        config: &IndexingConfig,
-        output_directory: &str,
-    ) -> Result<RepositoryIndexingResult, String> {
-        self.process_files_full_with_database(database, file_source, config, output_directory, None)
+        Ok((graph_data, writer_result))
     }
 
     pub fn process_files_full_with_database<F: FileSource>(
@@ -433,15 +479,16 @@ impl RepositoryIndexer {
         file_source: F,
         config: &IndexingConfig,
         output_directory: &str,
-        database_path: Option<&str>,
-    ) -> Result<RepositoryIndexingResult, String> {
-        let mut indexing_result = self.index_files(file_source, config)?;
-        self.analyze_and_write_graph_data(
+        database_path: &str,
+    ) -> Result<RepositoryIndexingResult, FatalIndexingError> {
+        let indexing_result = self.index_files(
             database,
-            &mut indexing_result,
             output_directory,
             database_path,
+            file_source,
+            config,
         )?;
+
         Ok(indexing_result)
     }
 
@@ -452,17 +499,18 @@ impl RepositoryIndexer {
         config: &IndexingConfig,
         database_path: &str,
         output_path: &str,
-    ) -> Result<RepositoryReindexingResult, String> {
+    ) -> Result<RepositoryReindexingResult, FatalIndexingError> {
+        let start_time = Instant::now();
+
         if !file_changes.has_changes() {
             warn!("No files to process in repository: {}", self.name);
             return Ok(RepositoryReindexingResult {
+                total_processing_time: start_time.elapsed(),
                 repository_name: self.name.clone(),
                 repository_path: self.path.clone(),
                 file_results: Vec::new(),
-                total_files_processed: 0,
-                total_files_skipped: 0,
-                total_files_errored: 0,
-                total_processing_time: Duration::from_secs(0),
+                skipped_files: Vec::new(),
+                errored_files: Vec::new(),
                 errors: Vec::new(),
                 graph_data: None,
                 writer_result: None,
@@ -473,31 +521,37 @@ impl RepositoryIndexer {
 
         let database_instance = database.get_or_create_database(database_path, None);
         if database_instance.is_none() {
-            return Err(format!("Failed to create database: {database_path}."));
+            return Err(FatalIndexingError::FailedToLoadDatabase(
+                AnalyzeAndWriteErrors::FailedToLoadDatabase(format!(
+                    "Failed to create database: {database_path}."
+                )),
+            ));
         } else {
             info!("Found database_instance for reindexing: {database_instance:?}");
         }
         let database_instance = database_instance.unwrap();
 
-        // Run the full processing pipeline
         let file_source = ChangesFileSource::new(&file_changes, self.path.clone());
-        let result = self
-            .process_files_full(database, file_source, config, output_path)
-            .expect("Failed to process repository");
+        let files = self.get_files(file_source, config)?;
 
-        // Create analysis service
+        let (file_results, skipped_files, errored_files, errors) =
+            self.parse_files(files, config)?;
+
         let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
-        // Analyze the file processing results to create graph data
         let graph_data = analysis_service
-            .analyze_results(&result.file_results)
-            .map_err(|e| format!("Analysis failed: {e}"))?;
+            .analyze_results(&file_results)
+            .map_err(|e| {
+                FatalIndexingError::FailedToAnalyze(AnalyzeAndWriteErrors::FailedToAnalyze(
+                    e.to_string(),
+                ))
+            })?;
 
         // Sync diff changes to kuzu
         let mut kuzu_syncer = KuzuChanges::new(
             &database_instance,
             file_changes,
-            graph_data,
+            graph_data.clone(),
             &self.path,
             output_path,
         );
@@ -505,23 +559,23 @@ impl RepositoryIndexer {
         kuzu_syncer
             .sync_changes()
             .map(|writer_result| RepositoryReindexingResult {
+                total_processing_time: start_time.elapsed(),
                 repository_name: self.name.clone(),
                 repository_path: self.path.clone(),
-                file_results: result.file_results,
-                total_files_processed: result.total_files_processed,
-                total_files_skipped: result.total_files_skipped,
-                total_files_errored: result.total_files_errored,
-                total_processing_time: result.total_processing_time,
-                errors: result.errors,
+                file_results,
+                skipped_files,
+                errored_files,
+                errors,
                 graph_data: None,
                 writer_result: Some(writer_result),
                 database_path: Some(database_path.to_string()),
                 database_loaded: true,
             })
-            .map_err(|e| format!("Failed to sync incremental changes to database: {e}"))
+            .map_err(|e| FatalIndexingError::FailedToSyncChanges(e.to_string()))
     }
 
     /// Load Parquet data into Kuzu database
+    /// FIXME: SEPARATE THIS INTO A SEPARATE MODULE/EXECUTOR
     fn load_into_database(
         &self,
         database: &KuzuDatabase,
@@ -604,13 +658,17 @@ impl RepositoryIndexer {
         let full_path = if file_path.starts_with(repo_path) {
             file_path.clone()
         } else {
-            format!("{repo_path}/{file_path}")
+            Path::new(repo_path)
+                .join(&file_path)
+                .to_string_lossy()
+                .to_string()
         };
 
         let metadata = std::fs::metadata(&full_path).map_err(|e| {
             ProcessingError::Error(file_path.clone(), format!("Failed to read metadata: {e}"))
         })?;
 
+        // FIXME: MOVE THIS TO THE PROCESSOR
         if metadata.len() as usize > max_file_size {
             return Err(ProcessingError::Skipped(
                 file_path.clone(),
@@ -622,8 +680,18 @@ impl RepositoryIndexer {
             ProcessingError::Error(file_path.clone(), format!("Failed to read file: {e}"))
         })?;
 
-        process_file_info(file_info, &content)
-            .map_err(|e| ProcessingError::Error(file_path, e.to_string()))
+        let file = FileProcessor::from_file_info(file_info, &content);
+
+        match file.process() {
+            ProcessingResult::Success(file_result) => Ok(file_result),
+            ProcessingResult::Skipped(skipped) => {
+                Err(ProcessingError::Skipped(skipped.file_path, skipped.reason))
+            }
+            ProcessingResult::Error(errored) => Err(ProcessingError::Error(
+                errored.file_path,
+                errored.error_message,
+            )),
+        }
     }
 }
 

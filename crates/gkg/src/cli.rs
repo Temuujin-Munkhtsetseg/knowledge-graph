@@ -35,6 +35,10 @@ pub enum Commands {
         /// Enable verbose logging
         #[arg(short, long)]
         verbose: bool,
+
+        /// Output statistics. Optionally specify a file path to save to.
+        #[arg(long, value_name = "FILE", num_args = 0..=1, require_equals = true)]
+        stats_output: Option<Option<PathBuf>>,
     },
     /// Start the gkg server
     Server {

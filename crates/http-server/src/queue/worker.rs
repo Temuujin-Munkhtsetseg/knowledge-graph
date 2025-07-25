@@ -221,7 +221,7 @@ impl WorkspaceWorker {
         .await;
 
         match result {
-            Ok(Ok(())) => {
+            Ok(Ok(_stats)) => {
                 info!(
                     "Indexing completed successfully for workspace '{}'",
                     workspace_folder_path

@@ -1,199 +1,181 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use crate::analysis::types::GraphData;
+use crate::writer::WriterResult;
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::time::Duration;
 
-/// Statistics tracking for the indexing process
-#[derive(Debug)]
-pub struct IndexingStats {
-    files_discovered: AtomicUsize,
-    files_processed: AtomicUsize,
-    files_skipped: AtomicUsize,
-    files_errored: AtomicUsize,
-    repositories_processed: AtomicUsize,
-    repositories_errored: AtomicUsize,
-    definitions_found: AtomicUsize,
-    references_found: AtomicUsize,
-    // File type statistics (extension -> count)
-    file_types_processed: Arc<Mutex<HashMap<String, usize>>>,
-    file_types_skipped: Arc<Mutex<HashMap<String, usize>>>,
-    file_types_errored: Arc<Mutex<HashMap<String, usize>>>,
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FileTypeStats {
+    pub processed: usize,
+    pub skipped: usize,
+    pub errored: usize,
+    pub total_bytes: u64,
 }
 
-impl IndexingStats {
-    pub fn new() -> Self {
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LanguageStats {
+    pub file_count: usize,
+    pub definition_count: usize,
+    pub definition_types: HashMap<String, usize>,
+    pub total_bytes: u64,
+}
+
+pub fn finalize_project_statistics(
+    project_name: String,
+    project_path: String,
+    duration: Duration,
+    graph_data: &GraphData,
+    writer_result: &WriterResult,
+) -> ProjectStatistics {
+    let mut language_map: HashMap<String, (usize, usize, HashMap<String, usize>)> = HashMap::new();
+
+    let file_path_to_language: HashMap<&str, &str> = graph_data
+        .file_nodes
+        .iter()
+        .map(|f| (f.path.as_str(), f.language.as_str()))
+        .collect();
+
+    for file_node in &graph_data.file_nodes {
+        let entry =
+            language_map
+                .entry(file_node.language.clone())
+                .or_insert((0, 0, HashMap::new()));
+        entry.0 += 1; // file_count
+    }
+
+    for def_node in &graph_data.definition_nodes {
+        if let Some(&language) = file_path_to_language.get(def_node.location.file_path.as_str()) {
+            let entry = language_map
+                .entry(language.to_string())
+                .or_insert((0, 0, HashMap::new()));
+            entry.1 += 1;
+            *entry
+                .2
+                .entry(def_node.definition_type.as_str().to_string())
+                .or_insert(0) += 1;
+        }
+    }
+
+    let language_statistics: Vec<LanguageStatistics> = language_map
+        .into_iter()
+        .map(
+            |(language, (file_count, definitions_count, definition_type_counts))| {
+                LanguageStatistics {
+                    language,
+                    file_count,
+                    definitions_count,
+                    definition_type_counts,
+                }
+            },
+        )
+        .collect();
+
+    ProjectStatistics {
+        project_name,
+        project_path,
+        total_files: writer_result.total_files,
+        total_definitions: writer_result.total_definitions,
+        languages: language_statistics,
+        indexing_duration_seconds: duration.as_secs_f64(),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatisticsMetadata {
+    pub gkg_version: String,
+    pub timestamp: DateTime<Utc>,
+    pub workspace_path: String,
+    pub indexing_duration_seconds: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanguageStatistics {
+    pub language: String,
+    pub file_count: usize,
+    pub definitions_count: usize,
+    pub definition_type_counts: HashMap<String, usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectStatistics {
+    pub project_name: String,
+    pub project_path: String,
+    pub total_files: usize,
+    pub total_definitions: usize,
+    pub languages: Vec<LanguageStatistics>,
+    pub indexing_duration_seconds: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceStatistics {
+    pub metadata: StatisticsMetadata,
+    pub total_projects: usize,
+    pub total_files: usize,
+    pub total_definitions: usize,
+    pub total_languages: HashMap<String, LanguageSummary>,
+    pub projects: Vec<ProjectStatistics>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanguageSummary {
+    pub file_count: usize,
+    pub definitions_count: usize,
+    pub definition_type_counts: HashMap<String, usize>,
+}
+
+impl WorkspaceStatistics {
+    pub fn new(workspace_path: String, indexing_duration_seconds: f64) -> Self {
         Self {
-            files_discovered: AtomicUsize::new(0),
-            files_processed: AtomicUsize::new(0),
-            files_skipped: AtomicUsize::new(0),
-            files_errored: AtomicUsize::new(0),
-            repositories_processed: AtomicUsize::new(0),
-            repositories_errored: AtomicUsize::new(0),
-            definitions_found: AtomicUsize::new(0),
-            references_found: AtomicUsize::new(0),
-            file_types_processed: Arc::new(Mutex::new(HashMap::new())),
-            file_types_skipped: Arc::new(Mutex::new(HashMap::new())),
-            file_types_errored: Arc::new(Mutex::new(HashMap::new())),
+            metadata: StatisticsMetadata {
+                gkg_version: env!("CARGO_PKG_VERSION").to_string(),
+                timestamp: Utc::now(),
+                workspace_path,
+                indexing_duration_seconds,
+            },
+            total_projects: 0,
+            total_files: 0,
+            total_definitions: 0,
+            total_languages: HashMap::new(),
+            projects: Vec::new(),
         }
     }
 
-    // File statistics
-    pub fn increment_files_discovered(&self) {
-        self.files_discovered.fetch_add(1, Ordering::Relaxed);
-    }
+    pub fn add_project(&mut self, project_stats: ProjectStatistics) {
+        self.total_files += project_stats.total_files;
+        self.total_definitions += project_stats.total_definitions;
 
-    pub fn increment_files_processed(&self) {
-        self.files_processed.fetch_add(1, Ordering::Relaxed);
-    }
+        for lang_stats in &project_stats.languages {
+            let lang_summary = self
+                .total_languages
+                .entry(lang_stats.language.clone())
+                .or_insert_with(|| LanguageSummary {
+                    file_count: 0,
+                    definitions_count: 0,
+                    definition_type_counts: HashMap::new(),
+                });
 
-    pub fn increment_files_skipped(&self) {
-        self.files_skipped.fetch_add(1, Ordering::Relaxed);
-    }
+            lang_summary.file_count += lang_stats.file_count;
+            lang_summary.definitions_count += lang_stats.definitions_count;
 
-    pub fn increment_files_errored(&self) {
-        self.files_errored.fetch_add(1, Ordering::Relaxed);
-    }
-
-    // File type statistics
-    pub fn increment_file_type_processed(&self, file_extension: &str) {
-        self.increment_files_processed();
-        let mut map = self.file_types_processed.lock().unwrap();
-        *map.entry(file_extension.to_string()).or_insert(0) += 1;
-    }
-
-    pub fn increment_file_type_skipped(&self, file_extension: &str) {
-        self.increment_files_skipped();
-        let mut map = self.file_types_skipped.lock().unwrap();
-        *map.entry(file_extension.to_string()).or_insert(0) += 1;
-    }
-
-    pub fn increment_file_type_errored(&self, file_extension: &str) {
-        self.increment_files_errored();
-        let mut map = self.file_types_errored.lock().unwrap();
-        *map.entry(file_extension.to_string()).or_insert(0) += 1;
-    }
-
-    // Repository statistics
-    pub fn increment_repositories_processed(&self) {
-        self.repositories_processed.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub fn increment_repository_errors(&self) {
-        self.repositories_errored.fetch_add(1, Ordering::Relaxed);
-    }
-
-    // Code entity statistics
-    pub fn add_definitions(&self, count: usize) {
-        self.definitions_found.fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn add_references(&self, count: usize) {
-        self.references_found.fetch_add(count, Ordering::Relaxed);
-    }
-
-    // Getters
-    pub fn files_discovered(&self) -> usize {
-        self.files_discovered.load(Ordering::Relaxed)
-    }
-
-    pub fn files_processed(&self) -> usize {
-        self.files_processed.load(Ordering::Relaxed)
-    }
-
-    pub fn files_skipped(&self) -> usize {
-        self.files_skipped.load(Ordering::Relaxed)
-    }
-
-    pub fn files_errored(&self) -> usize {
-        self.files_errored.load(Ordering::Relaxed)
-    }
-
-    pub fn repositories_processed(&self) -> usize {
-        self.repositories_processed.load(Ordering::Relaxed)
-    }
-
-    pub fn repositories_errored(&self) -> usize {
-        self.repositories_errored.load(Ordering::Relaxed)
-    }
-
-    pub fn definitions_found(&self) -> usize {
-        self.definitions_found.load(Ordering::Relaxed)
-    }
-
-    pub fn references_found(&self) -> usize {
-        self.references_found.load(Ordering::Relaxed)
-    }
-
-    // File type getters
-    pub fn file_types_processed(&self) -> HashMap<String, usize> {
-        self.file_types_processed.lock().unwrap().clone()
-    }
-
-    pub fn file_types_skipped(&self) -> HashMap<String, usize> {
-        self.file_types_skipped.lock().unwrap().clone()
-    }
-
-    pub fn file_types_errored(&self) -> HashMap<String, usize> {
-        self.file_types_errored.lock().unwrap().clone()
-    }
-
-    // Progress calculation
-    pub fn total_files_processed(&self) -> usize {
-        self.files_processed() + self.files_skipped() + self.files_errored()
-    }
-
-    pub fn progress_percentage(&self, total_expected: usize) -> f64 {
-        if total_expected == 0 {
-            100.0
-        } else {
-            (self.total_files_processed() as f64 / total_expected as f64) * 100.0
-        }
-    }
-
-    // Helper to extract file extension
-    pub fn extract_extension(file_path: &str) -> String {
-        std::path::Path::new(file_path)
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("unknown")
-            .to_string()
-    }
-
-    // Pretty print file type statistics
-    pub fn format_file_type_stats(&self) -> String {
-        let mut result = String::new();
-
-        let processed = self.file_types_processed();
-        let skipped = self.file_types_skipped();
-        let errored = self.file_types_errored();
-
-        // Collect all file types
-        let mut all_types: HashSet<String> = HashSet::new();
-        all_types.extend(processed.keys().cloned());
-        all_types.extend(skipped.keys().cloned());
-        all_types.extend(errored.keys().cloned());
-
-        let mut types: Vec<String> = all_types.into_iter().collect();
-        types.sort();
-
-        for file_type in types {
-            let proc_count = processed.get(&file_type).unwrap_or(&0);
-            let skip_count = skipped.get(&file_type).unwrap_or(&0);
-            let err_count = errored.get(&file_type).unwrap_or(&0);
-            let total = proc_count + skip_count + err_count;
-
-            if total > 0 {
-                result.push_str(&format!(
-                    "  • .{file_type}: {total} total (✅ {proc_count} processed, ⏭️ {skip_count} skipped, ❌ {err_count} errors)\n"
-                ));
+            for (def_type, count) in &lang_stats.definition_type_counts {
+                *lang_summary
+                    .definition_type_counts
+                    .entry(def_type.clone())
+                    .or_insert(0) += count;
             }
         }
 
-        result
+        self.projects.push(project_stats);
+        self.total_projects = self.projects.len();
     }
-}
 
-impl Default for IndexingStats {
-    fn default() -> Self {
-        Self::new()
+    pub fn export_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let json = serde_json::to_string_pretty(self)?;
+        fs::write(path, json)?;
+        Ok(())
     }
 }
