@@ -1,0 +1,12 @@
+[project]
+name = "gkg"
+
+[[scenarios.hyperfine]]
+id = "gkg_index_gdk_release_4_threads"
+command = "cargo run --package gkg --release -- index output/gdk --threads 4 --stats-output=gkg-stats.json"
+setup = "cargo run --package testing --bin download-repos"
+description = "Indexes all of GDK (gdk, gitlab, gitlab-shell) with 4 threads"
+custom_output_file = "gkg-stats.json"
+warmup = 1
+min_runs = 3
+max_runs = 3

@@ -31,6 +31,16 @@ impl TestRepository {
             dir: dir.to_path_buf(),
         }
     }
+
+    /// Creates a minimal Git repository without adding or committing files.
+    /// This is useful for large repositories where the initial commit would be slow.
+    pub fn new_minimal(dir: &Path) -> Self {
+        initialize_minimal_git_repo(dir);
+
+        Self {
+            dir: dir.to_path_buf(),
+        }
+    }
 }
 
 fn create_git_repo_structure(repo_path: &Path) {
@@ -85,6 +95,26 @@ fn initialize_git_repo(repo_path: &Path) {
         .current_dir(repo_path)
         .output()
         .expect("Failed to create initial commit");
+}
+
+fn initialize_minimal_git_repo(repo_path: &Path) {
+    Command::new("git")
+        .args(["init"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to initialize git repository");
+
+    Command::new("git")
+        .args(["config", "--local", "user.name", "test-gl-user"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to configure git user name");
+
+    Command::new("git")
+        .args(["config", "--local", "user.email", "test-gl-user@gitlab.com"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to configure git user email");
 }
 
 pub fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {

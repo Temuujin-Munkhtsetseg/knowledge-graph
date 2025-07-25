@@ -2,6 +2,7 @@ stages:
   - lint
   - build
   - test
+  - benchmark
   - deploy
   
 variables:
@@ -66,16 +67,16 @@ frontend-build:
       - packages/frontend/dist/
     expire_in: 24 hours
 
+
 rust-unit-test-report:
   stage: test
-  needs: []
+  needs:
+    - frontend-build
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   variables:
     RUST_BACKTRACE: 1
-  needs:
-    - frontend-build
   script:
     - cargo test export_bindings_ && cargo nextest run --profile ci
   extends: .rust-job-template
@@ -84,6 +85,137 @@ rust-unit-test-report:
     reports:
       junit:
         - target/nextest/ci/junit.xml
+
+# Reusable script for installing gitlab-xtasks conditionally
+.install-gitlab-xtasks: &install-gitlab-xtasks |
+    cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v1.1.0 --force
+
+
+# Shared benchmark template for GKG indexing performance tests
+.gkg-benchmark-template:
+  stage: benchmark
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  interruptible: true
+  script:
+    - export CARGO_INSTALL_ROOT="${CARGO_HOME:-$HOME/.cargo}"
+    - export PATH="${CARGO_INSTALL_ROOT}/bin:$HOME/.cargo/bin:$PATH"
+    - *install-gitlab-xtasks
+    - |
+      # Debug: Show where gitlab-xtasks was installed
+      which gitlab-xtasks || echo "gitlab-xtasks not found in PATH"
+      echo "Current PATH: $PATH"
+      
+      # Platform-specific setup
+      if [[ "$RUNNER_OS" == "macOS" ]]; then
+        # rustup will automatically use the version from rust-toolchain.toml
+        # Install hyperfine via Homebrew (recommended method)
+        brew install hyperfine 2>/dev/null || echo "hyperfine may already be installed"
+      else
+        cargo install --locked hyperfine
+      fi
+      
+      # Run benchmark with unique filename
+      OUTPUT_FILE="gkg-benchmark-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}-${ARCH}-${SCENARIO}.json"
+      gitlab-xtasks benchmark hyperfine \
+        --config gkg-benchmark-config.toml \
+        --architecture "$ARCH" \
+        --scenario "$SCENARIO" \
+        --output-file "$OUTPUT_FILE"
+      echo "GKG benchmark completed for scenario: $SCENARIO on architecture: $ARCH"
+  artifacts:
+    paths:
+      - gkg-benchmark-*.json
+    expire_in: 3 weeks
+
+# Linux GKG benchmark execution
+gkg-benchmark-linux:
+  extends: 
+    - .rust-job-template
+    - .gkg-benchmark-template
+  variables:
+    ARCH: "linux-x86_64"
+    CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+  parallel:
+    matrix:
+      - SCENARIO: [gkg_index_gdk_release_4_threads]
+
+# macOS GKG benchmark execution  
+# TODO: re-enable this once we can benchmark on macOS in under 10 minutes.
+# gkg-benchmark-macos:
+#   extends: .gkg-benchmark-template
+#   tags:
+#     - saas-macos-medium-m1
+#   image: macos-15-xcode-16
+#   variables:
+#     ARCH: "macos-arm64"
+#     CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+#     RUNNER_OS: "macOS"
+#   before_script:
+#     - rustc --version && cargo --version
+#     - rustup set auto-self-update disable
+#     # Install build dependencies like darwin-build-template
+#     - brew install cmake python jq
+#   parallel:
+#     matrix:
+#       - SCENARIO: [gkg_index_gdk_release_4_threads]
+
+# Collect and analyze all GKG benchmark results
+gkg-benchmark-analyze:
+  stage: benchmark
+  needs: 
+    - gkg-benchmark-linux
+    # - job: gkg-benchmark-macos
+    #   optional: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  interruptible: true
+  script:
+    - export CARGO_INSTALL_ROOT="${CARGO_HOME:-$HOME/.cargo}"
+    - export PATH="${CARGO_INSTALL_ROOT}/bin:$HOME/.cargo/bin:$PATH"
+    - *install-gitlab-xtasks
+    - |
+      # Generate markdown report with metadata
+      gitlab-xtasks benchmark analyze \
+        --pattern "gkg-benchmark-*.json" \
+        --output-format markdown \
+        --pipeline-url "$CI_PIPELINE_URL" \
+        --job-url "$CI_JOB_URL" \
+        --branch "$CI_COMMIT_REF_NAME" \
+        --output-file gkg-benchmark-results.md
+      
+      # Generate JSON report with metadata  
+      gitlab-xtasks benchmark analyze \
+        --pattern "gkg-benchmark-*.json" \
+        --output-format json \
+        --pipeline-url "$CI_PIPELINE_URL" \
+        --job-url "$CI_JOB_URL" \
+        --branch "$CI_COMMIT_REF_NAME" \
+        --output-file gkg-benchmark-results.json
+      
+      echo "Generated GKG benchmark reports:"
+      echo "- Markdown: gkg-benchmark-results.md"
+      echo "- JSON: gkg-benchmark-results.json"
+      
+      # Post benchmark results as MR comment using delete-and-add strategy
+      if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
+        echo "Posting GKG benchmark results to MR !$CI_MERGE_REQUEST_IID..."
+        gitlab-xtasks comment post \
+          --type delete-and-add \
+          --unique-id "gkg-benchmarking-comment" \
+          --file-path gkg-benchmark-results.md
+        echo "GKG benchmark comment posted successfully"
+      else
+        echo "Not a merge request pipeline, skipping comment posting"
+      fi
+  artifacts:
+    paths:
+      - gkg-benchmark-results.md
+      - gkg-benchmark-results.json
+      - gkg-benchmark-*.json
+    expire_in: 1 week
+  extends: .rust-job-template
 
 cargo-update:
   stage: deploy
