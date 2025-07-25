@@ -8,3 +8,13 @@ repository = "https://gitlab.com/gitlab-org/rust/knowledge-graph"
 edition = "2024"
 
 [dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
+zip = { workspace = true }
+
+[[bin]]
+name = "download-repos"
+path = "src/bin/download_repos.rs"
