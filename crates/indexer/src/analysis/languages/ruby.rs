@@ -34,39 +34,37 @@ impl RubyAnalyzer {
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
     ) -> Result<(), String> {
-        if let Some(definitions) = &file_result.definitions {
-            if let Some(defs) = definitions.iter_ruby() {
-                for definition in defs {
-                    if definition.definition_type == RubyDefinitionType::Module {
-                        // Modules are not strictly valid definitions per phase 1, so we skip them for now.
-                        // TODO: However, we should handle module call definitions eventually.
-                        continue;
-                    }
+        if let Some(defs) = file_result.definitions.iter_ruby() {
+            for definition in defs {
+                if definition.definition_type == RubyDefinitionType::Module {
+                    // Modules are not strictly valid definitions per phase 1, so we skip them for now.
+                    // TODO: However, we should handle module call definitions eventually.
+                    continue;
+                }
 
-                    if let Some((location, ruby_fqn)) =
-                        self.create_definition_location(definition, relative_file_path)?
-                    {
-                        let fqn_string = ruby_fqn_to_string(&ruby_fqn);
+                if let Some((location, ruby_fqn)) =
+                    self.create_definition_location(definition, relative_file_path)?
+                {
+                    let fqn_string = ruby_fqn_to_string(&ruby_fqn);
 
-                        // Create new definition
-                        let definition_node = DefinitionNode::new(
-                            fqn_string.clone(),
-                            definition.name.clone(),
-                            DefinitionType::Ruby(definition.definition_type),
-                            location,
-                        );
-                        definition_map.insert(
-                            (fqn_string.clone(), relative_file_path.to_string()),
-                            (definition_node, FqnType::Ruby(ruby_fqn)),
-                        );
+                    // Create new definition
+                    let definition_node = DefinitionNode::new(
+                        fqn_string.clone(),
+                        definition.name.clone(),
+                        DefinitionType::Ruby(definition.definition_type),
+                        location,
+                    );
+                    definition_map.insert(
+                        (fqn_string.clone(), relative_file_path.to_string()),
+                        (definition_node, FqnType::Ruby(ruby_fqn)),
+                    );
 
-                        // Always create file-definition relationship for this specific location
-                        file_definition_relationships.push(FileDefinitionRelationship {
-                            file_path: relative_file_path.to_string(),
-                            definition_fqn: fqn_string,
-                            relationship_type: RelationshipType::FileDefines,
-                        });
-                    }
+                    // Always create file-definition relationship for this specific location
+                    file_definition_relationships.push(FileDefinitionRelationship {
+                        file_path: relative_file_path.to_string(),
+                        definition_fqn: fqn_string,
+                        relationship_type: RelationshipType::FileDefines,
+                    });
                 }
             }
         }

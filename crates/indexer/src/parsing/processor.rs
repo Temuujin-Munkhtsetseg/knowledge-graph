@@ -3,10 +3,16 @@ use parser_core::{
     definitions::DefinitionTypeInfo,
     java::{analyzer::JavaAnalyzer, types::JavaDefinitionInfo},
     kotlin::{analyzer::KotlinAnalyzer, types::KotlinDefinitionInfo},
-    parser::{GenericParser, LanguageParser, SupportedLanguage, detect_language_from_extension},
-    python::{analyzer::PythonAnalyzer, types::PythonDefinitionInfo},
+    parser::{
+        GenericParser, LanguageParser, ParseResult, SupportedLanguage,
+        detect_language_from_extension,
+    },
+    python::{
+        analyzer::PythonAnalyzer,
+        types::{PythonDefinitionInfo, PythonImportedSymbolInfo},
+    },
     ruby::{analyzer::RubyAnalyzer, definitions::RubyDefinitionInfo},
-    rules::{RuleManager, run_rules},
+    rules::{MatchWithNodes, RuleManager, run_rules},
 };
 use std::time::{Duration, Instant};
 
@@ -173,7 +179,7 @@ impl<'a> FileProcessor<'a> {
             return ProcessingResult::Skipped(SkippedFile {
                 file_path: self.path.clone(),
                 reason: format!("Unsupported language: {language:?}"),
-                file_size: None,
+                file_size: Some(self.size()),
             });
         }
 
@@ -198,90 +204,107 @@ impl<'a> FileProcessor<'a> {
         let matches = run_rules(&parse_result.ast, Some(&self.path), &rule_manager);
         let rules_time = rules_start.elapsed();
 
-        // 4. Use language-specific analyzer to extract definitions
+        // 4. Use language-specific analyzer to extract constructs
         let analysis_start = Instant::now();
-        let definitions = match language {
-            SupportedLanguage::Ruby => {
-                let analyzer = RubyAnalyzer::new();
-                match analyzer.analyze(&matches, &parse_result) {
-                    Ok(analysis_result) => Definitions::Ruby(analysis_result.definitions),
-                    Err(e) => {
-                        return ProcessingResult::Error(ErroredFile {
-                            file_path: self.path.clone(),
-                            error_message: format!("Failed to analyze Ruby file: {e}"),
-                            error_stage: ProcessingStage::Parsing,
-                        });
-                    }
-                }
-            }
-            SupportedLanguage::Python => {
-                let analyzer = PythonAnalyzer::new();
-                match analyzer.analyze(&matches, &parse_result) {
-                    Ok(analysis_result) => Definitions::Python(analysis_result.definitions),
-                    Err(e) => {
-                        return ProcessingResult::Error(ErroredFile {
-                            file_path: self.path.clone(),
-                            error_message: format!("Failed to analyze Python file: {e}"),
-                            error_stage: ProcessingStage::Parsing,
-                        });
-                    }
-                }
-            }
-            SupportedLanguage::Kotlin => {
-                let analyzer = KotlinAnalyzer::new();
-                match analyzer.analyze(&matches, &parse_result) {
-                    Ok(analysis_result) => Definitions::Kotlin(analysis_result.definitions),
-                    Err(e) => {
-                        return ProcessingResult::Error(ErroredFile {
-                            file_path: self.path.clone(),
-                            error_message: format!("Failed to analyze Kotlin file: {e}"),
-                            error_stage: ProcessingStage::Parsing,
-                        });
-                    }
-                }
-            }
-            SupportedLanguage::Java => {
-                let analyzer = JavaAnalyzer::new();
-                match analyzer.analyze(&matches, &parse_result) {
-                    Ok(analysis_result) => Definitions::Java(analysis_result.definitions),
-                    Err(e) => {
-                        return ProcessingResult::Error(ErroredFile {
-                            file_path: self.path.clone(),
-                            error_message: format!("Failed to analyze Java file: {e}"),
-                            error_stage: ProcessingStage::Parsing,
-                        });
-                    }
-                }
-            }
-            _ => {
-                // This should not happen due to the is_supported check above
-                return ProcessingResult::Skipped(SkippedFile {
+        let (definitions, imports) = match self.analyze_file(language, &parse_result, &matches) {
+            Ok(result) => result,
+            Err(e) => {
+                return ProcessingResult::Error(ErroredFile {
                     file_path: self.path.clone(),
-                    reason: format!("Language not supported: {language:?}"),
-                    file_size: None,
+                    error_message: format!("Failed to analyze: {e}"),
+                    error_stage: ProcessingStage::Parsing,
                 });
             }
         };
         let analysis_time = analysis_start.elapsed();
-        let total_time = start_time.elapsed();
+
+        let matches_count = matches.len();
         let definitions_count = definitions.count();
+        let imported_symbols_count = imports.as_ref().map_or(0, |i| i.count());
 
         ProcessingResult::Success(FileProcessingResult {
             file_path: self.path.clone(),
             extension: self.extension.clone(),
             file_size: self.size(),
             language,
-            definitions: Some(definitions),
+            definitions,
+            imported_symbols: imports,
             stats: ProcessingStats {
-                total_time,
+                total_time: start_time.elapsed(),
                 parse_time,
                 rules_time,
                 analysis_time,
-                rule_matches: matches.len(),
+                rule_matches: matches_count,
                 definitions_count,
+                imported_symbols_count,
             },
             is_supported: true,
         })
+    }
+
+    fn analyze_file(
+        &self,
+        language: SupportedLanguage,
+        parse_result: &ParseResult,
+        matches: &[MatchWithNodes],
+    ) -> Result<(Definitions, Option<ImportedSymbols>), anyhow::Error> {
+        match language {
+            SupportedLanguage::Ruby => {
+                let analyzer = RubyAnalyzer::new();
+                match analyzer.analyze(matches, parse_result) {
+                    Ok(analysis_result) => {
+                        Ok((Definitions::Ruby(analysis_result.definitions), None))
+                    }
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Failed to analyze Ruby file '{}': {}",
+                        self.path,
+                        e
+                    )),
+                }
+            }
+            SupportedLanguage::Python => {
+                let analyzer = PythonAnalyzer::new();
+                match analyzer.analyze(matches, parse_result) {
+                    Ok(analysis_result) => Ok((
+                        Definitions::Python(analysis_result.definitions),
+                        Some(ImportedSymbols::Python(analysis_result.imports)),
+                    )),
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Failed to analyze Python file '{}': {}",
+                        self.path,
+                        e
+                    )),
+                }
+            }
+            SupportedLanguage::Kotlin => {
+                let analyzer = KotlinAnalyzer::new();
+                match analyzer.analyze(matches, parse_result) {
+                    Ok(analysis_result) => {
+                        Ok((Definitions::Kotlin(analysis_result.definitions), None))
+                    }
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Failed to analyze Kotlin file '{}': {}",
+                        self.path,
+                        e
+                    )),
+                }
+            }
+            SupportedLanguage::Java => {
+                let analyzer = JavaAnalyzer::new();
+                match analyzer.analyze(matches, parse_result) {
+                    Ok(analysis_result) => {
+                        Ok((Definitions::Java(analysis_result.definitions), None))
+                    }
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Failed to analyze Java file '{}': {}",
+                        self.path,
+                        e
+                    )),
+                }
+            }
+            // This should not happen due to the is_supported check earlier
+            _ => Err(anyhow::anyhow!("Unsupported language: {:?}", language)),
+        }
     }
 }
 
@@ -361,6 +384,32 @@ impl Definitions {
     }
 }
 
+/// Enum to hold definitions based on language
+#[derive(Clone, Debug)]
+pub enum ImportedSymbols {
+    Python(Vec<PythonImportedSymbolInfo>),
+}
+
+impl ImportedSymbols {
+    /// Get the count of imported symbols regardless of type
+    pub fn count(&self) -> usize {
+        match self {
+            ImportedSymbols::Python(imported_symbols) => imported_symbols.len(),
+        }
+    }
+
+    /// Check if there are any imported symbols
+    pub fn is_empty(&self) -> bool {
+        self.count() == 0
+    }
+
+    pub fn iter_python(&self) -> Option<impl Iterator<Item = &PythonImportedSymbolInfo>> {
+        match self {
+            ImportedSymbols::Python(imported_symbols) => Some(imported_symbols.iter()),
+        }
+    }
+}
+
 /// Result of processing a single file using Ruby analyzer
 #[derive(Clone, Debug)]
 pub struct FileProcessingResult {
@@ -372,8 +421,10 @@ pub struct FileProcessingResult {
     pub file_size: u64,
     /// Detected language
     pub language: SupportedLanguage,
-    /// Extracted definitions from Ruby analyzer
-    pub definitions: Option<Definitions>,
+    /// Extracted definitions
+    pub definitions: Definitions,
+    /// Extracted imported symbols
+    pub imported_symbols: Option<ImportedSymbols>,
     /// Processing statistics
     pub stats: ProcessingStats,
     /// Whether this language is supported for analysis
@@ -395,4 +446,6 @@ pub struct ProcessingStats {
     pub rule_matches: usize,
     /// Number of definitions extracted
     pub definitions_count: usize,
+    /// Number of imported symbols extracted
+    pub imported_symbols_count: usize,
 }

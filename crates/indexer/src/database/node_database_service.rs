@@ -210,13 +210,15 @@ impl<'a> NodeDatabaseService<'a> {
         self.query_builder.log_query(&query);
         match connection.query(&query) {
             Ok(result) => {
-                match self
-                    .get_scalar_query_results(result, vec!["dir_count", "file_count", "def_count"])
-                {
+                match self.get_scalar_query_results(
+                    result,
+                    vec!["dir_count", "file_count", "def_count", "imp_count"],
+                ) {
                     Some(counts) => Ok(NodeCounts {
                         directory_count: counts["dir_count"] as u32,
                         file_count: counts["file_count"] as u32,
                         definition_count: counts["def_count"] as u32,
+                        imported_symbol_count: counts["imp_count"] as u32,
                     }),
                     None => Err(Error::msg("No node counts found")),
                 }

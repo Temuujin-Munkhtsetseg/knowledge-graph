@@ -23,6 +23,11 @@ pub enum RelationshipType {
     // File relationships
     #[strum(serialize = "FILE_DEFINES")]
     FileDefines,
+    #[strum(serialize = "FILE_IMPORTS")]
+    FileImports,
+    // Definition-imported-symbol relationships
+    #[strum(serialize = "DEFINES_IMPORTED_SYMBOL")]
+    DefinesImportedSymbol,
     // Definition relationships - Module (TODO: add these back in for ruby edge cases)
     #[strum(serialize = "MODULE_TO_MODULE")]
     ModuleToSingletonMethod,

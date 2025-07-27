@@ -31,6 +31,9 @@ pub enum QueryParameterDefinition {
     Boolean(Option<bool>),
 }
 
+// TODO: Handle new ID for definitions (file_path + fqn)
+// TODO: Add queries for imported symbols
+
 impl QueryLibrary {
     pub fn get_definition_relations_query() -> Query {
         Query {

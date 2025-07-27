@@ -435,10 +435,15 @@ impl RepositoryIndexer {
             })?;
 
         info!(
-            "Analysis completed: {} files, {} definitions, {} relationships",
+            "Analysis completed: {} files, {} definitions, {} imported symbols, {} relationships",
             graph_data.file_nodes.len(),
             graph_data.definition_nodes.len(),
-            graph_data.file_definition_relationships.len()
+            graph_data.imported_symbol_nodes.len(),
+            graph_data.directory_relationships.len()
+                + graph_data.file_definition_relationships.len()
+                + graph_data.file_imported_symbol_relationships.len()
+                + graph_data.definition_relationships.len()
+                + graph_data.definition_imported_symbol_relationships.len()
         );
 
         let writer_service = WriterService::new(output_directory).map_err(|e| {
