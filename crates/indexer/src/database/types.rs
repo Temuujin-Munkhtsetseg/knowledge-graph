@@ -36,6 +36,7 @@ pub struct NodeCounts {
     pub directory_count: u32,
     pub file_count: u32,
     pub definition_count: u32,
+    pub imported_symbol_count: u32,
 }
 
 /// Relationship counts structure

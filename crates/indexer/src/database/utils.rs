@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::analysis::types::GraphData;
+use crate::analysis::types::{GraphData, ImportedSymbolLocation};
 use database::graph::RelationshipType;
 use database::graph::RelationshipTypeMapping;
 
@@ -18,7 +18,9 @@ pub struct ConsolidatedRelationships {
     pub directory_to_directory: Vec<ConsolidatedRelationship>,
     pub directory_to_file: Vec<ConsolidatedRelationship>,
     pub file_to_definition: Vec<ConsolidatedRelationship>,
+    pub file_to_imported_symbol: Vec<ConsolidatedRelationship>,
     pub definition_to_definition: Vec<ConsolidatedRelationship>,
+    pub definition_to_imported_symbol: Vec<ConsolidatedRelationship>,
 }
 
 /// Node ID generator for assigning integer IDs to nodes
@@ -28,12 +30,15 @@ pub struct NodeIdGenerator {
     directory_ids: HashMap<String, u32>,
     /// File path to ID mapping
     file_ids: HashMap<String, u32>,
-    /// Definition FQN to ID mapping (TODO: add file path)
+    /// Definition FQN to ID mapping
     definition_ids: HashMap<(String, String), u32>,
+    /// Imported symbol location to ID mapping
+    imported_symbol_ids: HashMap<(String, i64, i64), u32>,
     /// Next available IDs for each type
     pub next_directory_id: u32,
     pub next_file_id: u32,
     pub next_definition_id: u32,
+    pub next_imported_symbol_id: u32,
 }
 
 impl Default for NodeIdGenerator {
@@ -48,9 +53,11 @@ impl NodeIdGenerator {
             directory_ids: HashMap::new(),
             file_ids: HashMap::new(),
             definition_ids: HashMap::new(),
+            imported_symbol_ids: HashMap::new(),
             next_directory_id: 1,
             next_file_id: 1,
             next_definition_id: 1,
+            next_imported_symbol_id: 1,
         }
     }
 
@@ -59,6 +66,7 @@ impl NodeIdGenerator {
         self.directory_ids.clear();
         self.file_ids.clear();
         self.definition_ids.clear();
+        self.imported_symbol_ids.clear();
     }
 
     pub fn get_or_assign_directory_id(&mut self, path: &str) -> u32 {
@@ -98,6 +106,29 @@ impl NodeIdGenerator {
         id
     }
 
+    pub fn get_or_assign_imported_symbol_id(&mut self, location: &ImportedSymbolLocation) -> u32 {
+        if let Some(&id) = self.imported_symbol_ids.get(&(
+            location.file_path.to_string(),
+            location.start_byte,
+            location.end_byte,
+        )) {
+            return id;
+        }
+
+        let id = self.next_imported_symbol_id;
+        self.imported_symbol_ids.insert(
+            (
+                location.file_path.to_string(),
+                location.start_byte,
+                location.end_byte,
+            ),
+            id,
+        );
+        self.next_imported_symbol_id += 1;
+
+        id
+    }
+
     pub fn get_directory_id(&self, path: &str) -> Option<u32> {
         self.directory_ids.get(path).copied()
     }
@@ -109,6 +140,16 @@ impl NodeIdGenerator {
     pub fn get_definition_id(&self, fqn: &str, file_path: &str) -> Option<u32> {
         self.definition_ids
             .get(&(fqn.to_string(), file_path.to_string()))
+            .copied()
+    }
+
+    pub fn get_imported_symbol_id(&self, location: &ImportedSymbolLocation) -> Option<u32> {
+        self.imported_symbol_ids
+            .get(&(
+                location.file_path.clone(),
+                location.start_byte,
+                location.end_byte,
+            ))
             .copied()
     }
 }
@@ -152,6 +193,12 @@ impl<'a> GraphMapper<'a> {
             self.node_id_generator
                 .get_or_assign_definition_id(&def_node.fqn, &def_node.location.file_path);
         }
+
+        // Assign imported symbol IDs
+        for imported_symbol_node in &self.graph_data.imported_symbol_nodes {
+            self.node_id_generator
+                .get_or_assign_imported_symbol_id(&imported_symbol_node.location);
+        }
     }
 
     /// Map the graph data to the integer IDs
@@ -177,8 +224,9 @@ impl<'a> GraphMapper<'a> {
         let mut dir_not_found = 0;
         let mut file_not_found = 0;
         let mut def_not_found = 0;
+        let mut import_not_found = 0;
 
-        // Process directory relationships
+        // Process directory-to-directory and directory-to-file relationships
         for dir_rel in &graph_data.directory_relationships {
             let Some(source_id) = id_generator.get_directory_id(&dir_rel.from_path) else {
                 dir_not_found += 1;
@@ -228,8 +276,7 @@ impl<'a> GraphMapper<'a> {
             }
         }
 
-        // Process file-definition relationships
-        // For each relationship, we need to find the definition's primary location to get the correct ID
+        // Process file-to-definition relationships
         for file_rel in &graph_data.file_definition_relationships {
             let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
@@ -262,7 +309,39 @@ impl<'a> GraphMapper<'a> {
                 });
         }
 
-        // Process definition relationships
+        // Process file-to-imported-symbol relationships
+        for file_rel in &graph_data.file_imported_symbol_relationships {
+            let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
+                file_not_found += 1;
+                tracing::warn!(
+                    "(FILE_IMPORTS) Source file ID not found: File({})",
+                    file_rel.file_path
+                );
+                continue;
+            };
+
+            let Some(target_id) = id_generator.get_imported_symbol_id(&file_rel.import_location)
+            else {
+                import_not_found += 1;
+                tracing::warn!(
+                    "(FILE_IMPORTS) Target imported symbol ID not found: Location({:?}) File({})",
+                    file_rel.import_location,
+                    file_rel.file_path,
+                );
+                continue;
+            };
+            let relationship_type = relationship_mapping.get_type_id(file_rel.relationship_type);
+
+            relationships
+                .file_to_imported_symbol
+                .push(ConsolidatedRelationship {
+                    source_id: Some(source_id),
+                    target_id: Some(target_id),
+                    relationship_type,
+                });
+        }
+
+        // Process definition-to-definition relationships
         for def_rel in &graph_data.definition_relationships {
             let Some(source_id) = id_generator
                 .get_definition_id(&def_rel.from_definition_fqn, &def_rel.from_file_path)
@@ -299,11 +378,48 @@ impl<'a> GraphMapper<'a> {
                 });
         }
 
+        // Process definition-to-imported-symbol relationships
+        for def_rel in &graph_data.definition_imported_symbol_relationships {
+            let Some(source_id) =
+                id_generator.get_definition_id(&def_rel.definition_fqn, &def_rel.file_path)
+            else {
+                def_not_found += 1;
+                tracing::warn!(
+                    "(DEFINES_IMPORTED_SYMBOL) Source definition ID not found: {} {}",
+                    def_rel.definition_fqn,
+                    def_rel.file_path,
+                );
+                continue;
+            };
+
+            let Some(target_id) =
+                id_generator.get_imported_symbol_id(&def_rel.imported_symbol_location)
+            else {
+                import_not_found += 1;
+                tracing::warn!(
+                    "(DEFINITION_IMPORTED_SYMBOL_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
+                    def_rel.imported_symbol_location,
+                );
+                continue;
+            };
+
+            let relationship_type = relationship_mapping.get_type_id(def_rel.relationship_type);
+
+            relationships
+                .definition_to_imported_symbol
+                .push(ConsolidatedRelationship {
+                    source_id: Some(source_id),
+                    target_id: Some(target_id),
+                    relationship_type,
+                });
+        }
+
         tracing::info!(
-            "Consolidated relationships: dir_not_found: {}, file_not_found: {}, def_not_found: {}",
+            "Consolidated relationships: dir_not_found: {}, file_not_found: {}, def_not_found: {}, import_not_found: {}",
             dir_not_found,
             file_not_found,
-            def_not_found
+            def_not_found,
+            import_not_found
         );
 
         Ok(relationships)

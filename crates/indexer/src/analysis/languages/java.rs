@@ -29,34 +29,32 @@ impl JavaAnalyzer {
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
     ) {
-        if let Some(definitions) = &file_result.definitions {
-            if let Some(defs) = definitions.iter_java() {
-                for definition in defs {
-                    if let Ok(Some((location, fqn))) =
-                        self.create_definition_location(definition, relative_file_path)
-                    {
-                        let fqn_string = java_fqn_to_string(&fqn);
-                        let definition_node = DefinitionNode::new(
-                            fqn_string.clone(),
-                            definition.name.clone(),
-                            DefinitionType::Java(definition.definition_type),
-                            location,
-                        );
+        if let Some(defs) = file_result.definitions.iter_java() {
+            for definition in defs {
+                if let Ok(Some((location, fqn))) =
+                    self.create_definition_location(definition, relative_file_path)
+                {
+                    let fqn_string = java_fqn_to_string(&fqn);
+                    let definition_node = DefinitionNode::new(
+                        fqn_string.clone(),
+                        definition.name.clone(),
+                        DefinitionType::Java(definition.definition_type),
+                        location,
+                    );
 
-                        // Only add file definition relationship for top-level definitions
-                        if self.is_top_level_definition(&fqn) {
-                            file_definition_relationships.push(FileDefinitionRelationship {
-                                file_path: relative_file_path.to_string(),
-                                definition_fqn: fqn_string.clone(),
-                                relationship_type: RelationshipType::FileDefines,
-                            });
-                        }
-
-                        definition_map.insert(
-                            (fqn_string.clone(), relative_file_path.to_string()),
-                            (definition_node, FqnType::Java(fqn)),
-                        );
+                    // Only add file definition relationship for top-level definitions
+                    if self.is_top_level_definition(&fqn) {
+                        file_definition_relationships.push(FileDefinitionRelationship {
+                            file_path: relative_file_path.to_string(),
+                            definition_fqn: fqn_string.clone(),
+                            relationship_type: RelationshipType::FileDefines,
+                        });
                     }
+
+                    definition_map.insert(
+                        (fqn_string.clone(), relative_file_path.to_string()),
+                        (definition_node, FqnType::Java(fqn)),
+                    );
                 }
             }
         }

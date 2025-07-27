@@ -106,7 +106,12 @@ impl<'a> SchemaManager<'a> {
     /// Check if the schema already exists by looking for key tables
     fn schema_exists(&self) -> Result<bool, DatabaseError> {
         let connection = self.get_connection();
-        let required_tables = vec!["DirectoryNode", "FileNode", "DefinitionNode"];
+        let required_tables = vec![
+            "DirectoryNode",
+            "FileNode",
+            "DefinitionNode",
+            "ImportedSymbolNode",
+        ];
 
         for table in required_tables {
             if !connection.table_exists(table)? {
@@ -197,8 +202,7 @@ impl<'a> SchemaManager<'a> {
             primary_key: "id".to_string(),
         };
 
-        // Definition nodes (one row per unique FQN)
-        // Uses primary location for core data, multiple locations handled separately
+        // Definition nodes
         let definition_table = NodeTable {
             name: "DefinitionNode".to_string(),
             columns: vec![
@@ -251,10 +255,64 @@ impl<'a> SchemaManager<'a> {
             primary_key: "id".to_string(),
         };
 
+        // Imported symbol nodes
+        let imported_symbol_table = NodeTable {
+            name: "ImportedSymbolNode".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: KuzuDataType::UInt32,
+                    is_primary_key: true,
+                },
+                ColumnDefinition {
+                    name: "import_type".to_string(),
+                    data_type: KuzuDataType::String,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "import_path".to_string(),
+                    data_type: KuzuDataType::String,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "name".to_string(),
+                    data_type: KuzuDataType::String,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "alias".to_string(),
+                    data_type: KuzuDataType::String,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "file_path".to_string(),
+                    data_type: KuzuDataType::String,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "start_byte".to_string(),
+                    data_type: KuzuDataType::Int64,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "end_byte".to_string(),
+                    data_type: KuzuDataType::Int64,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "line_number".to_string(),
+                    data_type: KuzuDataType::Int32,
+                    is_primary_key: false,
+                },
+            ],
+            primary_key: "id".to_string(),
+        };
+
         // Create the tables
         self.create_node_table(transaction_conn, &directory_table)?;
         self.create_node_table(transaction_conn, &file_table)?;
         self.create_node_table(transaction_conn, &definition_table)?;
+        self.create_node_table(transaction_conn, &imported_symbol_table)?;
 
         Ok(())
     }
@@ -283,32 +341,41 @@ impl<'a> SchemaManager<'a> {
             ]),
         };
 
-        // File relationships (FILE_DEFINES)
+        // File relationships (FILE_DEFINES + FILE_IMPORTS)
         // Note: Kuzu automatically handles FROM-TO connections, we only need custom properties
         let file_relationships = RelationshipTable {
             name: "FILE_RELATIONSHIPS".to_string(),
-            from_table: Some("FileNode".to_string()),
-            to_table: Some("DefinitionNode".to_string()),
+            from_table: None,
+            to_table: None, // Polymorphic: can be a DefinitionNode or ImportedSymbolNode
             columns: vec![ColumnDefinition {
                 name: "type".to_string(),
                 data_type: KuzuDataType::UInt8,
                 is_primary_key: false,
             }],
-            from_to_pairs: None,
+            from_to_pairs: Some(vec![
+                ("FileNode".to_string(), "DefinitionNode".to_string()),
+                ("FileNode".to_string(), "ImportedSymbolNode".to_string()),
+            ]),
         };
 
-        // Definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)
+        // Definition relationships (DEFINES_IMPORTED_SYMBOL, all MODULE_TO_*, CLASS_TO_*, METHOD_*)
         // Note: Kuzu automatically handles FROM-TO connections, we only need custom properties
         let definition_relationships = RelationshipTable {
             name: "DEFINITION_RELATIONSHIPS".to_string(),
-            from_table: Some("DefinitionNode".to_string()),
-            to_table: Some("DefinitionNode".to_string()),
+            from_table: None,
+            to_table: None, // Polymorphic: can be a DefinitionNode or ImportedSymbolNode
             columns: vec![ColumnDefinition {
                 name: "type".to_string(),
                 data_type: KuzuDataType::UInt8,
                 is_primary_key: false,
             }],
-            from_to_pairs: None,
+            from_to_pairs: Some(vec![
+                ("DefinitionNode".to_string(), "DefinitionNode".to_string()),
+                (
+                    "DefinitionNode".to_string(),
+                    "ImportedSymbolNode".to_string(),
+                ),
+            ]),
         };
 
         // Create consolidated relationship tables
@@ -464,6 +531,7 @@ impl<'a> SchemaManager<'a> {
             ("DirectoryNode", "directories.parquet"),
             ("FileNode", "files.parquet"),
             ("DefinitionNode", "definitions.parquet"),
+            ("ImportedSymbolNode", "imported_symbols.parquet"),
         ];
 
         for (table_name, file_name) in node_files {
@@ -529,46 +597,87 @@ impl<'a> SchemaManager<'a> {
             }
         }
 
-        // Import other relationship files with specific from/to types
-        let other_rel_files = vec![
-            (
+        // Import file-to-definition relationships
+        let file_to_def_file =
+            std::path::Path::new(parquet_dir).join("file_to_definition_relationships.parquet");
+        if file_to_def_file.exists() {
+            match transaction_conn.copy_relationships_from_parquet(
                 "FILE_RELATIONSHIPS",
-                "file_relationships.parquet",
+                file_to_def_file.to_str().unwrap(),
                 Some("FileNode"),
                 Some("DefinitionNode"),
-            ),
-            (
-                "DEFINITION_RELATIONSHIPS",
-                "definition_relationships.parquet",
-                Some("DefinitionNode"),
-                Some("DefinitionNode"),
-            ),
-        ];
-
-        for (table_name, file_name, from_table, to_table) in other_rel_files {
-            let file_path = std::path::Path::new(parquet_dir).join(file_name);
-            if file_path.exists() {
-                info!("Importing {} from {}", table_name, file_path.display());
-                match transaction_conn.copy_relationships_from_parquet(
-                    table_name,
-                    file_path.to_str().unwrap(),
-                    from_table,
-                    to_table,
-                ) {
-                    Ok(_) => info!("Successfully imported {}", table_name),
-                    Err(e) => {
-                        let error_msg = format!("Failed to import {table_name}: {e}");
-                        warn!("{}", error_msg);
-                        return Err(e);
-                    }
+            ) {
+                Ok(_) => {
+                    info!("Successfully imported FILE_RELATIONSHIPS (FileNode -> DefinitionNode)")
                 }
-            } else {
-                // FILE_RELATIONSHIPS and DEFINITION_RELATIONSHIPS are optional
-                // They won't exist when there are no definitions found during indexing, e.g due to an unimplemented language or when re-indexing
-                info!(
-                    "Relationship file not found: {}, skipping import",
-                    file_path.display()
-                );
+                Err(e) => warn!(
+                    "Failed to import FileNode->DefinitionNode relationships: {}",
+                    e
+                ),
+            }
+        }
+
+        // Import file-to-imported-symbol relationships
+        let file_to_imported_symbol_file =
+            std::path::Path::new(parquet_dir).join("file_to_imported_symbol_relationships.parquet");
+        if file_to_imported_symbol_file.exists() {
+            match transaction_conn.copy_relationships_from_parquet(
+                "FILE_RELATIONSHIPS",
+                file_to_imported_symbol_file.to_str().unwrap(),
+                Some("FileNode"),
+                Some("ImportedSymbolNode"),
+            ) {
+                Ok(_) => info!(
+                    "Successfully imported FILE_RELATIONSHIPS (FileNode -> ImportedSymbolNode)"
+                ),
+                Err(e) => warn!(
+                    "Failed to import FileNode->ImportedSymbolNode relationships: {}",
+                    e
+                ),
+            }
+        }
+
+        // Import definition-to-definition relationships
+        let def_to_def_file = std::path::Path::new(parquet_dir)
+            .join("definition_to_definition_relationships.parquet");
+        if def_to_def_file.exists() {
+            match transaction_conn.copy_relationships_from_parquet(
+                "DEFINITION_RELATIONSHIPS",
+                def_to_def_file.to_str().unwrap(),
+                Some("DefinitionNode"),
+                Some("DefinitionNode"),
+            ) {
+                Ok(_) => {
+                    info!(
+                        "Successfully imported DEFINITION_RELATIONSHIPS (DefinitionNode -> DefinitionNode)"
+                    )
+                }
+                Err(e) => warn!(
+                    "Failed to import DefinitionNode->DefinitionNode relationships: {}",
+                    e
+                ),
+            }
+        }
+
+        // Import definition-to-imported-symbol relationships
+        let def_to_import_file = std::path::Path::new(parquet_dir)
+            .join("definition_to_imported_symbol_relationships.parquet");
+        if def_to_import_file.exists() {
+            match transaction_conn.copy_relationships_from_parquet(
+                "DEFINITION_RELATIONSHIPS",
+                def_to_import_file.to_str().unwrap(),
+                Some("DefinitionNode"),
+                Some("ImportedSymbolNode"),
+            ) {
+                Ok(_) => {
+                    info!(
+                        "Successfully imported DEFINITION_RELATIONSHIPS (DefinitionNode -> ImportedSymbolNode)"
+                    )
+                }
+                Err(e) => warn!(
+                    "Failed to import DefinitionNode->ImportedSymbolNode relationships: {}",
+                    e
+                ),
             }
         }
 

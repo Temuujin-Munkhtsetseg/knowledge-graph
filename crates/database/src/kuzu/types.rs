@@ -1,4 +1,4 @@
-use kuzu::Value;
+use kuzu::{LogicalType, Value};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -54,6 +54,7 @@ pub enum KuzuNodeType {
     DirectoryNode,
     FileNode,
     DefinitionNode,
+    ImportedSymbolNode,
 }
 
 impl KuzuNodeType {
@@ -62,6 +63,7 @@ impl KuzuNodeType {
             KuzuNodeType::DirectoryNode => "DirectoryNode",
             KuzuNodeType::FileNode => "FileNode",
             KuzuNodeType::DefinitionNode => "DefinitionNode",
+            KuzuNodeType::ImportedSymbolNode => "ImportedSymbolNode",
         }
     }
 }
@@ -162,6 +164,117 @@ impl std::fmt::Display for DefinitionNodeFromKuzu {
             self.primary_end_byte,
             self.primary_line_number,
             self.total_locations
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportedSymbolNodeFromKuzu {
+    pub id: u32,
+    pub import_type: String,
+    pub import_path: String,
+    pub name: Option<String>,
+    pub alias: Option<String>,
+    pub file_path: String,
+    pub start_byte: i64,
+    pub end_byte: i64,
+    pub line_number: i32,
+}
+
+impl ImportedSymbolNodeFromKuzu {
+    pub fn empty() -> Self {
+        Self {
+            id: 0,
+            import_type: String::new(),
+            import_path: String::new(),
+            name: None,
+            alias: None,
+            file_path: String::new(),
+            start_byte: 0,
+            end_byte: 0,
+            line_number: 0,
+        }
+    }
+
+    pub fn from_kuzu_node(node: &Value) -> Self {
+        if let Value::Node(node_val) = node {
+            let mut node = Self::empty();
+            for (prop_name, prop_value) in node_val.get_properties().iter() {
+                match prop_name.as_str() {
+                    "id" => {
+                        if let Value::UInt32(i) = prop_value {
+                            node.id = *i
+                        }
+                    }
+                    "import_type" | "import_path" | "file_path" => {
+                        if let Value::String(s) = prop_value {
+                            match prop_name.as_str() {
+                                "import_type" => node.import_type = s.to_string(),
+                                "import_path" => node.import_path = s.to_string(),
+                                "file_path" => node.file_path = s.to_string(),
+                                _ => (),
+                            }
+                        }
+                    }
+                    "name" | "alias" => match prop_value {
+                        Value::String(s) => match prop_name.as_str() {
+                            "name" => node.name = Some(s.to_string()),
+                            "alias" => node.alias = Some(s.to_string()),
+                            _ => (),
+                        },
+                        Value::Null(LogicalType::String) => match prop_name.as_str() {
+                            "name" => node.name = None,
+                            "alias" => node.alias = None,
+                            _ => (),
+                        },
+                        _ => (),
+                    },
+                    "start_byte" | "end_byte" => {
+                        if let Value::Int64(i) = prop_value {
+                            match prop_name.as_str() {
+                                "start_byte" => node.start_byte = *i,
+                                "end_byte" => node.end_byte = *i,
+                                _ => (),
+                            }
+                        }
+                    }
+                    "line_number" | "primary_line_number" => {
+                        if let Value::Int32(i) = prop_value {
+                            match prop_name.as_str() {
+                                "line_number" => node.line_number = *i,
+                                "primary_line_number" => node.line_number = *i,
+                                _ => (),
+                            }
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            node
+        } else {
+            Self::empty()
+        }
+    }
+
+    pub fn invalid() -> bool {
+        Self::empty().id == 0
+    }
+}
+
+impl std::fmt::Display for ImportedSymbolNodeFromKuzu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ImportedSymbolNodeFromKuzu(id: {}, import_type: {}, import_path: {}, name: {:?}, alias: {:?}, file_path: {}, start_byte: {}, end_byte: {}, line_number: {})",
+            self.id,
+            self.import_type,
+            self.import_path,
+            self.name,
+            self.alias,
+            self.file_path,
+            self.start_byte,
+            self.end_byte,
+            self.line_number
         )
     }
 }
@@ -345,6 +458,16 @@ impl FromKuzuNode for DefinitionNodeFromKuzu {
 
     fn name() -> &'static str {
         KuzuNodeType::DefinitionNode.as_str()
+    }
+}
+
+impl FromKuzuNode for ImportedSymbolNodeFromKuzu {
+    fn from_kuzu_node(node: &Value) -> Self {
+        Self::from_kuzu_node(node)
+    }
+
+    fn name() -> &'static str {
+        KuzuNodeType::ImportedSymbolNode.as_str()
     }
 }
 

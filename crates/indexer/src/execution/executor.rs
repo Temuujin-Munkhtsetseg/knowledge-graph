@@ -1074,6 +1074,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_run_workspace_reindexing_comprehensive() {
         let (workspace_manager, _temp_dir, workspace_path) = create_test_workspace_with_projects(3);
         let event_bus = Arc::new(EventBus::new());

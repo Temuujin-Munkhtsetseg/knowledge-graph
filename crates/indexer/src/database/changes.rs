@@ -8,7 +8,8 @@ use crate::parsing::changes::{FileChanges, FileChangesPathType};
 use crate::writer::{WriterResult, WriterService};
 use anyhow::Error;
 use database::kuzu::types::{
-    DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, FromKuzuNode, KuzuNodeType,
+    DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, FromKuzuNode,
+    ImportedSymbolNodeFromKuzu, KuzuNodeType,
 };
 use tracing::error;
 
@@ -53,9 +54,11 @@ impl<'a> KuzuChanges<'a> {
         let changes = self.get_changes();
 
         // Get the new node ID heads
-        let (max_definition_id, max_file_id, max_dir_id) = self.new_node_id_heads();
+        let (max_definition_id, max_imported_symbol_id, max_file_id, max_dir_id) =
+            self.new_node_id_heads();
         let mut node_id_generator = NodeIdGenerator::new();
         node_id_generator.next_definition_id = max_definition_id as u32 + 1;
+        node_id_generator.next_imported_symbol_id = max_imported_symbol_id as u32 + 1;
         node_id_generator.next_file_id = max_file_id as u32 + 1;
         node_id_generator.next_directory_id = max_dir_id as u32 + 1;
 
@@ -129,11 +132,16 @@ impl<'a> KuzuChanges<'a> {
         Ok(result)
     }
 
-    fn new_node_id_heads(&mut self) -> (u64, u64, u64) {
+    fn new_node_id_heads(&mut self) -> (u64, u64, u64, u64) {
         // Compute the max id of each node type
         let max_definition_id = self
             .node_database_service
             .agg_node_by::<DefinitionNodeFromKuzu>("max", "id")
+            .unwrap();
+
+        let max_imported_symbol_id = self
+            .node_database_service
+            .agg_node_by::<ImportedSymbolNodeFromKuzu>("max", "id")
             .unwrap();
 
         let max_file_id = self
@@ -146,7 +154,12 @@ impl<'a> KuzuChanges<'a> {
             .agg_node_by::<DirectoryNodeFromKuzu>("max", "id")
             .unwrap();
 
-        (max_definition_id, max_file_id, max_dir_id)
+        (
+            max_definition_id,
+            max_imported_symbol_id,
+            max_file_id,
+            max_dir_id,
+        )
     }
 
     fn find_nodes<R: FromKuzuNode>(
@@ -169,6 +182,11 @@ impl<'a> KuzuChanges<'a> {
             KuzuNodeType::DirectoryNode => self
                 .node_database_service
                 .get_by::<String, R>(node_type, "path", &changed_files)
+                .unwrap(),
+
+            KuzuNodeType::ImportedSymbolNode => self
+                .node_database_service
+                .get_by::<String, R>(node_type, "file_path", &changed_files)
                 .unwrap(),
         }
     }

@@ -126,7 +126,9 @@ impl QueryBuilder {
             OPTIONAL MATCH (f:FileNode) 
             WITH dir_count, count(f) as file_count
             OPTIONAL MATCH (def:DefinitionNode)
-            RETURN dir_count, file_count, count(def) as def_count
+            WITH dir_count, file_count, count(def) as def_count
+            OPTIONAL MATCH (imp:ImportedSymbolNode)
+            RETURN dir_count, file_count, def_count, count(imp) as imp_count
         "
             .to_string(),
         )
@@ -156,7 +158,9 @@ impl QueryBuilder {
             RelationshipType::DirContainsDir | RelationshipType::DirContainsFile => {
                 ("DIRECTORY_RELATIONSHIPS", relationship_type.as_str())
             }
-            RelationshipType::FileDefines => ("FILE_RELATIONSHIPS", relationship_type.as_str()),
+            RelationshipType::FileDefines | RelationshipType::FileImports => {
+                ("FILE_RELATIONSHIPS", relationship_type.as_str())
+            }
             _ => {
                 // All other types are definition relationships
                 ("DEFINITION_RELATIONSHIPS", relationship_type.as_str())
@@ -182,6 +186,7 @@ impl QueryBuilder {
             KuzuNodeType::DirectoryNode => ("DIRECTORY_RELATIONSHIPS", node_type.as_str()),
             KuzuNodeType::FileNode => ("FILE_RELATIONSHIPS", node_type.as_str()),
             KuzuNodeType::DefinitionNode => ("DEFINITION_RELATIONSHIPS", node_type.as_str()),
+            KuzuNodeType::ImportedSymbolNode => todo!(),
         };
         (
             QueryNoop::No,

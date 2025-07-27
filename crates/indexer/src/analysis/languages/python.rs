@@ -1,16 +1,18 @@
 use crate::analysis::types::{
-    DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-    FileDefinitionRelationship, FqnType,
+    DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
+    DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
+    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
+    ImportedSymbolNode,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
 use parser_core::python::{
     fqn::python_fqn_to_string,
-    types::{PythonDefinitionInfo, PythonDefinitionType, PythonFqn},
+    types::{PythonDefinitionInfo, PythonDefinitionType, PythonFqn, PythonImportedSymbolInfo},
 };
 use std::collections::HashMap;
 
-/// Handles Python-specific analysis operations
+// Handles Python-specific analysis operations
 pub struct PythonAnalyzer;
 
 impl Default for PythonAnalyzer {
@@ -33,69 +35,109 @@ impl PythonAnalyzer {
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
     ) {
-        if let Some(definitions) = &file_result.definitions {
-            if let Some(defs) = definitions.iter_python() {
-                for definition in defs {
-                    if let Ok(Some((location, fqn))) =
-                        self.create_definition_location(definition, relative_file_path)
-                    {
-                        let fqn_string = python_fqn_to_string(&fqn);
-                        let definition_node = DefinitionNode::new(
-                            fqn_string.clone(),
-                            definition.name.clone(),
-                            DefinitionType::Python(definition.definition_type),
-                            location,
-                        );
-                        definition_map.insert(
-                            (fqn_string.clone(), relative_file_path.to_string()),
-                            (definition_node, FqnType::Python(fqn)),
-                        );
+        if let Some(defs) = file_result.definitions.iter_python() {
+            for definition in defs {
+                if let Ok(Some((location, fqn))) =
+                    self.create_definition_location(definition, relative_file_path)
+                {
+                    let fqn_string = python_fqn_to_string(&fqn);
+                    let definition_node = DefinitionNode::new(
+                        fqn_string.clone(),
+                        definition.name.clone(),
+                        DefinitionType::Python(definition.definition_type),
+                        location,
+                    );
+
+                    if self.is_top_level_definition(&fqn) {
                         file_definition_relationships.push(FileDefinitionRelationship {
                             file_path: relative_file_path.to_string(),
-                            definition_fqn: fqn_string,
+                            definition_fqn: fqn_string.clone(),
                             relationship_type: RelationshipType::FileDefines,
                         });
                     }
+
+                    definition_map.insert(
+                        (fqn_string.clone(), relative_file_path.to_string()),
+                        (definition_node, FqnType::Python(fqn)),
+                    );
                 }
             }
         }
     }
 
-    /// Create a definition location from a definition info
-    fn create_definition_location(
+    /// Process imported symbols from a file result and update the import map
+    pub fn process_imports(
         &self,
-        definition: &PythonDefinitionInfo,
-        file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, PythonFqn)>, String> {
-        // Only create definition locations if we have an FQN
-        if let Some(ref fqn) = definition.fqn {
-            let line_number = self.calculate_line_number(definition);
-            let location = DefinitionLocation {
-                file_path: file_path.to_string(),
-                start_byte: definition.match_info.range.byte_offset.0 as i64,
-                end_byte: definition.match_info.range.byte_offset.1 as i64,
-                line_number,
-            };
+        file_result: &FileProcessingResult,
+        relative_file_path: &str,
+        imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+    ) {
+        if let Some(imported_symbols) = &file_result.imported_symbols {
+            if let Some(imports) = imported_symbols.iter_python() {
+                for imported_symbol in imports {
+                    let location =
+                        self.create_imported_symbol_location(imported_symbol, relative_file_path);
+                    let identifier = self.create_imported_symbol_identifier(imported_symbol);
+                    let scope_fqn_string = if let Some(ref scope) = imported_symbol.scope {
+                        python_fqn_to_string(scope)
+                    } else {
+                        "".to_string()
+                    };
+                    let imported_symbol_node = ImportedSymbolNode::new(
+                        ImportType::Python(imported_symbol.import_type),
+                        imported_symbol.import_path.clone(),
+                        identifier,
+                        location.clone(),
+                    );
 
-            Ok(Some((location, fqn.clone())))
-        } else {
-            // Skip definitions without FQNs
-            log::debug!(
-                "Skipping definition '{}' without FQN in file '{}'",
-                definition.name,
-                file_path
-            );
-            Ok(None)
+                    if let Some(imported_symbol_nodes) = imported_symbol_map
+                        .get_mut(&(scope_fqn_string.clone(), relative_file_path.to_string()))
+                    {
+                        imported_symbol_nodes.push(imported_symbol_node);
+                    } else {
+                        imported_symbol_map.insert(
+                            (scope_fqn_string.clone(), relative_file_path.to_string()),
+                            vec![imported_symbol_node],
+                        );
+                    }
+
+                    file_import_relationships.push(FileImportedSymbolRelationship {
+                        file_path: relative_file_path.to_string(),
+                        import_location: location.clone(),
+                        relationship_type: RelationshipType::FileImports,
+                    });
+                }
+            }
         }
     }
 
-    /// Create definition-to-definition relationships using definitions map
+    /// Create definition-to-definition and definition-to-imported-symbol relationships using definitions map
     pub fn add_definition_relationships(
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
+            // Handle definition-to-imported-symbol relationships
+            if let Some(imported_symbol_nodes) =
+                imported_symbol_map.get(&(child_fqn_string.clone(), child_file_path.to_string()))
+            {
+                for imported_symbol in imported_symbol_nodes {
+                    definition_imported_symbol_relationships.push(
+                        DefinitionImportedSymbolRelationship {
+                            file_path: child_file_path.clone(),
+                            definition_fqn: child_fqn_string.clone(),
+                            imported_symbol_location: imported_symbol.location.clone(),
+                            relationship_type: RelationshipType::DefinesImportedSymbol,
+                        },
+                    );
+                }
+            }
+
+            // Handle definition-to-definition relationships
             if let Some(parent_fqn_string) = self.get_parent_fqn_string(child_fqn) {
                 if let Some((parent_def, _)) =
                     definition_map.get(&(parent_fqn_string.clone(), child_file_path.to_string()))
@@ -115,6 +157,61 @@ impl PythonAnalyzer {
                 }
             }
         }
+    }
+
+    /// Create a definition location from a definition info
+    fn create_definition_location(
+        &self,
+        definition: &PythonDefinitionInfo,
+        file_path: &str,
+    ) -> Result<Option<(DefinitionLocation, PythonFqn)>, String> {
+        // Only create definition locations if we have an FQN
+        if let Some(ref fqn) = definition.fqn {
+            let location = DefinitionLocation {
+                file_path: file_path.to_string(),
+                start_byte: definition.match_info.range.byte_offset.0 as i64,
+                end_byte: definition.match_info.range.byte_offset.1 as i64,
+                line_number: definition.match_info.range.start.line as i32,
+            };
+
+            Ok(Some((location, fqn.clone())))
+        } else {
+            // Skip definitions without FQNs
+            log::debug!(
+                "Skipping definition '{}' without FQN in file '{}'",
+                definition.name,
+                file_path
+            );
+            Ok(None)
+        }
+    }
+
+    /// Create an imported symbol location from an imported symbol info
+    fn create_imported_symbol_location(
+        &self,
+        imported_symbol: &PythonImportedSymbolInfo,
+        file_path: &str,
+    ) -> ImportedSymbolLocation {
+        ImportedSymbolLocation {
+            file_path: file_path.to_string(),
+            start_byte: imported_symbol.range.byte_offset.0 as i64,
+            end_byte: imported_symbol.range.byte_offset.1 as i64,
+            line_number: imported_symbol.range.start.line as i32,
+        }
+    }
+
+    fn create_imported_symbol_identifier(
+        &self,
+        imported_symbol: &PythonImportedSymbolInfo,
+    ) -> Option<ImportIdentifier> {
+        if imported_symbol.identifier.is_some() {
+            return Some(ImportIdentifier {
+                name: imported_symbol.identifier.as_ref().unwrap().name.clone(),
+                alias: imported_symbol.identifier.as_ref().unwrap().alias.clone(),
+            });
+        }
+
+        None
     }
 
     /// Extract parent FQN string from a given FQN
@@ -213,9 +310,7 @@ impl PythonAnalyzer {
         }
     }
 
-    /// Calculate approximate line number from byte position
-    fn calculate_line_number(&self, definition: &PythonDefinitionInfo) -> i32 {
-        // Use the line number from the match info (1-indexed)
-        definition.match_info.range.start.line as i32
+    fn is_top_level_definition(&self, fqn: &PythonFqn) -> bool {
+        fqn.len() == 1
     }
 }
