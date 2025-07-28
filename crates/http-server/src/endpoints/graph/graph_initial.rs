@@ -457,8 +457,8 @@ mod tests {
                 "DefinitionNode definition_type should not be empty"
             );
             assert!(
-                properties.primary_line_number > 0,
-                "DefinitionNode primary_line_number should be positive"
+                properties.start_line > 0,
+                "DefinitionNode start_line should be positive"
             );
             assert!(
                 properties.primary_start_byte >= 0,

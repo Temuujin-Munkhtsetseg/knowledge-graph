@@ -242,7 +242,22 @@ impl<'a> SchemaManager<'a> {
                     is_primary_key: false,
                 },
                 ColumnDefinition {
-                    name: "primary_line_number".to_string(),
+                    name: "start_line".to_string(),
+                    data_type: KuzuDataType::Int32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "end_line".to_string(),
+                    data_type: KuzuDataType::Int32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "start_col".to_string(),
+                    data_type: KuzuDataType::Int32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "end_col".to_string(),
                     data_type: KuzuDataType::Int32,
                     is_primary_key: false,
                 },
@@ -300,7 +315,22 @@ impl<'a> SchemaManager<'a> {
                     is_primary_key: false,
                 },
                 ColumnDefinition {
-                    name: "line_number".to_string(),
+                    name: "start_line".to_string(),
+                    data_type: KuzuDataType::Int32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "end_line".to_string(),
+                    data_type: KuzuDataType::Int32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "start_col".to_string(),
+                    data_type: KuzuDataType::Int32,
+                    is_primary_key: false,
+                },
+                ColumnDefinition {
+                    name: "end_col".to_string(),
                     data_type: KuzuDataType::Int32,
                     is_primary_key: false,
                 },

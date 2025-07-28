@@ -205,13 +205,14 @@ impl JavaAnalyzer {
         file_path: &str,
     ) -> Result<Option<(DefinitionLocation, JavaFqn)>, String> {
         if let Some(ref fqn) = definition.fqn {
-            let line_number = self.calculate_line_number(definition);
-
             let location = DefinitionLocation {
                 file_path: file_path.to_string(),
                 start_byte: definition.match_info.range.byte_offset.0 as i64,
                 end_byte: definition.match_info.range.byte_offset.1 as i64,
-                line_number,
+                start_line: definition.match_info.range.start.line as i32,
+                end_line: definition.match_info.range.end.line as i32,
+                start_col: definition.match_info.range.start.column as i32,
+                end_col: definition.match_info.range.end.column as i32,
             };
 
             Ok(Some((location, fqn.clone())))
@@ -225,10 +226,6 @@ impl JavaAnalyzer {
 
             Ok(None)
         }
-    }
-
-    fn calculate_line_number(&self, definition: &JavaDefinitionInfo) -> i32 {
-        definition.match_info.range.start.line as i32
     }
 
     fn is_top_level_definition(&self, fqn: &JavaFqn) -> bool {

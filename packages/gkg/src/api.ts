@@ -4,7 +4,7 @@ import type { TSWorkspaceFolderInfo } from "./workspace_folder";
 
 export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, graph_neighbors: GraphNeighborsEndpointDef, graph_search: GraphSearchEndpointDef, };
 
-export type DefinitionNodeProperties = { path: string, fqn: string, definition_type: string, primary_line_number: number, primary_start_byte: bigint, primary_end_byte: bigint, total_locations: number, };
+export type DefinitionNodeProperties = { path: string, fqn: string, definition_type: string, start_line: number, primary_start_byte: bigint, primary_end_byte: bigint, total_locations: number, };
 
 export type DirectoryNodeProperties = { path: string, absolute_path: string, repository_name: string, };
 

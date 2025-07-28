@@ -171,7 +171,10 @@ impl PythonAnalyzer {
                 file_path: file_path.to_string(),
                 start_byte: definition.match_info.range.byte_offset.0 as i64,
                 end_byte: definition.match_info.range.byte_offset.1 as i64,
-                line_number: definition.match_info.range.start.line as i32,
+                start_line: definition.match_info.range.start.line as i32,
+                end_line: definition.match_info.range.end.line as i32,
+                start_col: definition.match_info.range.start.column as i32,
+                end_col: definition.match_info.range.end.column as i32,
             };
 
             Ok(Some((location, fqn.clone())))
@@ -196,7 +199,10 @@ impl PythonAnalyzer {
             file_path: file_path.to_string(),
             start_byte: imported_symbol.range.byte_offset.0 as i64,
             end_byte: imported_symbol.range.byte_offset.1 as i64,
-            line_number: imported_symbol.range.start.line as i32,
+            start_line: imported_symbol.range.start.line as i32,
+            end_line: imported_symbol.range.end.line as i32,
+            start_col: imported_symbol.range.start.column as i32,
+            end_col: imported_symbol.range.end.column as i32,
         }
     }
 

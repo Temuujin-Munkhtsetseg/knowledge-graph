@@ -504,7 +504,10 @@ impl WriterService {
         let mut primary_file_path_values = Vec::new();
         let mut primary_start_byte_values = Vec::new();
         let mut primary_end_byte_values = Vec::new();
-        let mut primary_line_number_values = Vec::new();
+        let mut start_line_values = Vec::new();
+        let mut end_line_values = Vec::new();
+        let mut start_col_values = Vec::new();
+        let mut end_col_values = Vec::new();
         let mut total_locations_values = Vec::new();
 
         for definition_node in definition_nodes {
@@ -520,7 +523,10 @@ impl WriterService {
             primary_file_path_values.push(location.file_path.clone());
             primary_start_byte_values.push(location.start_byte);
             primary_end_byte_values.push(location.end_byte);
-            primary_line_number_values.push(location.line_number);
+            start_line_values.push(location.start_line);
+            end_line_values.push(location.end_line);
+            start_col_values.push(location.start_col);
+            end_col_values.push(location.end_col);
             total_locations_values.push(1);
         }
 
@@ -536,7 +542,10 @@ impl WriterService {
             Field::new("primary_file_path", DataType::Utf8, false),
             Field::new("primary_start_byte", DataType::Int64, false),
             Field::new("primary_end_byte", DataType::Int64, false),
-            Field::new("primary_line_number", DataType::Int32, false),
+            Field::new("start_line", DataType::Int32, false),
+            Field::new("end_line", DataType::Int32, false),
+            Field::new("start_col", DataType::Int32, false),
+            Field::new("end_col", DataType::Int32, false),
             Field::new("total_locations", DataType::Int32, false),
         ]));
 
@@ -548,7 +557,10 @@ impl WriterService {
         let primary_file_path_array = StringArray::from(primary_file_path_values);
         let primary_start_byte_array = Int64Array::from(primary_start_byte_values);
         let primary_end_byte_array = Int64Array::from(primary_end_byte_values);
-        let primary_line_number_array = Int32Array::from(primary_line_number_values);
+        let start_line_array = Int32Array::from(start_line_values);
+        let end_line_array = Int32Array::from(end_line_values);
+        let start_col_array = Int32Array::from(start_col_values);
+        let end_col_array = Int32Array::from(end_col_values);
         let total_locations_array = Int32Array::from(total_locations_values);
 
         // Create record batch
@@ -562,7 +574,10 @@ impl WriterService {
                 Arc::new(primary_file_path_array),
                 Arc::new(primary_start_byte_array),
                 Arc::new(primary_end_byte_array),
-                Arc::new(primary_line_number_array),
+                Arc::new(start_line_array),
+                Arc::new(end_line_array),
+                Arc::new(start_col_array),
+                Arc::new(end_col_array),
                 Arc::new(total_locations_array),
             ],
         )?;
@@ -605,7 +620,10 @@ impl WriterService {
         let mut file_path_values = Vec::new();
         let mut start_byte_values = Vec::new();
         let mut end_byte_values = Vec::new();
-        let mut line_number_values = Vec::new();
+        let mut start_line_values = Vec::new();
+        let mut end_line_values = Vec::new();
+        let mut start_col_values = Vec::new();
+        let mut end_col_values = Vec::new();
 
         for imported_symbol_node in imported_symbol_nodes {
             let location = imported_symbol_node.location.clone();
@@ -617,7 +635,10 @@ impl WriterService {
             file_path_values.push(location.file_path.clone());
             start_byte_values.push(location.start_byte);
             end_byte_values.push(location.end_byte);
-            line_number_values.push(location.line_number);
+            start_line_values.push(location.start_line);
+            end_line_values.push(location.end_line);
+            start_col_values.push(location.start_col);
+            end_col_values.push(location.end_col);
 
             if !identifier.is_some() {
                 name_values.push(None);
@@ -641,7 +662,10 @@ impl WriterService {
             Field::new("file_path", DataType::Utf8, false),
             Field::new("start_byte", DataType::Int64, false),
             Field::new("end_byte", DataType::Int64, false),
-            Field::new("line_number", DataType::Int32, false),
+            Field::new("start_line", DataType::Int32, false),
+            Field::new("end_line", DataType::Int32, false),
+            Field::new("start_col", DataType::Int32, false),
+            Field::new("end_col", DataType::Int32, false),
         ]));
 
         // Convert data to Arrow arrays
@@ -653,7 +677,10 @@ impl WriterService {
         let file_path_array = StringArray::from(file_path_values);
         let start_byte_array = Int64Array::from(start_byte_values);
         let end_byte_array = Int64Array::from(end_byte_values);
-        let line_number_array = Int32Array::from(line_number_values);
+        let start_line_array = Int32Array::from(start_line_values);
+        let end_line_array = Int32Array::from(end_line_values);
+        let start_col_array = Int32Array::from(start_col_values);
+        let end_col_array = Int32Array::from(end_col_values);
 
         // Create record batch
         let batch = RecordBatch::try_new(
@@ -667,7 +694,10 @@ impl WriterService {
                 Arc::new(file_path_array),
                 Arc::new(start_byte_array),
                 Arc::new(end_byte_array),
-                Arc::new(line_number_array),
+                Arc::new(start_line_array),
+                Arc::new(end_line_array),
+                Arc::new(start_col_array),
+                Arc::new(end_col_array),
             ],
         )?;
 
