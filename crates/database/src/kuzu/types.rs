@@ -78,7 +78,10 @@ pub struct DefinitionNodeFromKuzu {
     pub primary_file_path: String,
     pub primary_start_byte: i64,
     pub primary_end_byte: i64,
-    pub primary_line_number: i32,
+    pub start_line: i32,
+    pub end_line: i32,
+    pub start_col: i32,
+    pub end_col: i32,
     pub total_locations: i32,
 }
 
@@ -92,7 +95,10 @@ impl DefinitionNodeFromKuzu {
             primary_file_path: String::new(),
             primary_start_byte: 0,
             primary_end_byte: 0,
-            primary_line_number: 0,
+            start_line: 0,
+            end_line: 0,
+            start_col: 0,
+            end_col: 0,
             total_locations: 0,
         }
     }
@@ -127,10 +133,13 @@ impl DefinitionNodeFromKuzu {
                             }
                         }
                     }
-                    "primary_line_number" | "total_locations" => {
+                    "start_line" | "end_line" | "start_col" | "end_col" | "total_locations" => {
                         if let Value::Int32(i) = prop_value {
                             match prop_name.as_str() {
-                                "primary_line_number" => node.primary_line_number = *i,
+                                "start_line" => node.start_line = *i,
+                                "end_line" => node.end_line = *i,
+                                "start_col" => node.start_col = *i,
+                                "end_col" => node.end_col = *i,
                                 "total_locations" => node.total_locations = *i,
                                 _ => (),
                             }
@@ -154,7 +163,7 @@ impl std::fmt::Display for DefinitionNodeFromKuzu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "DefinitionNodeFromKuzu(id: {}, fqn: {}, name: {}, definition_type: {}, primary_file_path: {}, primary_start_byte: {}, primary_end_byte: {}, primary_line_number: {}, total_locations: {})",
+            "DefinitionNodeFromKuzu(id: {}, fqn: {}, name: {}, definition_type: {}, primary_file_path: {}, primary_start_byte: {}, primary_end_byte: {}, start_line: {}, end_line: {}, start_col: {}, end_col: {}, total_locations: {})",
             self.id,
             self.fqn,
             self.name,
@@ -162,7 +171,10 @@ impl std::fmt::Display for DefinitionNodeFromKuzu {
             self.primary_file_path,
             self.primary_start_byte,
             self.primary_end_byte,
-            self.primary_line_number,
+            self.start_line,
+            self.end_line,
+            self.start_col,
+            self.end_col,
             self.total_locations
         )
     }
@@ -178,7 +190,10 @@ pub struct ImportedSymbolNodeFromKuzu {
     pub file_path: String,
     pub start_byte: i64,
     pub end_byte: i64,
-    pub line_number: i32,
+    pub start_line: i32,
+    pub end_line: i32,
+    pub start_col: i32,
+    pub end_col: i32,
 }
 
 impl ImportedSymbolNodeFromKuzu {
@@ -192,7 +207,10 @@ impl ImportedSymbolNodeFromKuzu {
             file_path: String::new(),
             start_byte: 0,
             end_byte: 0,
-            line_number: 0,
+            start_line: 0,
+            end_line: 0,
+            start_col: 0,
+            end_col: 0,
         }
     }
 
@@ -238,11 +256,13 @@ impl ImportedSymbolNodeFromKuzu {
                             }
                         }
                     }
-                    "line_number" | "primary_line_number" => {
+                    "start_line" | "end_line" | "start_col" | "end_col" => {
                         if let Value::Int32(i) = prop_value {
                             match prop_name.as_str() {
-                                "line_number" => node.line_number = *i,
-                                "primary_line_number" => node.line_number = *i,
+                                "start_line" => node.start_line = *i,
+                                "end_line" => node.end_line = *i,
+                                "start_col" => node.start_col = *i,
+                                "end_col" => node.end_col = *i,
                                 _ => (),
                             }
                         }
@@ -265,7 +285,7 @@ impl std::fmt::Display for ImportedSymbolNodeFromKuzu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ImportedSymbolNodeFromKuzu(id: {}, import_type: {}, import_path: {}, name: {:?}, alias: {:?}, file_path: {}, start_byte: {}, end_byte: {}, line_number: {})",
+            "ImportedSymbolNodeFromKuzu(id: {}, import_type: {}, import_path: {}, name: {:?}, alias: {:?}, file_path: {}, start_byte: {}, end_byte: {}, start_line: {}, end_line: {}, start_col: {}, end_col: {})",
             self.id,
             self.import_type,
             self.import_path,
@@ -274,7 +294,10 @@ impl std::fmt::Display for ImportedSymbolNodeFromKuzu {
             self.file_path,
             self.start_byte,
             self.end_byte,
-            self.line_number
+            self.start_line,
+            self.end_line,
+            self.start_col,
+            self.end_col
         )
     }
 }

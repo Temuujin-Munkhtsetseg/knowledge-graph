@@ -273,7 +273,7 @@ const highlightSearchTerm = (text: string, term: string) => {
                           {{ node.properties.definition_type }}
                         </Badge>
                         <span class="text-xs text-muted-foreground">
-                          Line {{ node.properties.primary_line_number }}
+                          Line {{ node.properties.start_line }}
                         </span>
                       </div>
                     </div>

@@ -72,8 +72,14 @@ pub struct DefinitionLocation {
     pub start_byte: i64,
     /// End byte position in the file  
     pub end_byte: i64,
-    /// Line number where definition starts
-    pub line_number: i32,
+    /// Start line number
+    pub start_line: i32,
+    /// End line number
+    pub end_line: i32,
+    /// Start column number
+    pub start_col: i32,
+    /// End column number
+    pub end_col: i32,
 }
 
 /// Represents a language-specific definition type (e.g. class, module, method, etc.)
@@ -146,8 +152,14 @@ pub struct ImportedSymbolLocation {
     pub start_byte: i64,
     /// End byte position in the file  
     pub end_byte: i64,
-    /// Line number where imported symbol starts
-    pub line_number: i32,
+    /// Start line number
+    pub start_line: i32,
+    /// End line number
+    pub end_line: i32,
+    /// Start column
+    pub start_col: i32,
+    /// End column
+    pub end_col: i32,
 }
 
 /// Represents a language-specific import type

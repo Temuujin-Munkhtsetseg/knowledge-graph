@@ -188,7 +188,7 @@ const tooltipPosition = computed(() => {
                 <Calendar class="w-3 h-3 flex-shrink-0" />
                 <span class="min-w-0">{{
                   formatLocation(
-                    node.properties.primary_line_number,
+                    node.properties.start_line,
                     node.properties.primary_start_byte,
                     node.properties.primary_end_byte,
                   )
