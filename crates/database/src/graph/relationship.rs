@@ -96,6 +96,8 @@ pub enum RelationshipType {
     InterfaceToClass,
     #[strum(serialize = "INTERFACE_TO_METHOD")]
     InterfaceToMethod,
+    #[strum(serialize = "INTERFACE_TO_FUNCTION")]
+    InterfaceToFunction,
     #[strum(serialize = "INTERFACE_TO_PROPERTY")]
     InterfaceToProperty,
     #[strum(serialize = "INTERFACE_TO_LAMBDA")]
