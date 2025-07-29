@@ -21,6 +21,7 @@ pub use languages::java::JavaAnalyzer;
 pub use languages::kotlin::KotlinAnalyzer;
 pub use languages::python::PythonAnalyzer;
 pub use languages::ruby::RubyAnalyzer;
+pub use languages::typescript::TypeScriptAnalyzer;
 
 /// Analysis service that orchestrates the transformation of parsing results into graph data
 pub struct AnalysisService {
@@ -31,6 +32,7 @@ pub struct AnalysisService {
     python_analyzer: PythonAnalyzer,
     kotlin_analyzer: KotlinAnalyzer,
     java_analyzer: JavaAnalyzer,
+    typescript_analyzer: TypeScriptAnalyzer,
 }
 
 impl AnalysisService {
@@ -42,6 +44,7 @@ impl AnalysisService {
         let python_analyzer = PythonAnalyzer::new();
         let kotlin_analyzer = KotlinAnalyzer::new();
         let java_analyzer = JavaAnalyzer::new();
+        let typescript_analyzer = TypeScriptAnalyzer::new();
 
         Self {
             repository_name,
@@ -51,6 +54,7 @@ impl AnalysisService {
             python_analyzer,
             kotlin_analyzer,
             java_analyzer,
+            typescript_analyzer,
         }
     }
 
@@ -255,6 +259,20 @@ impl AnalysisService {
                     file_definition_relationships,
                 );
             }
+            SupportedLanguage::TypeScript => {
+                self.typescript_analyzer.process_definitions(
+                    file_result,
+                    &relative_path,
+                    definition_map,
+                    file_definition_relationships,
+                );
+                self.typescript_analyzer.process_imports(
+                    file_result,
+                    &relative_path,
+                    imported_symbol_map,
+                    file_imported_symbol_relationships,
+                );
+            }
             _ => {}
         }
     }
@@ -311,6 +329,14 @@ impl AnalysisService {
             SupportedLanguage::Java => {
                 self.java_analyzer
                     .add_definition_relationships(&definition_map, definition_relationships);
+            }
+            SupportedLanguage::TypeScript => {
+                self.typescript_analyzer.add_definition_relationships(
+                    &definition_map,
+                    &imported_symbol_map,
+                    definition_relationships,
+                    definition_imported_symbol_relationships,
+                );
             }
             _ => {}
         }

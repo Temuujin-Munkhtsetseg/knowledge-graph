@@ -13,6 +13,10 @@ use parser_core::{
     },
     ruby::{analyzer::RubyAnalyzer, definitions::RubyDefinitionInfo},
     rules::{MatchWithNodes, RuleManager, run_rules},
+    typescript::{
+        analyzer::TypeScriptAnalyzer,
+        types::{TypeScriptDefinitionInfo, TypeScriptImportedSymbolInfo},
+    },
 };
 use std::time::{Duration, Instant};
 
@@ -174,6 +178,7 @@ impl<'a> FileProcessor<'a> {
                 | SupportedLanguage::Python
                 | SupportedLanguage::Kotlin
                 | SupportedLanguage::Java
+                | SupportedLanguage::TypeScript
         );
         if !is_supported {
             return ProcessingResult::Skipped(SkippedFile {
@@ -302,6 +307,20 @@ impl<'a> FileProcessor<'a> {
                     )),
                 }
             }
+            SupportedLanguage::TypeScript => {
+                let analyzer = TypeScriptAnalyzer::new();
+                match analyzer.analyze(matches, parse_result) {
+                    Ok(analysis_result) => Ok((
+                        Definitions::TypeScript(analysis_result.definitions),
+                        Some(ImportedSymbols::TypeScript(analysis_result.imports)),
+                    )),
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Failed to analyze TypeScript file '{}': {}",
+                        self.path,
+                        e
+                    )),
+                }
+            }
             // This should not happen due to the is_supported check earlier
             _ => Err(anyhow::anyhow!("Unsupported language: {:?}", language)),
         }
@@ -315,6 +334,7 @@ pub enum Definitions {
     Python(Vec<PythonDefinitionInfo>),
     Kotlin(Vec<KotlinDefinitionInfo>),
     Java(Vec<JavaDefinitionInfo>),
+    TypeScript(Vec<TypeScriptDefinitionInfo>),
 }
 
 impl Definitions {
@@ -325,6 +345,7 @@ impl Definitions {
             Definitions::Python(defs) => defs.len(),
             Definitions::Kotlin(defs) => defs.len(),
             Definitions::Java(defs) => defs.len(),
+            Definitions::TypeScript(defs) => defs.len(),
         }
     }
 
@@ -349,6 +370,10 @@ impl Definitions {
                     .map(|def| def.definition_type.as_str().to_string()),
             ),
             Definitions::Java(defs) => Box::new(
+                defs.iter()
+                    .map(|def| def.definition_type.as_str().to_string()),
+            ),
+            Definitions::TypeScript(defs) => Box::new(
                 defs.iter()
                     .map(|def| def.definition_type.as_str().to_string()),
             ),
@@ -382,12 +407,20 @@ impl Definitions {
             _ => None,
         }
     }
+
+    pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptDefinitionInfo>> {
+        match self {
+            Definitions::TypeScript(defs) => Some(defs.iter()),
+            _ => None,
+        }
+    }
 }
 
 /// Enum to hold definitions based on language
 #[derive(Clone, Debug)]
 pub enum ImportedSymbols {
     Python(Vec<PythonImportedSymbolInfo>),
+    TypeScript(Vec<TypeScriptImportedSymbolInfo>),
 }
 
 impl ImportedSymbols {
@@ -395,6 +428,7 @@ impl ImportedSymbols {
     pub fn count(&self) -> usize {
         match self {
             ImportedSymbols::Python(imported_symbols) => imported_symbols.len(),
+            ImportedSymbols::TypeScript(imported_symbols) => imported_symbols.len(),
         }
     }
 
@@ -406,6 +440,14 @@ impl ImportedSymbols {
     pub fn iter_python(&self) -> Option<impl Iterator<Item = &PythonImportedSymbolInfo>> {
         match self {
             ImportedSymbols::Python(imported_symbols) => Some(imported_symbols.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptImportedSymbolInfo>> {
+        match self {
+            ImportedSymbols::TypeScript(imported_symbols) => Some(imported_symbols.iter()),
+            _ => None,
         }
     }
 }

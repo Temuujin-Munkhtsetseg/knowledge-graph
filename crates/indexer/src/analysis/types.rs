@@ -1,4 +1,5 @@
 use database::graph::RelationshipType;
+use parser_core::fqn::{FQNPart, Fqn};
 use parser_core::{
     definitions::DefinitionTypeInfo,
     imports::ImportTypeInfo,
@@ -6,6 +7,7 @@ use parser_core::{
     kotlin::types::{KotlinDefinitionType, KotlinFqn},
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
     ruby::{fqn::RubyFqn, types::RubyDefinitionType},
+    typescript::types::{TypeScriptDefinitionType, TypeScriptImportType},
 };
 
 use serde::{Deserialize, Serialize};
@@ -83,12 +85,13 @@ pub struct DefinitionLocation {
 }
 
 /// Represents a language-specific definition type (e.g. class, module, method, etc.)
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DefinitionType {
     Ruby(RubyDefinitionType),
     Python(PythonDefinitionType),
     Kotlin(KotlinDefinitionType),
     Java(JavaDefinitionType),
+    TypeScript(TypeScriptDefinitionType),
     Unsupported(),
 }
 
@@ -99,6 +102,7 @@ impl DefinitionType {
             DefinitionType::Python(python_type) => python_type.as_str(),
             DefinitionType::Kotlin(kotlin_type) => kotlin_type.as_str(),
             DefinitionType::Java(java_type) => java_type.as_str(),
+            DefinitionType::TypeScript(typescript_type) => typescript_type.as_str(),
             DefinitionType::Unsupported() => "unsupported",
         }
     }
@@ -111,10 +115,11 @@ pub enum FqnType {
     Python(PythonFqn),
     Kotlin(KotlinFqn),
     Java(JavaFqn),
+    TypeScript(Fqn<FQNPart>),
 }
 
 /// Represents a definition node in the graph
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DefinitionNode {
     /// Fully qualified name (unique identifier)
     pub fqn: String,
@@ -166,12 +171,14 @@ pub struct ImportedSymbolLocation {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ImportType {
     Python(PythonImportType),
+    TypeScript(TypeScriptImportType),
 }
 
 impl ImportType {
     pub fn as_str(&self) -> &str {
         match self {
             ImportType::Python(python_type) => python_type.as_str(),
+            ImportType::TypeScript(typescript_type) => typescript_type.as_str(),
         }
     }
 }
