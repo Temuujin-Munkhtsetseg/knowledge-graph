@@ -386,6 +386,8 @@ publish-release::manual:
     - build:windows-x86_64
     - cargo-update
   before_script:
+    # Install git-lfs to handle large library files
+    - apt update && apt install -y git-lfs
     # Use the new Cargo.lock from cargo-update step
     - rm -f Cargo.lock
     - mv Cargo.lock.new Cargo.lock
