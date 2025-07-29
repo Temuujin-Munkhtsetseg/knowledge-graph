@@ -1215,7 +1215,7 @@ dependencies = [
 
 [[package]]
 name = "database"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "kuzu",
@@ -1374,7 +1374,7 @@ dependencies = [
 
 [[package]]
 name = "event-bus"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "serde",
@@ -1872,7 +1872,7 @@ dependencies = [
 
 [[package]]
 name = "gkg"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2041,7 +2041,7 @@ dependencies = [
 
 [[package]]
 name = "http-server"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2348,7 +2348,7 @@ dependencies = [
 
 [[package]]
 name = "indexer"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -2381,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "indexer-c-bindings"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "indexer",
 ]
@@ -2750,7 +2750,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "logging"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "file-rotate",
@@ -2786,7 +2786,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcp"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -4290,7 +4290,7 @@ dependencies = [
 
 [[package]]
 name = "testing"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "reqwest",
@@ -5668,7 +5668,7 @@ dependencies = [
 
 [[package]]
 name = "workspace-manager"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "dirs",
@@ -5691,7 +5691,7 @@ checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
 
 [[package]]
 name = "xtask"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
