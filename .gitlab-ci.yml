@@ -7,6 +7,10 @@ stages:
   
 variables:
   KUZU_VERSION: "0.11.1"
+  GITLAB_XTASKS_VERSION: "1.1.0"
+
+.install-gitlab-xtasks: &install-gitlab-xtasks |
+    cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v${GITLAB_XTASKS_VERSION} --force
 
 .rust-job-template:
   tags:
@@ -50,6 +54,15 @@ xtask-version-check:
     - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
   extends: .rust-job-template
 
+xtasks-verify-newlines:
+  stage: lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  script:
+    - *install-gitlab-xtasks
+    - gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css --directory .
+  extends: .rust-job-template
+
 frontend-build:
   stage: build
   image: node:22.17.0
@@ -85,11 +98,6 @@ rust-unit-test-report:
     reports:
       junit:
         - target/nextest/ci/junit.xml
-
-# Reusable script for installing gitlab-xtasks conditionally
-.install-gitlab-xtasks: &install-gitlab-xtasks |
-    cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v1.1.0 --force
-
 
 # Shared benchmark template for GKG indexing performance tests
 .gkg-benchmark-template:
