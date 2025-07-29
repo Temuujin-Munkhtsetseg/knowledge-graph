@@ -1,0 +1,225 @@
+@layer base, starlight, theme, components, utilities;
+
+@import "@astrojs/starlight-tailwind";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* https://starlight.astro.build/guides/customization */
+
+@theme {
+  /* GitLab-inspired accent color palette using official GitLab Orange (#FC6D26) */
+  --color-accent-200: #fddbc7; /* Very light GitLab orange with transparency */
+  --color-accent-600: #fc6d26; /* Official GitLab Orange */
+  --color-accent-900: #b54a1a; /* Darker GitLab orange */
+  --color-accent-950: #8a3714; /* Darkest GitLab orange */
+
+  /* Refined gray color palette for better contrast */
+  --color-gray-100: #f6f6f6;
+  --color-gray-200: #eeeeed;
+  --color-gray-300: #c2c2c1;
+  --color-gray-400: #8b8c8a;
+  --color-gray-500: #585857;
+  --color-gray-700: #383837;
+  --color-gray-800: #272726;
+  --color-gray-900: #181818;
+}
+
+/* Site title color customization using Tailwind's theme system */
+@layer utilities {
+  :root {
+    --site-title-light: theme(colors.black);
+    --site-title-dark: theme(colors.white);
+  }
+
+  /* Target the site title link and text */
+  .site-title,
+  .site-title span {
+    color: var(--site-title-light) !important;
+  }
+
+  /* Dark mode using prefers-color-scheme */
+  @media (prefers-color-scheme: dark) {
+    .site-title,
+    .site-title span {
+      color: var(--site-title-dark) !important;
+    }
+  }
+
+  /* Also handle data-theme attribute for Starlight's theme toggle */
+  [data-theme="dark"] .site-title,
+  [data-theme="dark"] .site-title span {
+    color: var(--site-title-dark) !important;
+  }
+
+  [data-theme="light"] .site-title,
+  [data-theme="light"] .site-title span {
+    color: var(--site-title-light) !important;
+  }
+
+  /* Hero Title Styling */
+  .hero-title {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    font-weight: 700 !important;
+    font-size: clamp(1.8rem, 6vw, 3.5rem) !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    text-transform: none !important;
+  }
+
+  /* GitLab text with official GitLab orange */
+  .gitlab-text {
+    background: linear-gradient(135deg, #fc6d26 0%, #e24329 100%) !important;
+    background-clip: text !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    color: transparent !important;
+    position: relative !important;
+    display: inline-block !important;
+    -moz-background-clip: text !important;
+    -moz-text-fill-color: transparent !important;
+  }
+
+  /* Knowledge and Graph text with GitLab purple accent */
+  .graph-text {
+    background: linear-gradient(135deg, #6b46c1 0%, #7c3aed 100%) !important;
+    background-clip: text !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    color: transparent !important;
+    position: relative !important;
+    display: inline-block !important;
+    -moz-background-clip: text !important;
+    -moz-text-fill-color: transparent !important;
+  }
+
+  /* GKG subtitle styling */
+  .gkg-subtitle {
+    font-size: 0.5em !important;
+    color: #374151 !important;
+    font-weight: 400 !important;
+    margin-left: 0.5rem !important;
+    vertical-align: text-bottom !important;
+    display: inline-block !important;
+    margin-top: 1rem !important;
+    margin-left: -0.05rem !important;
+  }
+
+  /* Dark mode styling for GKG subtitle */
+  [data-theme="dark"] .gkg-subtitle {
+    color: #9ca3af !important;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .gkg-subtitle {
+      color: #9ca3af !important;
+    }
+  }
+
+  /* Dark mode adjustments for better visibility */
+  [data-theme="dark"] .gitlab-text {
+    background: linear-gradient(
+      135deg,
+      #fca326 0%,
+      #fc6d26 50%,
+      #e24329 100%
+    ) !important;
+    background-clip: text !important;
+    -webkit-background-clip: text !important;
+  }
+
+  [data-theme="dark"] .knowledge-text,
+  [data-theme="dark"] .graph-text {
+    background: linear-gradient(
+      135deg,
+      #8b5cf6 0%,
+      #a78bfa 50%,
+      #c4b5fd 100%
+    ) !important;
+    background-clip: text !important;
+    -webkit-background-clip: text !important;
+  }
+
+  /* Also handle prefers-color-scheme for system dark mode */
+  @media (prefers-color-scheme: dark) {
+    .gitlab-text {
+      background: linear-gradient(
+        135deg,
+        #fca326 0%,
+        #fc6d26 50%,
+        #e24329 100%
+      ) !important;
+      background-clip: text !important;
+      -webkit-background-clip: text !important;
+    }
+
+    .knowledge-text,
+    .graph-text {
+      background: linear-gradient(
+        135deg,
+        #8b5cf6 0%,
+        #a78bfa 50%,
+        #c4b5fd 100%
+      ) !important;
+      background-clip: text !important;
+      -webkit-background-clip: text !important;
+    }
+  }
+
+  /* Ensure smooth gradient rendering */
+  .gitlab-text,
+  .knowledge-text,
+  .graph-text {
+    background-size: 200% 200% !important;
+    background-position: 0% 0% !important;
+  }
+
+  /* Fallback for browsers that don't support background-clip: text */
+  @supports not (-webkit-background-clip: text) {
+    .gitlab-text {
+      color: #fc6d26 !important;
+    }
+    .knowledge-text {
+      color: #6b46c1 !important;
+    }
+    .graph-text {
+      color: #6b46c1 !important;
+    }
+
+    [data-theme="dark"] .gitlab-text {
+      color: #fca326 !important;
+    }
+
+    [data-theme="dark"] .knowledge-text,
+    [data-theme="dark"] .graph-text {
+      color: #a78bfa !important;
+    }
+  }
+
+  /* Responsive adjustments for smaller screens */
+  @media (max-width: 768px) {
+    .hero-title {
+      font-size: clamp(1.5rem, 8vw, 2.8rem) !important;
+      gap: 0.3rem !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .hero-title {
+      font-size: clamp(1.3rem, 10vw, 2.2rem) !important;
+      gap: 0.2rem !important;
+    }
+  }
+}
+
+/* GitLab Fonts */
+:root {
+  --sl-font:
+    "Gitlab Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --sl-font-mono:
+    "Gitlab Mono", "JetBrains Mono", "SF Mono", Monaco, Inconsolata,
+    "Roboto Mono", "Courier New", monospace;
+}

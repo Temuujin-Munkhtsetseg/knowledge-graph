@@ -1,0 +1,138 @@
+---
+title: GitLab Knowledge Graph
+description: Create structured, queryable representations of code repositories to power AI features and enhance developer productivity.
+template: splash
+hero:
+  tagline: Create structured, queryable representations of code repositories to power AI features and enhance developer productivity.
+  title: |
+    <span class="hero-title">
+      <span class="gitlab-text">GitLab</span>
+      <span class="graph-text">Knowledge Graph</span>
+      <span class="gkg-subtitle">(gkg)</span>
+    </span>
+  image:
+    alt: GitLab Knowledge Graph Logo
+    dark: ../../assets/gkg-logo.png
+    light: ../../assets/gkg-logo.png
+  actions:
+    - text: Get Started
+      link: getting-started/install/
+      icon: right-arrow
+    - text: View on GitLab
+      link: https://gitlab.com/gitlab-org/rust/knowledge-graph
+      icon: external
+      variant: minimal
+---
+
+import {
+  CardGrid,
+  LinkCard,
+  Steps,
+  Badge,
+} from "@astrojs/starlight/components";
+import FeatureCard from "../../components/FeatureCard.astro";
+
+## Why GKG?
+
+<CardGrid>
+  <FeatureCard
+    title="Universal Call Graph"
+    icon="forward-slash"
+    badgeText="Native parsing"
+  >
+    <p>
+      Support for Rust, TypeScript, Python, Ruby, and more. Extensible
+      architecture powered by tree-sitter means new languages can be added with
+      ease.
+    </p>
+  </FeatureCard>
+  <FeatureCard
+    title="Lightning-Fast Queries"
+    icon="rocket"
+    badgeText="Kuzu Graph Database"
+  >
+    <p>
+      Purpose-built for complex relationship queries. Find dependencies, trace
+      function calls, and explore architecture at any scale.
+    </p>
+  </FeatureCard>
+  <FeatureCard
+    title="Developer-First Design"
+    icon="laptop"
+    badgeText="Many Ways to Access"
+  >
+    <p>
+      Powerful CLI for automation, IDE integration, and beautiful web UI for
+      exploration. Works with all major OS.
+    </p>
+  </FeatureCard>
+  <FeatureCard
+    title="AI-Ready Integration"
+    icon="open-book"
+    badgeText="MCP Protocol Support"
+  >
+    <p>
+      Enables AI tools to understand your codebase structure and provide
+      context-aware assistance.
+    </p>
+  </FeatureCard>
+</CardGrid>
+
+## Get Started in Minutes
+
+<Steps>
+
+1. **Install GitLab Knowledge Graph**
+
+   One-line installation for Linux, macOS, and Windows:
+
+   ```bash
+   curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.sh | bash
+   ```
+
+2. **Index your first repository**
+
+   Navigate to your project and create the knowledge graph:
+
+   ```bash
+   gkg index
+   ```
+
+3. **Explore with the web interface**
+
+   Start the server and open your browser:
+
+   ```bash
+   gkg server --enable-reindexing
+   ```
+
+</Steps>
+
+## Use Cases
+
+<CardGrid>
+  <LinkCard
+    title="Codebase RAG"
+    description="Enable context-aware code suggestions and analysis with MCP integration"
+    href="cli/server/"
+  />
+  <LinkCard
+    title="Code Navigation"
+    description="Find all references, dependencies, and relationships across your codebase"
+    href="getting-started/quick-start/"
+  />
+  <LinkCard
+    title="Impact Analysis"
+    description="Understand how changes affect other parts of your system before you make them"
+    href="cli/server/"
+  />
+  <LinkCard
+    title="Architecture Visualization"
+    description="Generate interactive graphs of system structure and dependencies"
+    href="getting-started/quick-start/#server-mode"
+  />
+</CardGrid>
+
+## Project Status <Badge text="Under Active Development" variant="caution" />
+
+This project is not production ready and is still under active development. Follow progress in the [Knowledge Graph First Iteration epic](https://gitlab.com/groups/gitlab-org/-/epics/17514).

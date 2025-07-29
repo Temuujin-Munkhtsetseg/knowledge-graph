@@ -25,6 +25,11 @@ echo "📦 Updating @gitlab-org/gkg..."
 npm version "$NEW_VERSION" --workspace=@gitlab-org/gkg --git-tag-version=false
 echo "✅ Updated @gitlab-org/gkg to version $NEW_VERSION"
 
+# Update docs
+echo "📦 Updating docs..."
+npm version "$NEW_VERSION" --workspace=docs --git-tag-version=false
+echo "✅ Updated docs to version $NEW_VERSION"
+
 # Update the VERSION file
 echo "$NEW_VERSION" > VERSION
 echo "✅ Updated VERSION file"
