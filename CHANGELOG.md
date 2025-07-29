@@ -1,3 +1,41 @@
+## [0.7.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.6.0...v0.7.0) (2025-07-29)
+
+### :sparkles: Features
+
+* add go bindings package ([ae96f42](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ae96f42eb17d528ab7c8713131ad90fd22aa45c0)) by Jan Provaznik
+* **benchmark:** add GDK benchmark test ([a3db486](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a3db48696d563f01f80e595ec8d6ac0b2e4fa1fc)) by Michael Angelo Rivera
+* **indexer:** add basic statistics to indexer ([cb6fcce](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/cb6fcced22738a6634087e5533d5bd5451cdc6b8)) by Michael Angelo Rivera
+* **indexer:** added indexing support for Python definitions ([1479266](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1479266f1eb9bf1998c883ceae95faecc7d316e4)) by Jonathan Shobrook
+* **indexer:** full migration to relationship type enum in indexer ([b686dcb](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b686dcb36862fb74e6fa75daed599dba927681ae)) by Michael Usachenko
+* **indexer:** indexing for imported symbols in Python ([e115cb9](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e115cb929753a094526b5f18cbecb92f39b6a2d7)) by Jonathan Shobrook
+* **install:** mac binary signing ([bb7f548](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/bb7f548a96331de9532290bb0c1d4098922ad3d8)) by Bohdan Parkhomchuk
+* **install:** one-line installation scripts ([b49ae65](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b49ae657c0756cc460b5cf9478e546072563e9fb)) by Bohdan Parkhomchuk
+* **java:** index Java definitions ([7b8a281](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7b8a2810d0245e180c47bbf176b34105ab8f9274)) by Jean-Gabriel Doyon
+* **kotlin:** index Kotlin definitions ([9d96959](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9d96959a72e629d72d80a7093334af924734f709)) by Jean-Gabriel Doyon
+* **reindexing:** enforcing project level watching, better transaction isolation ([90b080c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/90b080c21b29d0acb14d1c719ed0b35b12b10bea)) by Michael Usachenko
+* **ts:** implement TS/JS indexing for definitions and imports ([b1ece4b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b1ece4b719bceee3a5baf1de37a217a24eb0374e)) by Michael Usachenko
+* **watcher:** watchers can now operate over entire workspaces, or individual projects ([5371f00](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5371f0062f43f9ee54191d9b103e76733de8f4db)) by Michael Usachenko
+
+### :bug: Fixes
+
+* **ci:** install git lfs in release step ([a0bba24](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a0bba24939ffa47859647622ceed895a816a0592)) by Bohdan Parkhomchuk
+* **db:** kuzu node id assignments now use primary_file_path and fqn ([b1d805c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b1d805cfb153aa26410ce19195d00b104a5eba30)) by Michael Usachenko
+* **deps:** update lock file ([a0602f2](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a0602f2d5e2cf6a771e8c7b153504bc1bda55a4f)) by michaelangeloio
+* **frontend:** remove shadcn-vue dep, due to stylus dependency being removed from npm ([d9ebbf4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d9ebbf4aca32af9f82374c26270a630477fcd225)) by Michael Usachenko
+* **playground:** fix graph neighbours search ([7ef58fb](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7ef58fb53cbed726624a5b062ce396d3af4c7009)) by Jean-Gabriel Doyon
+* **playground:** hovering an edge not showing tooltip, use name instead of FQN for the nodes ([3f45cf8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3f45cf8e747817f4a84975055d738b61ace7eafe)) by Jean-Gabriel Doyon
+
+### :zap: Refactor
+
+* **indexer:** reduce file parsing progress output ([1b02013](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1b02013e08ccaa78c57698d2b44b97b3d38e894b)) by michaelangeloio
+
+### :repeat: Chore
+
+* **deps:** bump gitalisk to v0.4.0 and parser to v0.7.0 ([a8b0877](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a8b0877a2574a01001fa6c4c9b32c15919b4f023)) by Michael Usachenko
+* **deps:** remove unused deps ([7a0bf8a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7a0bf8ad330b2ddffac88936aecd112bcbbf1e23)) by Bohdan Parkhomchuk
+* **docs:** fix readme typo ([6290bfa](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6290bfaad705952b1ea6dd2f842276a2543617b2)) by Bohdan Parkhomchuk
+* **indexer:** added more location details to DefinitionNode and ImportedSymbolNode ([d2cd098](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d2cd098695a95df11aaab3946721c6c5c1a5a548)) by Jonathan Shobrook
+
 ## [0.6.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.5.0...v0.6.0) (2025-07-18)
 
 ### :sparkles: Features
