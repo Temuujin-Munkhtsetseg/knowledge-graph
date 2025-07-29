@@ -376,6 +376,75 @@ go-tests:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
+docs-build:
+  stage: deploy
+  image: node:22.17.0
+  needs: []
+  variables:
+    PAGES_PREFIX: ""
+    npm_config_cache: "${CI_PROJECT_DIR}/.npm"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        PAGES_PREFIX: ""
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      variables:
+        PAGES_PREFIX: "$CI_COMMIT_REF_SLUG"
+  before_script:
+    - npm ci
+    - npm run lint --workspace=docs
+  script:
+    - npm run build --workspace=docs
+    - echo "Pages accessible through ${CI_PAGES_URL}"
+  pages:
+    path_prefix: "$PAGES_PREFIX"
+    expire_in: 1 week
+    publish: packages/docs/dist
+  artifacts:
+    paths:
+      - packages/docs/dist/
+    expire_in: 1 week
+  environment:
+    name: "Docs ${PAGES_PREFIX}"
+    url: $CI_PAGES_URL
+
+docs-comment:
+  tags:
+    - saas-linux-medium-amd64
+  stage: deploy
+  needs:
+    - docs-build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  variables:
+    PAGES_PREFIX: "$CI_COMMIT_REF_SLUG"
+  script:
+    - *install-gitlab-xtasks
+    - |
+      # Construct the docs URL based on the branch
+      DOCS_URL="${CI_PAGES_URL}/${PAGES_PREFIX}"
+      
+      # Create markdown comment content
+      cat > docs-ready-comment.md << EOF
+      ## 📚 Documentation Preview Ready
+      
+      The documentation for this merge request has been built and deployed.
+      
+      **📖 View Documentation:** [${DOCS_URL}](${DOCS_URL})
+      
+      This preview will be available until the merge request is closed or merged.
+      EOF
+      
+      # Post the comment
+      gitlab-xtasks comment post \
+        --type delete-and-add \
+        --unique-id "docs-preview-comment" \
+        --file-path docs-ready-comment.md
+      
+      echo "Documentation preview comment posted successfully"
+      echo "Documentation available at: ${DOCS_URL}"
+  extends: .rust-job-template
+
 publish-release::manual:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
   stage: deploy
