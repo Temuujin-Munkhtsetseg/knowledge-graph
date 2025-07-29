@@ -6,7 +6,7 @@ stages:
   - deploy
   
 variables:
-  KUZU_VERSION: "0.11.0"
+  KUZU_VERSION: "0.11.1"
 
 .rust-job-template:
   tags:
