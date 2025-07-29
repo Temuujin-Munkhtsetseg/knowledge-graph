@@ -76,6 +76,10 @@ run = "npm run format --workspace=@gitlab-org/gkg-frontend"
 [tasks.frontend-lint]
 run = "npm run lint --workspace=@gitlab-org/gkg-frontend"
 
+# runs docs development server
+[tasks.docs-dev]
+run = "npm run dev --workspace=docs"
+
 # runs gitlab-xtasks to check for newlines
 [tasks.newlines-fix]
 run = "gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs --directory . --fix"
