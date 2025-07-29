@@ -141,39 +141,32 @@ gkg-benchmark-linux:
     matrix:
       - SCENARIO: [gkg_index_gdk_release_4_threads]
 
-# macOS GKG benchmark execution  
-# TODO: re-enable this once we can benchmark on macOS in under 10 minutes.
-# gkg-benchmark-macos:
-#   extends: .gkg-benchmark-template
-#   tags:
-#     - saas-macos-medium-m1
-#   image: macos-15-xcode-16
-#   variables:
-#     ARCH: "macos-arm64"
-#     CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
-#     RUNNER_OS: "macOS"
-#   before_script:
-#     - rustc --version && cargo --version
-#     - rustup set auto-self-update disable
-#     # Install build dependencies like darwin-build-template
-#     - brew install cmake python jq
-#   parallel:
-#     matrix:
-#       - SCENARIO: [gkg_index_gdk_release_4_threads]
+gkg-benchmark-macos:
+  extends: .gkg-benchmark-template
+  tags:
+    - saas-macos-medium-m1
+  image: macos-15-xcode-16
+  variables:
+    ARCH: "macos-arm64"
+    RUNNER_OS: "macOS"
+  before_script:
+    - source ./scripts/macos-kuzu-install.sh
+    - rustc --version && cargo --version
+    - rustup set auto-self-update disable
+  parallel:
+    matrix:
+      - SCENARIO: [gkg_index_gdk_release_4_threads]
 
 # Collect and analyze all GKG benchmark results
 gkg-benchmark-analyze:
   stage: benchmark
   needs: 
     - gkg-benchmark-linux
-    # - job: gkg-benchmark-macos
-    #   optional: true
+    - gkg-benchmark-macos
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   interruptible: true
   script:
-    - export CARGO_INSTALL_ROOT="${CARGO_HOME:-$HOME/.cargo}"
-    - export PATH="${CARGO_INSTALL_ROOT}/bin:$HOME/.cargo/bin:$PATH"
     - *install-gitlab-xtasks
     - |
       # Generate markdown report with metadata
