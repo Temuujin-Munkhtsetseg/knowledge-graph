@@ -18,6 +18,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "Running mise run newlines-fix..."
+mise run newlines-fix
+if [ $? -ne 0 ]; then
+    echo "newlines fix failed"
+    exit 1
+fi
+
 # Re-add any files that were modified by the fixes
 echo "Re-adding modified files to commit..."
 git add -A
