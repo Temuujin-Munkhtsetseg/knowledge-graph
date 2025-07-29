@@ -16,6 +16,7 @@ use tracing::error;
 #[derive(Debug, Clone)]
 pub struct KuzuChangesIds {
     pub deleted_definition_ids: Vec<u32>,
+    pub deleted_imported_symbol_ids: Vec<u32>,
     pub deleted_file_ids: Vec<u32>,
     pub deleted_directory_ids: Vec<u32>,
     pub changed_file_paths: Vec<String>,
@@ -95,6 +96,14 @@ impl<'a> KuzuChanges<'a> {
                     "id",
                     &changes.deleted_definition_ids,
                 );
+
+                // Remove deleted imported symbols (and their relationships)
+                let _ = service.delete_by(
+                    KuzuNodeType::ImportedSymbolNode,
+                    "id",
+                    &changes.deleted_imported_symbol_ids,
+                );
+
                 // Remove deleted files (and their relationships)
                 let _ = service.delete_by(KuzuNodeType::FileNode, "id", &changes.deleted_file_ids);
                 // Remove deleted directories (and their relationships)
@@ -103,10 +112,16 @@ impl<'a> KuzuChanges<'a> {
                     "id",
                     &changes.deleted_directory_ids,
                 );
+
                 // Delete the nodes for changed files and directories from the database
                 let _ = service.delete_by(
                     KuzuNodeType::DefinitionNode,
                     "primary_file_path",
+                    &changes.changed_file_paths,
+                );
+                let _ = service.delete_by(
+                    KuzuNodeType::ImportedSymbolNode,
+                    "file_path",
                     &changes.changed_file_paths,
                 );
                 let _ =
@@ -133,26 +148,40 @@ impl<'a> KuzuChanges<'a> {
     }
 
     fn new_node_id_heads(&mut self) -> (u64, u64, u64, u64) {
+        let node_counts = self.node_database_service.get_node_counts().unwrap();
+
         // Compute the max id of each node type
-        let max_definition_id = self
-            .node_database_service
-            .agg_node_by::<DefinitionNodeFromKuzu>("max", "id")
-            .unwrap();
+        let max_definition_id = if node_counts.definition_count > 0 {
+            self.node_database_service
+                .agg_node_by::<DefinitionNodeFromKuzu>("max", "id")
+                .unwrap()
+        } else {
+            0
+        };
 
-        let max_imported_symbol_id = self
-            .node_database_service
-            .agg_node_by::<ImportedSymbolNodeFromKuzu>("max", "id")
-            .unwrap();
+        let max_imported_symbol_id = if node_counts.imported_symbol_count > 0 {
+            self.node_database_service
+                .agg_node_by::<ImportedSymbolNodeFromKuzu>("max", "id")
+                .unwrap()
+        } else {
+            0
+        };
 
-        let max_file_id = self
-            .node_database_service
-            .agg_node_by::<FileNodeFromKuzu>("max", "id")
-            .unwrap();
+        let max_file_id = if node_counts.file_count > 0 {
+            self.node_database_service
+                .agg_node_by::<FileNodeFromKuzu>("max", "id")
+                .unwrap()
+        } else {
+            0
+        };
 
-        let max_dir_id = self
-            .node_database_service
-            .agg_node_by::<DirectoryNodeFromKuzu>("max", "id")
-            .unwrap();
+        let max_dir_id = if node_counts.directory_count > 0 {
+            self.node_database_service
+                .agg_node_by::<DirectoryNodeFromKuzu>("max", "id")
+                .unwrap()
+        } else {
+            0
+        };
 
         (
             max_definition_id,
@@ -213,6 +242,16 @@ impl<'a> KuzuChanges<'a> {
             .map(|def| def.id)
             .collect::<Vec<_>>();
 
+        // Find deleted imported symbols
+        let deleted_symbols = self.find_nodes::<ImportedSymbolNodeFromKuzu>(
+            FileChangesPathType::ChangedFiles,
+            KuzuNodeType::ImportedSymbolNode,
+        );
+        let deleted_import_ids = deleted_symbols
+            .iter()
+            .map(|symbol| symbol.id)
+            .collect::<Vec<_>>();
+
         // Find removed files (exist in kuzu but not in new)
         let deleted_files = self.find_nodes::<FileNodeFromKuzu>(
             FileChangesPathType::DeletedFiles,
@@ -240,6 +279,7 @@ impl<'a> KuzuChanges<'a> {
 
         KuzuChangesIds {
             deleted_definition_ids: deleted_def_ids,
+            deleted_imported_symbol_ids: deleted_import_ids,
             deleted_file_ids,
             deleted_directory_ids: deleted_dir_ids,
             changed_file_paths: changed_files,
