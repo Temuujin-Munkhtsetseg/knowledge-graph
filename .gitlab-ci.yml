@@ -7,7 +7,7 @@ stages:
   
 variables:
   KUZU_VERSION: "0.11.1"
-  GITLAB_XTASKS_VERSION: "1.1.0"
+  GITLAB_XTASKS_VERSION: "1.2.0"
 
 .install-gitlab-xtasks: &install-gitlab-xtasks |
     cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v${GITLAB_XTASKS_VERSION} --force
@@ -60,7 +60,7 @@ xtasks-verify-newlines:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   script:
     - *install-gitlab-xtasks
-    - gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css --directory .
+    - gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs --directory .
   extends: .rust-job-template
 
 frontend-build:

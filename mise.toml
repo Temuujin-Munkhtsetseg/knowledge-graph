@@ -75,3 +75,7 @@ run = "npm run format --workspace=@gitlab-org/gkg-frontend"
 # runs and fixes possible eslint errors
 [tasks.frontend-lint]
 run = "npm run lint --workspace=@gitlab-org/gkg-frontend"
+
+# runs gitlab-xtasks to check for newlines
+[tasks.newlines-fix]
+run = "gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs --directory . --fix"
