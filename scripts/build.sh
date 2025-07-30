@@ -5,12 +5,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INC_DIR="$PROJECT_ROOT/include"
 
-PLATFORM=${PLATFORM:-$(uname -s)}
+PLATFORM=${PLATFORM:-$(uname -s | tr '[:upper:]' '[:lower:]')}
 ARCH=${ARCH:-$(uname -m)}
+if [ "$ARCH" = "arm64" ]; then
+    ARCH="aarch64"
+fi
 CARGO_PARAMS=${CARGO_PARAMS:-"--locked --release"}
 
+echo "Building for $PLATFORM $ARCH"
+
 case "$PLATFORM" in
-    Darwin)
+    darwin)
         case "$ARCH" in
             aarch64)
                 LIB_DIR="$PROJECT_ROOT/lib/darwin_arm64"
@@ -22,7 +27,7 @@ case "$PLATFORM" in
                 ;;
         esac
         ;;
-    Linux)
+    linux)
         case "$ARCH" in
             aarch64)
                 LIB_DIR="$PROJECT_ROOT/lib/linux_arm64"
@@ -36,22 +41,22 @@ case "$PLATFORM" in
         ;;
 esac
 
-if [ -z "LIB_DIR" ]; then
+if [ -z "$LIB_DIR" ]; then
     echo "unknown arch '$ARCH' or platform '$PLATFORM'"
     exit 1
 fi
 
-
+echo "Building binary with target $TARGET"
 build_bin() {
     cargo build $CARGO_PARAMS --bin gkg --target $TARGET
 
     # Sign and notarize the binary
-    if [ "$PLATFORM" = "Darwin" ];then
+    if [ "$PLATFORM" = "darwin" ];then
         ./scripts/macos-sign-notarize.sh "target/${TARGET}/release/gkg"
     fi
 
-    tar -czvf gkg-linux-${ARCH}.tar.gz -C target/${TARGET}/release gkg
-    echo "created gkg-linux-${ARCH}.tar.gz"
+    tar -czvf gkg-${PLATFORM}-${ARCH}.tar.gz -C target/${TARGET}/release gkg
+    echo "created gkg-${PLATFORM}-${ARCH}.tar.gz"
 }
 
 build_lib() {
