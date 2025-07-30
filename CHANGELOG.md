@@ -1,3 +1,26 @@
+## [0.8.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.7.0...v0.8.0) (2025-07-30)
+
+### :sparkles: Features
+
+* **bench:** use dynamic kuzu for macos bench ([5ed7592](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5ed759202045665da6b55c27b9e761075f4a2cef)) by Bohdan Parkhomchuk
+* **docs:** add docs framework ([80e3ef2](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/80e3ef2a52b00a636de5c6932eedca0f4f9ef77a)) by Michael Angelo Rivera
+* **reindexing:** enable re-indexing for imports ([5e91f7c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5e91f7cf4a1ad757b66071a6082dc0f13f45ab28)) by Michael Usachenko
+
+### :bug: Fixes
+
+* **ci:** fix releases for darwin ([39fe684](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/39fe6840365de03498d8dcb266d62e3a412f2555)) by Bohdan Parkhomchuk
+
+### :repeat: Chore
+
+* **ci:** enforce newlines ([3ca9b74](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3ca9b7450138c37dedb7976d930a822f8e7349cf)) by michaelangeloio
+* **ci:** fix arch variable coming from CI ([35029d6](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/35029d65b36de887f8f56e7e0c4216d3421dba21)) by Bohdan Parkhomchuk
+* **deps:** bump kuzu to latest (0.11.1) ([2abf2a4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/2abf2a47291a30ddd4639d8b4946f6b0a3eadbad)) by Michael Usachenko
+* **deps:** update gitlab-xtasks ([49ebd57](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/49ebd571a8a2abd64cd91f359af36739bcb9b473)) by Michael Angelo Rivera
+* **deps:** update lock file ([8df939f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8df939f7d5b08bc4227937381e46eaa6b722d6f4)) by michaelangeloio
+* downgrade go version ([9e2359f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9e2359f5ed8c9fc363bb4b05eaa5097b33063531)) by Jan Provaznik
+* **mise:** add docs command to mise ([8aae243](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8aae243596ec9b0f9f90f57973709561956ddf00)) by michaelangeloio
+* update go bindings module ([fb45c4d](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/fb45c4d33ff6f3001da85b67e23adea1aafed3d8)) by Jan Provaznik
+
 ## [0.7.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.6.0...v0.7.0) (2025-07-29)
 
 ### :sparkles: Features
