@@ -5,7 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INC_DIR="$PROJECT_ROOT/include"
 
-PLATFORM=${PLATFORM:-$(uname -s | tr '[:upper:]' '[:lower:]')}
+PLATFORM=${PLATFORM:-$(uname -s)}
+PLATFORM=$(echo "$PLATFORM" | tr '[:upper:]' '[:lower:]')
+
 ARCH=${ARCH:-$(uname -m)}
 if [ "$ARCH" = "arm64" ]; then
     ARCH="aarch64"
@@ -46,7 +48,6 @@ if [ -z "$LIB_DIR" ]; then
     exit 1
 fi
 
-echo "Building binary with target $TARGET"
 build_bin() {
     cargo build $CARGO_PARAMS --bin gkg --target $TARGET
 
