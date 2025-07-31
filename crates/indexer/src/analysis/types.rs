@@ -1,5 +1,5 @@
 use database::graph::RelationshipType;
-use parser_core::fqn::{FQNPart, Fqn};
+
 use parser_core::{
     definitions::DefinitionTypeInfo,
     imports::ImportTypeInfo,
@@ -7,7 +7,7 @@ use parser_core::{
     kotlin::types::{KotlinDefinitionType, KotlinFqn},
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
     ruby::{fqn::RubyFqn, types::RubyDefinitionType},
-    typescript::types::{TypeScriptDefinitionType, TypeScriptImportType},
+    typescript::types::{TypeScriptDefinitionType, TypeScriptFqn, TypeScriptImportType},
 };
 
 use serde::{Deserialize, Serialize};
@@ -115,7 +115,7 @@ pub enum FqnType {
     Python(PythonFqn),
     Kotlin(KotlinFqn),
     Java(JavaFqn),
-    TypeScript(Fqn<FQNPart>),
+    TypeScript(TypeScriptFqn),
 }
 
 /// Represents a definition node in the graph

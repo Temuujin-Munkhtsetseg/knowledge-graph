@@ -6,10 +6,13 @@ use crate::analysis::types::{
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
-use parser_core::fqn::{FQNPart, Fqn};
+
 use parser_core::typescript::{
     fqn::typescript_fqn_to_string,
-    types::{TypeScriptDefinitionInfo, TypeScriptDefinitionType, TypeScriptImportedSymbolInfo},
+    types::{
+        TypeScriptDefinitionInfo, TypeScriptDefinitionType, TypeScriptFqn,
+        TypeScriptImportedSymbolInfo,
+    },
 };
 use std::collections::HashMap;
 
@@ -45,7 +48,7 @@ impl TypeScriptAnalyzer {
                 if let Ok(Some((location, fqn))) =
                     self.create_definition_location(definition, relative_file_path)
                 {
-                    let fqn_string = typescript_fqn_to_string(&fqn);
+                    let fqn_string = typescript_fqn_to_string(definition.fqn.as_ref().unwrap());
                     let definition_node = DefinitionNode::new(
                         fqn_string.clone(),
                         definition.name.clone(),
@@ -54,7 +57,7 @@ impl TypeScriptAnalyzer {
                     );
 
                     // If top-level definition, add file-to-definition relationship
-                    if fqn.len() == 1 {
+                    if definition.fqn.as_ref().unwrap().len() == 1 {
                         file_definition_relationships.push(FileDefinitionRelationship {
                             file_path: relative_file_path.to_string(),
                             definition_fqn: fqn_string.clone(),
@@ -170,20 +173,20 @@ impl TypeScriptAnalyzer {
         &self,
         definition: &TypeScriptDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, Fqn<FQNPart>)>, String> {
+    ) -> Result<Option<(DefinitionLocation, TypeScriptFqn)>, String> {
         // Only create definition locations if we have an FQN
-        if let Some(ref fqn) = definition.fqn {
+        if definition.fqn.is_some() {
             let location = DefinitionLocation {
                 file_path: file_path.to_string(),
-                start_byte: definition.match_info.range.byte_offset.0 as i64,
-                end_byte: definition.match_info.range.byte_offset.1 as i64,
-                start_line: definition.match_info.range.start.line as i32,
-                end_line: definition.match_info.range.end.line as i32,
-                start_col: definition.match_info.range.start.column as i32,
-                end_col: definition.match_info.range.end.column as i32,
+                start_byte: definition.range.byte_offset.0 as i64,
+                end_byte: definition.range.byte_offset.1 as i64,
+                start_line: definition.range.start.line as i32,
+                end_line: definition.range.end.line as i32,
+                start_col: definition.range.start.column as i32,
+                end_col: definition.range.end.column as i32,
             };
 
-            Ok(Some((location, fqn.clone())))
+            Ok(Some((location, definition.fqn.as_ref().unwrap().clone())))
         } else {
             // Skip definitions without FQNs
             log::debug!(
@@ -230,14 +233,14 @@ impl TypeScriptAnalyzer {
     fn get_parent_fqn_string(&self, fqn: &FqnType) -> Option<String> {
         match fqn {
             FqnType::TypeScript(typescript_fqn) => {
-                let parts_len = typescript_fqn.parts.len();
+                let parts_len = typescript_fqn.len();
                 if parts_len <= 1 {
                     return None;
                 }
 
                 // Build parent string directly without creating new Vec
                 Some(
-                    typescript_fqn.parts[..parts_len - 1]
+                    typescript_fqn[..parts_len - 1]
                         .iter()
                         .map(|part| part.node_name.as_str())
                         .collect::<Vec<_>>()

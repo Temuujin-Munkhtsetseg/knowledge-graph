@@ -169,12 +169,12 @@ impl PythonAnalyzer {
         if let Some(ref fqn) = definition.fqn {
             let location = DefinitionLocation {
                 file_path: file_path.to_string(),
-                start_byte: definition.match_info.range.byte_offset.0 as i64,
-                end_byte: definition.match_info.range.byte_offset.1 as i64,
-                start_line: definition.match_info.range.start.line as i32,
-                end_line: definition.match_info.range.end.line as i32,
-                start_col: definition.match_info.range.start.column as i32,
-                end_col: definition.match_info.range.end.column as i32,
+                start_byte: definition.range.byte_offset.0 as i64,
+                end_byte: definition.range.byte_offset.1 as i64,
+                start_line: definition.range.start.line as i32,
+                end_line: definition.range.end.line as i32,
+                start_col: definition.range.start.column as i32,
+                end_col: definition.range.end.column as i32,
             };
 
             Ok(Some((location, fqn.clone())))
