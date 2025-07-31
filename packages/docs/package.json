@@ -13,7 +13,7 @@
   "dependencies": {
     "@astrojs/starlight": "^0.35.2",
     "@gitlab/fonts": "^1.3.0",
-    "astro": "^5.12.5",
+    "astro": "^5.12.7",
     "sharp": "^0.34.3"
   },
   "devDependencies": {
