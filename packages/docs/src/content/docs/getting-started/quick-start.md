@@ -3,8 +3,6 @@ title: Quick Start
 description: Get up and running with GitLab Knowledge Graph in minutes
 ---
 
-# Quick Start
-
 This guide will help you get GitLab Knowledge Graph up and running on your first project in just a few minutes.
 
 ## Prerequisites
