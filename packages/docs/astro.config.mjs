@@ -139,6 +139,10 @@ export default defineConfig({
           label: "Server Side Indexing",
           autogenerate: { directory: "server-side-indexing" },
         },
+        {
+          label: "Internal",
+          autogenerate: { directory: "internal" },
+        },
       ],
       editLink: {
         baseUrl:
