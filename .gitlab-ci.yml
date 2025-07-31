@@ -3,7 +3,9 @@ stages:
   - build
   - test
   - benchmark
-  - deploy
+  - prepare-release
+  - build-release
+  - release
   
 variables:
   KUZU_VERSION: "0.11.1"
@@ -18,6 +20,13 @@ variables:
   image: registry.gitlab.com/gitlab-org/rust/build-images/rust-kuzu:1.88.0-${KUZU_VERSION}-linux-x86_64
   before_script:
     - rustup set auto-self-update disable
+
+.go-job-template:
+  image: ${GITLAB_DEPENDENCY_PROXY}golang:1.24.5
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+  before_script:
+    - mkdir -p .go
 
 mr-title-check:
   image: ${GITLAB_DEPENDENCY_PROXY}node:lts-alpine
@@ -45,15 +54,6 @@ rust-lint-check:
     - cargo clippy --all-targets --all-features -- -D warnings  
   extends: .rust-job-template
 
-xtask-version-check:
-  stage: lint
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  script:
-    - cargo run --package xtask --manifest-path crates/xtask/Cargo.toml -- check-versions
-  extends: .rust-job-template
-
 xtasks-verify-newlines:
   stage: lint
   rules:
@@ -70,9 +70,8 @@ frontend-build:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  before_script:
-    - npm ci
   script:
+    - npm ci
     - npm run build --workspace=@gitlab-org/gkg-frontend
     - npm run build --workspace=@gitlab-org/gkg
   artifacts:
@@ -80,6 +79,98 @@ frontend-build:
       - packages/frontend/dist/
     expire_in: 24 hours
 
+build-bindings:
+  image: rust:1.88.0-bookworm
+  stage: build
+  allow_failure: true
+  when: manual
+  tags:
+    - saas-linux-large-amd64
+  script:
+    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
+    - rustup target add ${ARCH}-unknown-linux-gnu
+    - ./scripts/build.sh lib
+  variables:
+    PLATFORM: Linux
+    ARCH: x86_64
+    CARGO_PARAMS: '--release'
+  artifacts:
+    paths:
+      - ./gkg-linux-${ARCH}.tar.gz
+      - ./lib
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+docs-build:
+  stage: build
+  image: node:22.17.0
+  needs: []
+  variables:
+    PAGES_PREFIX: ""
+    npm_config_cache: "${CI_PROJECT_DIR}/.npm"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        PAGES_PREFIX: ""
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      variables:
+        PAGES_PREFIX: "$CI_COMMIT_REF_SLUG"
+  before_script:
+    - npm ci
+    - npm run lint --workspace=docs
+  script:
+    - npm run build --workspace=docs
+    - echo "Pages accessible through ${CI_PAGES_URL}"
+  pages:
+    path_prefix: "$PAGES_PREFIX"
+    expire_in: 1 week
+    publish: packages/docs/dist
+  artifacts:
+    paths:
+      - packages/docs/dist/
+    expire_in: 1 week
+  environment:
+    name: "Docs ${PAGES_PREFIX}"
+    url: $CI_PAGES_URL
+
+docs-comment:
+  tags:
+    - saas-linux-medium-amd64
+  stage: build
+  needs:
+    - docs-build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  variables:
+    PAGES_PREFIX: "$CI_COMMIT_REF_SLUG"
+  script:
+    - *install-gitlab-xtasks
+    - |
+      # Construct the docs URL based on the branch
+      DOCS_URL="${CI_PAGES_URL}/${PAGES_PREFIX}"
+      
+      # Create markdown comment content
+      cat > docs-ready-comment.md << EOF
+      ## 📚 Documentation Preview Ready
+      
+      The documentation for this merge request has been built and deployed.
+      
+      **📖 View Documentation:** [${DOCS_URL}](${DOCS_URL})
+      
+      This preview will be available until the merge request is closed or merged.
+      EOF
+      
+      # Post the comment
+      gitlab-xtasks comment post \
+        --type delete-and-add \
+        --unique-id "docs-preview-comment" \
+        --file-path docs-ready-comment.md
+      
+      echo "Documentation preview comment posted successfully"
+      echo "Documentation available at: ${DOCS_URL}"
+  extends: .rust-job-template
 
 rust-unit-test-report:
   stage: test
@@ -98,6 +189,19 @@ rust-unit-test-report:
     reports:
       junit:
         - target/nextest/ci/junit.xml
+
+go-tests:
+  stage: test
+  allow_failure: true
+  needs:
+    - build-bindings
+  script:
+    - cd bindings/go/
+    - go test ./...
+  extends: .go-job-template
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # Shared benchmark template for GKG indexing performance tests
 .gkg-benchmark-template:
@@ -218,28 +322,47 @@ gkg-benchmark-analyze:
     expire_in: 1 week
   extends: .rust-job-template
 
-cargo-update:
-  stage: deploy
-  extends: .rust-job-template
-  script:
-    - cargo update --workspace
-    - cp Cargo.lock Cargo.lock.new
-  artifacts:
-    paths:
-      - Cargo.lock.new
-    expire_in: 7 days
+start-release:
+  when: manual
+  allow_failure: false
+  image: node:22.17.0
+  stage: prepare-release
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - npm ci
+    - npm run semantic-release -- --dry-run
+  artifacts:
+    paths:
+      - .VERSION
+    expire_in: 7 days
+
+cargo-update:
+  stage: build-release
+  needs:
+    - start-release
+  extends: .rust-job-template
+  script:
+    - cargo install cargo-edit
+    - cargo set-version $(cat .VERSION)
+    - |
+      tar -czf cargo-files.tar.gz \
+        Cargo.toml \
+        Cargo.lock \
+        crates/*/Cargo.toml
+  artifacts:
+    paths:
+      - cargo-files.tar.gz
+    expire_in: 7 days
 
 .linux-build-template:
   image: rust:1.88.0-bookworm
-  stage: deploy
+  stage: build-release
   needs:
     - frontend-build
     - cargo-update
   before_script:
-    - rm -f Cargo.lock
-    - mv Cargo.lock.new Cargo.lock
+    - tar -xzf cargo-files.tar.gz
   script:
     - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
     - rustup target add ${ARCH}-unknown-linux-gnu
@@ -251,20 +374,17 @@ cargo-update:
       - ./gkg-linux-${ARCH}.tar.gz
       - ./lib
     expire_in: 7 days
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 .darwin-build-template:
   image: macos-15-xcode-16
   tags:
     - saas-macos-medium-m1
-  stage: deploy
+  stage: build-release
   needs:
     - frontend-build
     - cargo-update
   before_script:
-    - rm -f Cargo.lock
-    - mv Cargo.lock.new Cargo.lock
+    - tar -xzf cargo-files.tar.gz
   script:
     - brew install cmake python jq
     - rustup target add ${ARCH}-apple-darwin
@@ -276,8 +396,6 @@ cargo-update:
       - ./gkg-darwin-${ARCH}.tar.gz
       - ./lib
     expire_in: 7 days
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 build:linux-aarch64-gnu:
   extends: .linux-build-template
@@ -306,14 +424,13 @@ build:darwin-x86_64:
 build:windows-x86_64:
   tags:
     - saas-windows-medium-amd64
-  stage: deploy
+  stage: build-release
   needs:
     - frontend-build
     - cargo-update
   before_script:
     - '.\scripts\windows-prepare.ps1 ${KUZU_VERSION}'
-    - Remove-Item -Path Cargo.lock -ErrorAction SilentlyContinue
-    - Move-Item -Path Cargo.lock.new -Destination Cargo.lock
+    - tar -xzf cargo-files.tar.gz
   script:
     - cargo build --release --bin gkg --locked
     - Copy-Item -Path C:\install\libkuzu\*.dll -Destination target\release\
@@ -322,132 +439,11 @@ build:windows-x86_64:
     paths:
       - ./gkg-windows-x86_64.tar.gz
     expire_in: 7 days
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   timeout: 2h
 
-.go-job-template:
-  image: ${GITLAB_DEPENDENCY_PROXY}golang:1.24.5
-  variables:
-    GOPATH: $CI_PROJECT_DIR/.go
-  before_script:
-    - mkdir -p .go
-  cache:
-    key:
-      files:
-        - .gitlab-ci.yml
-    paths:
-      - .go/pkg/mod/
-
-build-bindings:
-  image: rust:1.88.0-bookworm
-  stage: build
-  allow_failure: true
-  when: manual
-  tags:
-    - saas-linux-large-amd64
-  script:
-    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
-    - rustup target add ${ARCH}-unknown-linux-gnu
-    - ./scripts/build.sh lib
-  variables:
-    PLATFORM: Linux
-    ARCH: x86_64
-    CARGO_PARAMS: '--release'
-  artifacts:
-    paths:
-      - ./gkg-linux-${ARCH}.tar.gz
-      - ./lib
-    expire_in: 7 days
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
-go-tests:
-  stage: test
-  allow_failure: true
-  needs:
-    - build-bindings
-  script:
-    - cd bindings/go/
-    - go test ./...
-  extends: .go-job-template
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
-docs-build:
-  stage: deploy
-  image: node:22.17.0
-  needs: []
-  variables:
-    PAGES_PREFIX: ""
-    npm_config_cache: "${CI_PROJECT_DIR}/.npm"
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      variables:
-        PAGES_PREFIX: ""
-    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
-      variables:
-        PAGES_PREFIX: "$CI_COMMIT_REF_SLUG"
-  before_script:
-    - npm ci
-    - npm run lint --workspace=docs
-  script:
-    - npm run build --workspace=docs
-    - echo "Pages accessible through ${CI_PAGES_URL}"
-  pages:
-    path_prefix: "$PAGES_PREFIX"
-    expire_in: 1 week
-    publish: packages/docs/dist
-  artifacts:
-    paths:
-      - packages/docs/dist/
-    expire_in: 1 week
-  environment:
-    name: "Docs ${PAGES_PREFIX}"
-    url: $CI_PAGES_URL
-
-docs-comment:
-  tags:
-    - saas-linux-medium-amd64
-  stage: deploy
-  needs:
-    - docs-build
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-  variables:
-    PAGES_PREFIX: "$CI_COMMIT_REF_SLUG"
-  script:
-    - *install-gitlab-xtasks
-    - |
-      # Construct the docs URL based on the branch
-      DOCS_URL="${CI_PAGES_URL}/${PAGES_PREFIX}"
-      
-      # Create markdown comment content
-      cat > docs-ready-comment.md << EOF
-      ## 📚 Documentation Preview Ready
-      
-      The documentation for this merge request has been built and deployed.
-      
-      **📖 View Documentation:** [${DOCS_URL}](${DOCS_URL})
-      
-      This preview will be available until the merge request is closed or merged.
-      EOF
-      
-      # Post the comment
-      gitlab-xtasks comment post \
-        --type delete-and-add \
-        --unique-id "docs-preview-comment" \
-        --file-path docs-ready-comment.md
-      
-      echo "Documentation preview comment posted successfully"
-      echo "Documentation available at: ${DOCS_URL}"
-  extends: .rust-job-template
-
-publish-release::manual:
+release:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
-  stage: deploy
+  stage: release
   needs:
     - build:linux-aarch64-gnu
     - build:linux-x86_64-gnu
@@ -459,8 +455,7 @@ publish-release::manual:
     # Install git-lfs to handle large library files
     - apt update && apt install -y git-lfs
     # Use the new Cargo.lock from cargo-update step
-    - rm -f Cargo.lock
-    - mv Cargo.lock.new Cargo.lock
+    - tar -xzf cargo-files.tar.gz
     # Validate that the repository contains a package.json and extract a few values from it.
     - |
       if [[ ! -f package.json ]]; then
@@ -469,7 +464,6 @@ publish-release::manual:
         exit 1
       fi
     - NPM_PACKAGE_NAME=$(node -p "require('./package.json').name")
-    - NPM_PACKAGE_VERSION=$(node -p "require('./package.json').version")
     # Validate that the package name is properly scoped to the project's root namespace.
     # For more information, see https://docs.gitlab.com/user/packages/npm_registry/#naming-convention
     - |
@@ -480,11 +474,7 @@ publish-release::manual:
       fi
   script:
     - npm ci
-    - PREVIOUS_VERSION=$(node -p "require('./package.json').version")
     # Generate SHA256 checksums for all binaries
     - for file in *.tar.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
     - npm run semantic-release
-  when: manual
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   allow_failure: false
