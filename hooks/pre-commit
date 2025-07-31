@@ -2,19 +2,11 @@
 
 echo "Running pre-commit hooks..."
 
-# Run cargo fmt and fix formatting issues
-echo "Checking and fixing code formatting..."
-cargo fmt
+# Run mise fix-all task (cargo fmt + cargo clippy --fix --allow-dirty)
+echo "Running formatting and clippy fixes..."
+mise run fix-all
 if [ $? -ne 0 ]; then
-    echo "❌ Code formatting failed."
-    exit 1
-fi
-
-# Run clippy and fix warnings
-echo "Running clippy and fixing warnings..."
-cargo clippy --fix --allow-dirty -- -D warnings
-if [ $? -ne 0 ]; then
-    echo "❌ Clippy check failed. Please fix the remaining warnings before committing."
+    echo "❌ Code formatting and clippy fixes failed."
     exit 1
 fi
 
