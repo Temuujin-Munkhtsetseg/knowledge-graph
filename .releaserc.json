@@ -119,6 +119,7 @@
     [
       "@semantic-release/exec",
       {
+        "verifyReleaseCmd": "echo ${nextRelease.version} > .VERSION",
         "prepareCmd": "./scripts/semantic-release-prepare.sh ${nextRelease.version}"
       }
     ],
@@ -129,7 +130,6 @@
           "package.json",
           "package-lock.json",
           "CHANGELOG.md",
-          "VERSION",
           "Cargo.toml",
           "Cargo.lock",
           "crates/*/Cargo.toml",
