@@ -135,6 +135,10 @@ export default defineConfig({
           label: "Architecture",
           autogenerate: { directory: "architecture" },
         },
+        {
+          label: "Server Side Indexing",
+          autogenerate: { directory: "server-side-indexing" },
+        },
       ],
       editLink: {
         baseUrl:

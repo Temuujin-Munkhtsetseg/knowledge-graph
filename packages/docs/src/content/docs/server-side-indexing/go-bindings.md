@@ -1,4 +1,14 @@
-# Go Bindings
+---
+title: Go Bindings
+description: A reference for the Go Bindings that are used for Server Side Indexing
+---
+
+Knowledge Graph is also used on the server side by [Zoekt Indexer](https://gitlab.com/gitlab-org/gitlab-zoekt-indexer), to parse repositories
+code and generate Graph Database that is stored on the Zoekt nodes.
+
+The interface is defined in the `indexer-c-bindings` crate.
+
+## Go Bindings
 
 `bindings/go` contains a Go module which can be used to call Knowledge Graph
 indexing from Go apps.

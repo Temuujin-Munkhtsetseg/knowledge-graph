@@ -59,7 +59,3 @@ irm https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.ps1 -O
 Because Knowledge Graph repository includes also pre-compiled static C-bindings
 libraries which are large, it uses LFS to store them. Make sure you have [git
 lfs](https://docs.gitlab.com/topics/git/lfs/) installed.
-
-## Using Knowledge Graph in Go
-
-See [go bindings](docs/bindings.md).

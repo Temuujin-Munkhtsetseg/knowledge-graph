@@ -3,8 +3,6 @@ title: gkg server
 description: Start the GitLab Knowledge Graph HTTP server with web interface and API
 ---
 
-# gkg server
-
 Start the GitLab Knowledge Graph HTTP server, providing a web interface, HTTP API, and optional file watching for automatic re-indexing.
 
 ## Synopsis
