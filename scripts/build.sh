@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-INC_DIR="$PROJECT_ROOT/include"
+INC_DIR="$PROJECT_ROOT/bindings/go/include"
 
 PLATFORM=${PLATFORM:-$(uname -s)}
 PLATFORM=$(echo "$PLATFORM" | tr '[:upper:]' '[:lower:]')
@@ -65,7 +65,11 @@ build_lib() {
 
     cargo build $CARGO_PARAMS --target $TARGET -p indexer-c-bindings
     cp target/${TARGET}/release/libindexer_c_bindings.a "$LIB_DIR/"
-    echo "created $LIB_DIR/libindexer_c_bindings.a"
+    gzip $LIB_DIR/libindexer_c_bindings.a
+    echo "created $LIB_DIR/libindexer_c_bindings.a.gz"
+
+    cp crates/indexer-c-bindings/c_bindings.h $INC_DIR
+    echo "copied crates/indexer-c-bindings/c_bindings.h to $INC_DIR"
 }
 
 TASK="${1:-all}"

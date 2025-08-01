@@ -196,8 +196,9 @@ go-tests:
   needs:
     - build-bindings
   script:
+    - gunzip lib/linux_amd64/libindexer_c_bindings.a.gz
     - cd bindings/go/
-    - go test ./...
+    - CGO_LDFLAGS="-L../../lib/linux_amd64/" go test ./...
   extends: .go-job-template
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
@@ -373,6 +374,7 @@ cargo-update:
     paths:
       - ./gkg-linux-${ARCH}.tar.gz
       - ./lib
+      - ./bindings/go/include
     expire_in: 7 days
 
 .darwin-build-template:
@@ -395,6 +397,7 @@ cargo-update:
     paths:
       - ./gkg-darwin-${ARCH}.tar.gz
       - ./lib
+      - ./bindings/go/include
     expire_in: 7 days
 
 build:linux-aarch64-gnu:
@@ -476,5 +479,6 @@ release:
     - npm ci
     # Generate SHA256 checksums for all binaries
     - for file in *.tar.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
+    - for file in lib/*/libindexer_c_bindings.a.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
     - npm run semantic-release
   allow_failure: false

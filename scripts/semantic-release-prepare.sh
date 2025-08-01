@@ -30,4 +30,8 @@ echo "📦 Updating docs..."
 npm version "$NEW_VERSION" --workspace=docs --git-tag-version=false
 echo "✅ Updated docs to version $NEW_VERSION"
 
+# Update go bindings download tool
+sed -i.bak "s/^const Version = \".*\"/const Version = \"$NEW_VERSION\"/" "bindings/go/cmd/download/main.go"
+echo "✅ Updated bindings/go/cmd/download/main.go"
+
 echo "🎉 All packages updated to $NEW_VERSION!" 

@@ -4,6 +4,6 @@
 package indexer
 
 /*
-#cgo LDFLAGS: -L../../../lib/linux_arm64 -l:libindexer_c_bindings.a -ldl -lm -lstdc++ -lpthread
+#cgo LDFLAGS: -l:libindexer_c_bindings.a -ldl -lm -lstdc++ -lpthread
 */
 import "C"
