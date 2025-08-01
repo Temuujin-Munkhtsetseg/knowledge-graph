@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::analysis::types::{GraphData, ImportedSymbolLocation};
 use database::graph::RelationshipType;
 use database::graph::RelationshipTypeMapping;
+use parser_core::utils::Range;
 
 /// Consolidated relationship data for efficient storage
 #[derive(Debug, Clone, Default, Copy)]
@@ -30,10 +31,10 @@ pub struct NodeIdGenerator {
     directory_ids: HashMap<String, u32>,
     /// File path to ID mapping
     file_ids: HashMap<String, u32>,
-    /// Definition FQN to ID mapping
-    definition_ids: HashMap<(String, String), u32>,
-    /// Imported symbol location to ID mapping
-    imported_symbol_ids: HashMap<(String, i64, i64), u32>,
+    /// Definition byte range to ID mapping
+    definition_ids: HashMap<(String, usize, usize), u32>,
+    /// Imported symbol byte range to ID mapping
+    imported_symbol_ids: HashMap<(String, usize, usize), u32>,
     /// Next available IDs for each type
     pub next_directory_id: u32,
     pub next_file_id: u32,
@@ -91,17 +92,24 @@ impl NodeIdGenerator {
         id
     }
 
-    pub fn get_or_assign_definition_id(&mut self, fqn: &str, file_path: &str) -> u32 {
-        if let Some(&id) = self
-            .definition_ids
-            .get(&(fqn.to_string(), file_path.to_string()))
-        {
+    pub fn get_or_assign_definition_id(&mut self, file_path: &str, range: &Range) -> u32 {
+        if let Some(&id) = self.definition_ids.get(&(
+            file_path.to_string(),
+            range.byte_offset.0,
+            range.byte_offset.1,
+        )) {
             return id;
         }
 
         let id = self.next_definition_id;
-        self.definition_ids
-            .insert((fqn.to_string(), file_path.to_string()), id);
+        self.definition_ids.insert(
+            (
+                file_path.to_string(),
+                range.byte_offset.0,
+                range.byte_offset.1,
+            ),
+            id,
+        );
         self.next_definition_id += 1;
         id
     }
@@ -109,8 +117,8 @@ impl NodeIdGenerator {
     pub fn get_or_assign_imported_symbol_id(&mut self, location: &ImportedSymbolLocation) -> u32 {
         if let Some(&id) = self.imported_symbol_ids.get(&(
             location.file_path.to_string(),
-            location.start_byte,
-            location.end_byte,
+            location.start_byte as usize,
+            location.end_byte as usize,
         )) {
             return id;
         }
@@ -119,8 +127,8 @@ impl NodeIdGenerator {
         self.imported_symbol_ids.insert(
             (
                 location.file_path.to_string(),
-                location.start_byte,
-                location.end_byte,
+                location.start_byte as usize,
+                location.end_byte as usize,
             ),
             id,
         );
@@ -137,9 +145,13 @@ impl NodeIdGenerator {
         self.file_ids.get(path).copied()
     }
 
-    pub fn get_definition_id(&self, fqn: &str, file_path: &str) -> Option<u32> {
+    pub fn get_definition_id(&self, file_path: &str, range: &Range) -> Option<u32> {
         self.definition_ids
-            .get(&(fqn.to_string(), file_path.to_string()))
+            .get(&(
+                file_path.to_string(),
+                range.byte_offset.0,
+                range.byte_offset.1,
+            ))
             .copied()
     }
 
@@ -147,8 +159,8 @@ impl NodeIdGenerator {
         self.imported_symbol_ids
             .get(&(
                 location.file_path.clone(),
-                location.start_byte,
-                location.end_byte,
+                location.start_byte as usize,
+                location.end_byte as usize,
             ))
             .copied()
     }
@@ -190,8 +202,10 @@ impl<'a> GraphMapper<'a> {
 
         // Assign definition IDs
         for def_node in &self.graph_data.definition_nodes {
-            self.node_id_generator
-                .get_or_assign_definition_id(&def_node.fqn, &def_node.location.file_path);
+            self.node_id_generator.get_or_assign_definition_id(
+                &def_node.location.file_path,
+                &def_node.location.to_range(),
+            );
         }
 
         // Assign imported symbol IDs
@@ -287,9 +301,10 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) =
-                id_generator.get_definition_id(&file_rel.definition_fqn, &file_rel.file_path)
-            else {
+            let Some(target_id) = id_generator.get_definition_id(
+                &file_rel.file_path,
+                &file_rel.definition_location.to_range(),
+            ) else {
                 def_not_found += 1;
                 tracing::warn!(
                     "(FILE_DEFINES) Target definition ID not found: FQN({}) File({})",
@@ -344,7 +359,7 @@ impl<'a> GraphMapper<'a> {
         // Process definition-to-definition relationships
         for def_rel in &graph_data.definition_relationships {
             let Some(source_id) = id_generator
-                .get_definition_id(&def_rel.from_definition_fqn, &def_rel.from_file_path)
+                .get_definition_id(&def_rel.from_file_path, &def_rel.from_location.to_range())
             else {
                 def_not_found += 1;
                 tracing::warn!(
@@ -355,8 +370,8 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) =
-                id_generator.get_definition_id(&def_rel.to_definition_fqn, &def_rel.to_file_path)
+            let Some(target_id) = id_generator
+                .get_definition_id(&def_rel.to_file_path, &def_rel.to_location.to_range())
             else {
                 def_not_found += 1;
                 tracing::warn!(
@@ -380,8 +395,8 @@ impl<'a> GraphMapper<'a> {
 
         // Process definition-to-imported-symbol relationships
         for def_rel in &graph_data.definition_imported_symbol_relationships {
-            let Some(source_id) =
-                id_generator.get_definition_id(&def_rel.definition_fqn, &def_rel.file_path)
+            let Some(source_id) = id_generator
+                .get_definition_id(&def_rel.file_path, &def_rel.definition_location.to_range())
             else {
                 def_not_found += 1;
                 tracing::warn!(

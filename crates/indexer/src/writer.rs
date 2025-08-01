@@ -514,7 +514,7 @@ impl WriterService {
             let location = definition_node.location.clone();
             id_values.push(
                 id_generator
-                    .get_definition_id(&definition_node.fqn, &location.file_path)
+                    .get_definition_id(&location.file_path, &location.to_range())
                     .unwrap(),
             );
             fqn_values.push(definition_node.fqn.as_str());
