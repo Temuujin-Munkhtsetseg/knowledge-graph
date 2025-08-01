@@ -20,5 +20,8 @@ yarn-debug.log
 # MacOS
 .DS_Store
 
+# Compiled libraries
+lib/
+
 # IDEs
 .idea/
