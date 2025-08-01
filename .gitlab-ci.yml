@@ -9,7 +9,7 @@ stages:
   
 variables:
   KUZU_VERSION: "0.11.1"
-  GITLAB_XTASKS_VERSION: "1.2.0"
+  GITLAB_XTASKS_VERSION: "1.3.0"
 
 .install-gitlab-xtasks: &install-gitlab-xtasks |
     cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v${GITLAB_XTASKS_VERSION} --force
@@ -164,7 +164,7 @@ docs-comment:
       
       # Post the comment
       gitlab-xtasks comment post \
-        --type delete-and-add \
+        --type add-or-edit \
         --unique-id "docs-preview-comment" \
         --file-path docs-ready-comment.md
       
@@ -304,11 +304,11 @@ gkg-benchmark-analyze:
       echo "- Markdown: gkg-benchmark-results.md"
       echo "- JSON: gkg-benchmark-results.json"
       
-      # Post benchmark results as MR comment using delete-and-add strategy
+      # Post benchmark results as MR comment using add-or-edit strategy
       if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
         echo "Posting GKG benchmark results to MR !$CI_MERGE_REQUEST_IID..."
         gitlab-xtasks comment post \
-          --type delete-and-add \
+          --type add-or-edit \
           --unique-id "gkg-benchmarking-comment" \
           --file-path gkg-benchmark-results.md
         echo "GKG benchmark comment posted successfully"
