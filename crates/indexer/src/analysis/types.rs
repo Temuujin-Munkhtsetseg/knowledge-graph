@@ -1,5 +1,4 @@
 use database::graph::RelationshipType;
-
 use parser_core::{
     definitions::DefinitionTypeInfo,
     imports::ImportTypeInfo,
@@ -8,6 +7,7 @@ use parser_core::{
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
     ruby::{fqn::RubyFqn, types::RubyDefinitionType},
     typescript::types::{TypeScriptDefinitionType, TypeScriptFqn, TypeScriptImportType},
+    utils::{Position, Range},
 };
 
 use serde::{Deserialize, Serialize};
@@ -82,6 +82,16 @@ pub struct DefinitionLocation {
     pub start_col: i32,
     /// End column number
     pub end_col: i32,
+}
+
+impl DefinitionLocation {
+    pub fn to_range(&self) -> Range {
+        Range::new(
+            Position::new(self.start_line as usize, self.start_col as usize),
+            Position::new(self.end_line as usize, self.end_col as usize),
+            (self.start_byte as usize, self.end_byte as usize),
+        )
+    }
 }
 
 /// Represents a language-specific definition type (e.g. class, module, method, etc.)
@@ -184,7 +194,7 @@ impl ImportType {
 }
 
 /// Represents an identifier associated with an imported symbol
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ImportIdentifier {
     /// Original name, e.g. "foo" in `from module import foo as bar`
     pub name: String,
@@ -193,7 +203,7 @@ pub struct ImportIdentifier {
 }
 
 /// Represents an imported symbol node in the graph
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ImportedSymbolNode {
     /// Language-specific type of import (regular, from, aliased, wildcard, etc.)
     pub import_type: ImportType,
@@ -244,6 +254,8 @@ pub struct FileDefinitionRelationship {
     pub definition_fqn: String,
     /// Type of relationship (always "DEFINES" for now)
     pub relationship_type: RelationshipType,
+    /// Definition location (foreign key to DefinitionNode.location)
+    pub definition_location: DefinitionLocation,
 }
 
 /// Represents a relationship between a file and an imported symbol
@@ -258,7 +270,7 @@ pub struct FileImportedSymbolRelationship {
 }
 
 /// Represents a hierarchical relationship between definitions
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DefinitionRelationship {
     /// Parent definition file path (foreign key to FileNode.path)
     pub from_file_path: String,
@@ -268,13 +280,17 @@ pub struct DefinitionRelationship {
     pub from_definition_fqn: String,
     /// Child definition FQN (foreign key to DefinitionNode.fqn)
     pub to_definition_fqn: String,
+    /// Parent definition location (foreign key to DefinitionNode.location)
+    pub from_location: DefinitionLocation,
+    /// Child definition location (foreign key to DefinitionNode.location)
+    pub to_location: DefinitionLocation,
     /// Type of relationship (e.g., "MODULE_TO_CLASS", "CLASS_TO_METHOD", etc.)
     pub relationship_type: RelationshipType,
 }
 
 /// Represents a relationship between a definition and an imported symbol
 /// (i.e. when an import is contained in the body of a definition)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DefinitionImportedSymbolRelationship {
     /// File path that the definition and import are contained in
     /// (foreign key to FileNode.path)
@@ -285,4 +301,6 @@ pub struct DefinitionImportedSymbolRelationship {
     pub imported_symbol_location: ImportedSymbolLocation,
     /// Type of relationship (always "DEFINES_IMPORTED_SYMBOL" for now)
     pub relationship_type: RelationshipType,
+    /// Definition location (foreign key to DefinitionNode.location)
+    pub definition_location: DefinitionLocation,
 }

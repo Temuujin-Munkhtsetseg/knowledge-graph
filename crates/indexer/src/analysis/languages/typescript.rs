@@ -6,7 +6,6 @@ use crate::analysis::types::{
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
-
 use parser_core::typescript::{
     fqn::typescript_fqn_to_string,
     types::{
@@ -53,7 +52,7 @@ impl TypeScriptAnalyzer {
                         fqn_string.clone(),
                         definition.name.clone(),
                         DefinitionType::TypeScript(definition.definition_type),
-                        location,
+                        location.clone(),
                     );
 
                     // If top-level definition, add file-to-definition relationship
@@ -62,12 +61,13 @@ impl TypeScriptAnalyzer {
                             file_path: relative_file_path.to_string(),
                             definition_fqn: fqn_string.clone(),
                             relationship_type: RelationshipType::FileDefines,
+                            definition_location: location.clone(),
                         });
                     }
 
                     definition_map.insert(
                         (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node, FqnType::TypeScript(fqn)),
+                        (definition_node, FqnType::TypeScript(fqn.clone())),
                     );
                 }
             }
@@ -141,6 +141,7 @@ impl TypeScriptAnalyzer {
                             definition_fqn: child_fqn_string.clone(),
                             imported_symbol_location: imported_symbol.location.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
+                            definition_location: child_def.location.clone(),
                         },
                     );
                 }
@@ -160,6 +161,8 @@ impl TypeScriptAnalyzer {
                             to_file_path: child_def.location.file_path.clone(),
                             from_definition_fqn: parent_fqn_string,
                             to_definition_fqn: child_fqn_string.clone(),
+                            from_location: parent_def.location.clone(),
+                            to_location: child_def.location.clone(),
                             relationship_type,
                         });
                     }

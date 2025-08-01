@@ -52,7 +52,7 @@ impl RubyAnalyzer {
                         fqn_string.clone(),
                         definition.name.clone(),
                         DefinitionType::Ruby(definition.definition_type),
-                        location,
+                        location.clone(),
                     );
                     definition_map.insert(
                         (fqn_string.clone(), relative_file_path.to_string()),
@@ -64,6 +64,7 @@ impl RubyAnalyzer {
                         file_path: relative_file_path.to_string(),
                         definition_fqn: fqn_string,
                         relationship_type: RelationshipType::FileDefines,
+                        definition_location: location.clone(),
                     });
                 }
             }
@@ -124,6 +125,8 @@ impl RubyAnalyzer {
                             to_file_path: child_def.location.file_path.clone(),
                             from_definition_fqn: parent_fqn_string,
                             to_definition_fqn: child_fqn_string.clone(),
+                            from_location: parent_def.location.clone(),
+                            to_location: child_def.location.clone(),
                             relationship_type,
                         });
                     }

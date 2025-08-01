@@ -45,7 +45,7 @@ impl PythonAnalyzer {
                         fqn_string.clone(),
                         definition.name.clone(),
                         DefinitionType::Python(definition.definition_type),
-                        location,
+                        location.clone(),
                     );
 
                     if self.is_top_level_definition(&fqn) {
@@ -53,6 +53,7 @@ impl PythonAnalyzer {
                             file_path: relative_file_path.to_string(),
                             definition_fqn: fqn_string.clone(),
                             relationship_type: RelationshipType::FileDefines,
+                            definition_location: location.clone(),
                         });
                     }
 
@@ -132,6 +133,7 @@ impl PythonAnalyzer {
                             definition_fqn: child_fqn_string.clone(),
                             imported_symbol_location: imported_symbol.location.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
+                            definition_location: child_def.location.clone(),
                         },
                     );
                 }
@@ -151,6 +153,8 @@ impl PythonAnalyzer {
                             to_file_path: child_def.location.file_path.clone(),
                             from_definition_fqn: parent_fqn_string,
                             to_definition_fqn: child_fqn_string.clone(),
+                            from_location: parent_def.location.clone(),
+                            to_location: child_def.location.clone(),
                             relationship_type,
                         });
                     }
