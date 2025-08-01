@@ -19,7 +19,7 @@ echo "Building for $PLATFORM $ARCH"
 case "$PLATFORM" in
     darwin)
         case "$ARCH" in
-            aarch64)
+            aarch64|arm64)
                 LIB_DIR="$PROJECT_ROOT/lib/darwin_arm64"
                 TARGET="aarch64-apple-darwin"
                 ;;
