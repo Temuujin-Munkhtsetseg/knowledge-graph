@@ -1,5 +1,9 @@
 package indexer
 
+// to run the test, build bindings library first using "mise build-lib",
+// then pass the location of built library when running the test:
+// CGO_LDFLAGS="-L../../../target/x86_64-unknown-linux-gnu/release/" go test
+
 import (
 	"testing"
 	"path/filepath"

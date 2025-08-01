@@ -2,7 +2,7 @@ package indexer
 
 /*
 #include <stdlib.h>
-#include "../../../crates/indexer-c-bindings/c_bindings.h"
+#include "../include/c_bindings.h"
 */
 import "C"
 import (
