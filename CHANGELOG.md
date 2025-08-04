@@ -1,3 +1,29 @@
+## [0.9.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.8.0...v0.9.0) (2025-08-04)
+
+### :sparkles: Features
+
+* **ci:** properly handle package versions for releases ([84bb0f9](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/84bb0f93fe1a2a16384d851c24f93c63fd078ead)) by Bohdan Parkhomchuk
+* **indexing:** added range support for definitions to node id generator ([f782cd3](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/f782cd3c89bda233fc188bc3e7e7ba909eafe626)) by Michael Usachenko
+* update bindings distribution ([91b3954](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/91b395459403b1f48f839dc5352eeeb4ed53717f)) by Jan Provaznik
+
+### :bug: Fixes
+
+* **ci:** xtasks add or edit comment ([4846e40](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4846e4099c3e4c4e7fb67eb58dfe4853dfcdd75b)) by michaelangeloio
+
+### :memo: Documentation
+
+* moving go bindings docs ([d10890f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d10890f6ab2d179ecc22044ff487ff7ea55c598a)) by Omar Qunsul
+
+### :repeat: Chore
+
+* add mise fix-all command ([fefd47a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/fefd47a4d7861dffe410d17ed782439f07ce3633)) by Michael Angelo Rivera
+* ignore lib/ in code ([aa27c56](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/aa27c56c5687da23d85d0946cacbabfb805b331c)) by Omar Qunsul
+* **indexer:** switch match_info to range ([cb73fa7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/cb73fa769ac2818429f0c44d4b2998291ca20931)) by michaelangeloio
+* make binaries smaller ([7a346fd](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7a346fd4bf4efd3e791ddfc7a7ec5065fd40e834)) by Dmitry Gruzd
+* move release process documentation ([e19634a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e19634a74ddcc05027bcf3e212bd48de2539b2a0)) by Michael Angelo Rivera
+* re-adding .gitattributes because we had lfs files ([43c68c5](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/43c68c520908102926ccde509f13c09f54e9a1a2)) by Omar Qunsul
+* **xtask:** remove version check ([505aa4b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/505aa4b3eede9077cea579be5a2f61147d9da403)) by michaelangeloio
+
 ## [0.8.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.7.0...v0.8.0) (2025-07-30)
 
 ### :sparkles: Features
