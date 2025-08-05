@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use tracing::{info, warn};
 
 use crate::analysis::types::{GraphData, ImportedSymbolLocation};
 use database::graph::RelationshipType;
@@ -244,7 +245,7 @@ impl<'a> GraphMapper<'a> {
         for dir_rel in &graph_data.directory_relationships {
             let Some(source_id) = id_generator.get_directory_id(&dir_rel.from_path) else {
                 dir_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(DIR_CONTAINS_DIR) Source directory ID not found: Directory({})",
                     dir_rel.from_path
                 );
@@ -256,7 +257,7 @@ impl<'a> GraphMapper<'a> {
             if dir_rel.relationship_type == RelationshipType::DirContainsDir {
                 let Some(target_id) = id_generator.get_directory_id(&dir_rel.to_path) else {
                     dir_not_found += 1;
-                    tracing::warn!(
+                    warn!(
                         "(DIR_CONTAINS_DIR) Target directory ID not found: Directory({})",
                         dir_rel.to_path
                     );
@@ -273,7 +274,7 @@ impl<'a> GraphMapper<'a> {
             } else if dir_rel.relationship_type == RelationshipType::DirContainsFile {
                 let Some(target_id) = id_generator.get_file_id(&dir_rel.to_path) else {
                     file_not_found += 1;
-                    tracing::warn!(
+                    warn!(
                         "(DIR_CONTAINS_FILE) Target file ID not found: File({})",
                         dir_rel.to_path
                     );
@@ -294,7 +295,7 @@ impl<'a> GraphMapper<'a> {
         for file_rel in &graph_data.file_definition_relationships {
             let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(FILE_DEFINES) Source file ID not found: File({})",
                     file_rel.file_path
                 );
@@ -306,10 +307,9 @@ impl<'a> GraphMapper<'a> {
                 &file_rel.definition_location.to_range(),
             ) else {
                 def_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(FILE_DEFINES) Target definition ID not found: FQN({}) File({})",
-                    file_rel.definition_fqn,
-                    file_rel.file_path,
+                    file_rel.definition_fqn, file_rel.file_path,
                 );
                 continue;
             };
@@ -328,7 +328,7 @@ impl<'a> GraphMapper<'a> {
         for file_rel in &graph_data.file_imported_symbol_relationships {
             let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(FILE_IMPORTS) Source file ID not found: File({})",
                     file_rel.file_path
                 );
@@ -338,10 +338,9 @@ impl<'a> GraphMapper<'a> {
             let Some(target_id) = id_generator.get_imported_symbol_id(&file_rel.import_location)
             else {
                 import_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(FILE_IMPORTS) Target imported symbol ID not found: Location({:?}) File({})",
-                    file_rel.import_location,
-                    file_rel.file_path,
+                    file_rel.import_location, file_rel.file_path,
                 );
                 continue;
             };
@@ -362,10 +361,9 @@ impl<'a> GraphMapper<'a> {
                 .get_definition_id(&def_rel.from_file_path, &def_rel.from_location.to_range())
             else {
                 def_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(DEFINITION_RELATIONSHIPS) Source definition ID not found: {} {}",
-                    def_rel.from_definition_fqn,
-                    def_rel.from_file_path,
+                    def_rel.from_definition_fqn, def_rel.from_file_path,
                 );
                 continue;
             };
@@ -374,10 +372,9 @@ impl<'a> GraphMapper<'a> {
                 .get_definition_id(&def_rel.to_file_path, &def_rel.to_location.to_range())
             else {
                 def_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(DEFINITION_RELATIONSHIPS) Target definition ID not found: {} {}",
-                    def_rel.to_definition_fqn,
-                    def_rel.to_file_path,
+                    def_rel.to_definition_fqn, def_rel.to_file_path,
                 );
                 continue;
             };
@@ -399,10 +396,9 @@ impl<'a> GraphMapper<'a> {
                 .get_definition_id(&def_rel.file_path, &def_rel.definition_location.to_range())
             else {
                 def_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(DEFINES_IMPORTED_SYMBOL) Source definition ID not found: {} {}",
-                    def_rel.definition_fqn,
-                    def_rel.file_path,
+                    def_rel.definition_fqn, def_rel.file_path,
                 );
                 continue;
             };
@@ -411,7 +407,7 @@ impl<'a> GraphMapper<'a> {
                 id_generator.get_imported_symbol_id(&def_rel.imported_symbol_location)
             else {
                 import_not_found += 1;
-                tracing::warn!(
+                warn!(
                     "(DEFINITION_IMPORTED_SYMBOL_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
                     def_rel.imported_symbol_location,
                 );
@@ -429,12 +425,9 @@ impl<'a> GraphMapper<'a> {
                 });
         }
 
-        tracing::info!(
+        info!(
             "Consolidated relationships: dir_not_found: {}, file_not_found: {}, def_not_found: {}, import_not_found: {}",
-            dir_not_found,
-            file_not_found,
-            def_not_found,
-            import_not_found
+            dir_not_found, file_not_found, def_not_found, import_not_found
         );
 
         Ok(relationships)

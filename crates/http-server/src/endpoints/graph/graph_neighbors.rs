@@ -16,6 +16,7 @@ use event_bus::types::project_info::{TSProjectInfo, to_ts_project_info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::error;
 use ts_rs::TS;
 use urlencoding;
 
@@ -195,7 +196,7 @@ pub async fn graph_neighbors_handler(
     ) {
         Ok(result) => result,
         Err(e) => {
-            tracing::error!("Failed to execute neighbors query: {}", e);
+            error!("Failed to execute neighbors query: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GraphNeighborsEndpoint::create_error_response(format!(
@@ -209,7 +210,7 @@ pub async fn graph_neighbors_handler(
     let graph_data = match convert_query_result_to_graph(&mut query_result) {
         Ok(data) => data,
         Err(e) => {
-            tracing::error!("Failed to convert query result to graph: {}", e);
+            error!("Failed to convert query result to graph: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GraphNeighborsEndpoint::create_error_response(format!(

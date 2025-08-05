@@ -15,6 +15,7 @@ use num_cpus;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tracing::{error, info};
 use ts_rs::TS;
 use workspace_manager::WorkspaceFolderInfo;
 use workspace_manager::WorkspaceManager;
@@ -114,7 +115,7 @@ pub async fn index_handler(
     };
 
     if let Err(e) = state.job_dispatcher.dispatch(job).await {
-        tracing::error!("Failed to dispatch indexing job: {}", e);
+        error!("Failed to dispatch indexing job: {}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(WorkspaceIndexEndpoint::create_error_response(format!(
@@ -151,19 +152,17 @@ pub fn spawn_indexing_task(
 
         match result {
             Ok(Ok(_stats)) => {
-                tracing::info!("Workspace indexing succeeded for {}", workspace_folder_path)
+                info!("Workspace indexing succeeded for {}", workspace_folder_path)
             }
             Ok(Err(e)) => {
-                tracing::error!(
+                error!(
                     "Indexing failed for workspace '{}': {}",
-                    workspace_folder_path,
-                    e
+                    workspace_folder_path, e
                 )
             }
-            Err(e) => tracing::error!(
+            Err(e) => error!(
                 "Indexing task panicked for workspace '{}': {}",
-                workspace_folder_path,
-                e
+                workspace_folder_path, e
             ),
         }
     });

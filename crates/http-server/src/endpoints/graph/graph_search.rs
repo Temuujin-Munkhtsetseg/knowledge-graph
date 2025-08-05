@@ -13,7 +13,7 @@ use database::querying::{
 use event_bus::types::project_info::{TSProjectInfo, to_ts_project_info};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
 use ts_rs::TS;
 use urlencoding;
 
@@ -171,7 +171,7 @@ pub async fn graph_search_handler(
     ) {
         Ok(result) => result,
         Err(e) => {
-            tracing::error!("Failed to execute search query: {}", e);
+            error!("Failed to execute search query: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GraphSearchEndpoint::create_error_response(format!(
@@ -185,7 +185,7 @@ pub async fn graph_search_handler(
     let nodes = match convert_query_result_to_nodes(&mut query_result) {
         Ok(nodes) => nodes,
         Err(e) => {
-            tracing::error!("Failed to convert query result to nodes: {}", e);
+            error!("Failed to convert query result to nodes: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GraphSearchEndpoint::create_error_response(format!(

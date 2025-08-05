@@ -5895,11 +5895,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "gitalisk-core"
-version = "0.4.0"
-
-[[patch.unused]]
-name = "parser-core"
-version = "0.10.0"
