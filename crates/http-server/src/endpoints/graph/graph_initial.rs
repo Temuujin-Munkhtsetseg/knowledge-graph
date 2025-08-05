@@ -16,7 +16,7 @@ use event_bus::types::project_info::{TSProjectInfo, to_ts_project_info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
 use ts_rs::TS;
 use urlencoding;
 
@@ -177,7 +177,7 @@ pub async fn graph_initial_handler(
     ) {
         Ok(result) => result,
         Err(e) => {
-            tracing::error!("Failed to execute initial graph query: {}", e);
+            error!("Failed to execute initial graph query: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GraphInitialEndpoint::create_error_response(format!(
@@ -191,7 +191,7 @@ pub async fn graph_initial_handler(
     let graph_data = match convert_query_result_to_graph(&mut query_result) {
         Ok(data) => data,
         Err(e) => {
-            tracing::error!("Failed to convert query result to graph: {}", e);
+            error!("Failed to convert query result to graph: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GraphInitialEndpoint::create_error_response(format!(

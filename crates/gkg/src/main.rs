@@ -154,6 +154,7 @@ async fn main() -> anyhow::Result<()> {
 
     let verbose = match cli.command {
         Commands::Index { verbose, .. } => verbose,
+        // server does not allow --verbose because it spits to log
         Commands::Server { .. } => false,
     };
 
@@ -232,16 +233,18 @@ async fn main() -> anyhow::Result<()> {
 
                 let lock_file_path = get_lock_file_path()?;
                 let mut file = fs::File::create(&lock_file_path)?;
-                write!(file, "{port}")?;
+                println!("GKG Server started on http://127.0.0.1:{port}");
+                // TODO: Change how we write to the logs
+                // Use color, severity, emoji, etc.
+                write!(file, "GKG Server started on http://127.0.0.1:{port}")?;
 
                 if let Some(mcp_config_path) = register_mcp {
+                    // TODO: Add logging when this happens
                     add_local_http_server_to_mcp_config(mcp_config_path, port)?;
                 }
 
-                let server_info = ServerInfo { port };
-                info!("{}", serde_json::to_string(&server_info)?);
-
                 let l_file = lock_file_path.clone();
+                println!("GKG Server logging to: {}", l_file.display());
                 ctrlc::set_handler(move || {
                     let _ = fs::remove_file(&l_file);
                     process::exit(0);
@@ -260,11 +263,9 @@ async fn main() -> anyhow::Result<()> {
                     add_local_http_server_to_mcp_config(mcp_config_path, port)?;
                 }
 
-                let server_info = ServerInfo { port };
-                info!("{}", serde_json::to_string(&server_info)?);
                 Ok(())
             } else {
-                error!(
+                println!(
                     "gkg server is in an inconsistent state. Please remove ~/.gkg/gkg-server.lock and try again."
                 );
                 process::exit(1);

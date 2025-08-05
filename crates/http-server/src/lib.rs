@@ -42,6 +42,7 @@ use std::sync::Arc;
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
+use tracing::{error, info};
 use workspace_manager::WorkspaceManager;
 
 #[derive(Clone)]
@@ -135,7 +136,7 @@ pub async fn run(
         .fallback_service(serve_assets)
         .layer(ServiceBuilder::new().layer(cors_layer));
 
-    tracing::info!("HTTP server listening on {}", addr);
+    info!("HTTP server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     // Set up graceful shutdown
@@ -148,7 +149,7 @@ pub async fn run(
     mcp_sse_cancellation_token.cancel();
 
     // Log shutdown completion
-    tracing::info!("HTTP server shut down gracefully");
+    info!("HTTP server shut down gracefully");
 
     result.map_err(Into::into)
 }
@@ -173,10 +174,10 @@ async fn shutdown_signal() {
 
     tokio::select! {
         _ = ctrl_c => {
-            tracing::info!("Received Ctrl+C, initiating graceful shutdown...");
+            info!("Received Ctrl+C, initiating graceful shutdown...");
         },
         _ = terminate => {
-            tracing::info!("Received SIGTERM, initiating graceful shutdown...");
+            info!("Received SIGTERM, initiating graceful shutdown...");
         },
     }
 }
@@ -189,7 +190,7 @@ pub fn find_unused_port() -> Result<u16> {
     match TcpListener::bind(("127.0.0.1", PREFERRED_PORT)) {
         Ok(listener) => Ok(listener.local_addr()?.port()),
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            tracing::info!(
+            info!(
                 "Preferred port {} is busy, finding a random unused port",
                 PREFERRED_PORT
             );
@@ -198,7 +199,7 @@ pub fn find_unused_port() -> Result<u16> {
             Ok(port)
         }
         Err(e) => {
-            tracing::error!("Error finding unused port: {e}");
+            error!("Error finding unused port: {e}");
             Err(e.into())
         }
     }
