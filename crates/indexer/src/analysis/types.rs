@@ -6,7 +6,10 @@ use parser_core::{
         imports::JavaImportType,
         types::{JavaDefinitionType, JavaFqn},
     },
-    kotlin::types::{KotlinDefinitionType, KotlinFqn},
+    kotlin::{
+        imports::KotlinImportType,
+        types::{KotlinDefinitionType, KotlinFqn},
+    },
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
     ruby::{fqn::RubyFqn, types::RubyDefinitionType},
     typescript::types::{TypeScriptDefinitionType, TypeScriptFqn, TypeScriptImportType},
@@ -184,6 +187,7 @@ pub struct ImportedSymbolLocation {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ImportType {
     Java(JavaImportType),
+    Kotlin(KotlinImportType),
     Python(PythonImportType),
     TypeScript(TypeScriptImportType),
 }
@@ -192,6 +196,7 @@ impl ImportType {
     pub fn as_str(&self) -> &str {
         match self {
             ImportType::Java(java_type) => java_type.as_str(),
+            ImportType::Kotlin(kotlin_type) => kotlin_type.as_str(),
             ImportType::Python(python_type) => python_type.as_str(),
             ImportType::TypeScript(typescript_type) => typescript_type.as_str(),
         }
