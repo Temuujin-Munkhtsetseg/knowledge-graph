@@ -2,7 +2,9 @@ use crate::project::file_info::FileInfo;
 use parser_core::{
     definitions::DefinitionTypeInfo,
     java::{analyzer::JavaAnalyzer, imports::JavaImportedSymbolInfo, types::JavaDefinitionInfo},
-    kotlin::{analyzer::KotlinAnalyzer, types::KotlinDefinitionInfo},
+    kotlin::{
+        analyzer::KotlinAnalyzer, imports::KotlinImportedSymbolInfo, types::KotlinDefinitionInfo,
+    },
     parser::{
         GenericParser, LanguageParser, ParseResult, SupportedLanguage,
         detect_language_from_extension,
@@ -284,9 +286,10 @@ impl<'a> FileProcessor<'a> {
             SupportedLanguage::Kotlin => {
                 let analyzer = KotlinAnalyzer::new();
                 match analyzer.analyze(matches, parse_result) {
-                    Ok(analysis_result) => {
-                        Ok((Definitions::Kotlin(analysis_result.definitions), None))
-                    }
+                    Ok(analysis_result) => Ok((
+                        Definitions::Kotlin(analysis_result.definitions),
+                        Some(ImportedSymbols::Kotlin(analysis_result.imports)),
+                    )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Kotlin file '{}': {}",
                         self.path,
@@ -417,10 +420,11 @@ impl Definitions {
     }
 }
 
-/// Enum to hold definitions based on language
+/// Enum to hold imported symbols based on language
 #[derive(Clone, Debug)]
 pub enum ImportedSymbols {
     Java(Vec<JavaImportedSymbolInfo>),
+    Kotlin(Vec<KotlinImportedSymbolInfo>),
     Python(Vec<PythonImportedSymbolInfo>),
     TypeScript(Vec<TypeScriptImportedSymbolInfo>),
 }
@@ -430,6 +434,7 @@ impl ImportedSymbols {
     pub fn count(&self) -> usize {
         match self {
             ImportedSymbols::Java(imported_symbols) => imported_symbols.len(),
+            ImportedSymbols::Kotlin(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::Python(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::TypeScript(imported_symbols) => imported_symbols.len(),
         }
@@ -438,6 +443,13 @@ impl ImportedSymbols {
     /// Check if there are any imported symbols
     pub fn is_empty(&self) -> bool {
         self.count() == 0
+    }
+
+    pub fn iter_kotlin(&self) -> Option<impl Iterator<Item = &KotlinImportedSymbolInfo>> {
+        match self {
+            ImportedSymbols::Kotlin(imported_symbols) => Some(imported_symbols.iter()),
+            _ => None,
+        }
     }
 
     pub fn iter_java(&self) -> Option<impl Iterator<Item = &JavaImportedSymbolInfo>> {
