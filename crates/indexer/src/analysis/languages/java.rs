@@ -3,15 +3,17 @@ use std::collections::HashMap;
 use database::graph::RelationshipType;
 use parser_core::java::{
     fqn::java_fqn_to_string,
+    imports::JavaImportedSymbolInfo,
     types::{JavaDefinitionInfo, JavaDefinitionType, JavaFqn, JavaFqnPartType},
 };
 
 use crate::{
     analysis::types::{
         DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-        FileDefinitionRelationship, FqnType,
+        FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
+        ImportType, ImportedSymbolLocation, ImportedSymbolNode,
     },
-    indexer::FileProcessingResult,
+    parsing::processor::FileProcessingResult,
 };
 
 #[derive(Default)]
@@ -61,12 +63,54 @@ impl JavaAnalyzer {
         }
     }
 
+    /// Process imported symbols from a file result and update the import map
+    pub fn process_imports(
+        &self,
+        file_result: &FileProcessingResult,
+        relative_file_path: &str,
+        imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+    ) {
+        if let Some(imported_symbols) = &file_result.imported_symbols {
+            if let Some(imports) = imported_symbols.iter_java() {
+                for imported_symbol in imports {
+                    let location =
+                        self.create_imported_symbol_location(imported_symbol, relative_file_path);
+                    let identifier = self.create_imported_symbol_identifier(imported_symbol);
+
+                    let imported_symbol_node = ImportedSymbolNode::new(
+                        ImportType::Java(imported_symbol.import_type),
+                        imported_symbol.import_path.clone(),
+                        identifier,
+                        location.clone(),
+                    );
+
+                    imported_symbol_map.insert(
+                        (
+                            imported_symbol.import_path.clone(),
+                            relative_file_path.to_string(),
+                        ),
+                        vec![imported_symbol_node],
+                    );
+
+                    file_import_relationships.push(FileImportedSymbolRelationship {
+                        file_path: relative_file_path.to_string(),
+                        import_location: location.clone(),
+                        relationship_type: RelationshipType::FileImports,
+                    });
+                }
+            }
+        }
+    }
+
+    /// Create definition-to-definition relationships using definitions map
     pub fn add_definition_relationships(
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
     ) {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
+            // Handle definition-to-definition relationships
             if let Some(parent_fqn_string) = self.get_parent_fqn_string(child_fqn) {
                 if let Some((parent_def, _)) =
                     definition_map.get(&(parent_fqn_string.clone(), child_file_path.to_string()))
@@ -233,5 +277,36 @@ impl JavaAnalyzer {
 
     fn is_top_level_definition(&self, fqn: &JavaFqn) -> bool {
         fqn.len() == 1 || (fqn.len() == 2 && fqn[0].node_type == JavaFqnPartType::Package)
+    }
+
+    /// Create an imported symbol location from an imported symbol info
+    fn create_imported_symbol_location(
+        &self,
+        imported_symbol: &JavaImportedSymbolInfo,
+        file_path: &str,
+    ) -> ImportedSymbolLocation {
+        ImportedSymbolLocation {
+            file_path: file_path.to_string(),
+            start_byte: imported_symbol.range.byte_offset.0 as i64,
+            end_byte: imported_symbol.range.byte_offset.1 as i64,
+            start_line: imported_symbol.range.start.line as i32,
+            end_line: imported_symbol.range.end.line as i32,
+            start_col: imported_symbol.range.start.column as i32,
+            end_col: imported_symbol.range.end.column as i32,
+        }
+    }
+
+    fn create_imported_symbol_identifier(
+        &self,
+        imported_symbol: &JavaImportedSymbolInfo,
+    ) -> Option<ImportIdentifier> {
+        if imported_symbol.identifier.is_some() {
+            return Some(ImportIdentifier {
+                name: imported_symbol.identifier.as_ref().unwrap().name.clone(),
+                alias: imported_symbol.identifier.as_ref().unwrap().alias.clone(),
+            });
+        }
+
+        None
     }
 }

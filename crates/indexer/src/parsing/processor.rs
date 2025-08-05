@@ -1,7 +1,7 @@
 use crate::project::file_info::FileInfo;
 use parser_core::{
     definitions::DefinitionTypeInfo,
-    java::{analyzer::JavaAnalyzer, types::JavaDefinitionInfo},
+    java::{analyzer::JavaAnalyzer, imports::JavaImportedSymbolInfo, types::JavaDefinitionInfo},
     kotlin::{analyzer::KotlinAnalyzer, types::KotlinDefinitionInfo},
     parser::{
         GenericParser, LanguageParser, ParseResult, SupportedLanguage,
@@ -297,9 +297,10 @@ impl<'a> FileProcessor<'a> {
             SupportedLanguage::Java => {
                 let analyzer = JavaAnalyzer::new();
                 match analyzer.analyze(matches, parse_result) {
-                    Ok(analysis_result) => {
-                        Ok((Definitions::Java(analysis_result.definitions), None))
-                    }
+                    Ok(analysis_result) => Ok((
+                        Definitions::Java(analysis_result.definitions),
+                        Some(ImportedSymbols::Java(analysis_result.imports)),
+                    )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Java file '{}': {}",
                         self.path,
@@ -419,6 +420,7 @@ impl Definitions {
 /// Enum to hold definitions based on language
 #[derive(Clone, Debug)]
 pub enum ImportedSymbols {
+    Java(Vec<JavaImportedSymbolInfo>),
     Python(Vec<PythonImportedSymbolInfo>),
     TypeScript(Vec<TypeScriptImportedSymbolInfo>),
 }
@@ -427,6 +429,7 @@ impl ImportedSymbols {
     /// Get the count of imported symbols regardless of type
     pub fn count(&self) -> usize {
         match self {
+            ImportedSymbols::Java(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::Python(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::TypeScript(imported_symbols) => imported_symbols.len(),
         }
@@ -435,6 +438,13 @@ impl ImportedSymbols {
     /// Check if there are any imported symbols
     pub fn is_empty(&self) -> bool {
         self.count() == 0
+    }
+
+    pub fn iter_java(&self) -> Option<impl Iterator<Item = &JavaImportedSymbolInfo>> {
+        match self {
+            ImportedSymbols::Java(imported_symbols) => Some(imported_symbols.iter()),
+            _ => None,
+        }
     }
 
     pub fn iter_python(&self) -> Option<impl Iterator<Item = &PythonImportedSymbolInfo>> {

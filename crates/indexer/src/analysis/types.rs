@@ -2,7 +2,10 @@ use database::graph::RelationshipType;
 use parser_core::{
     definitions::DefinitionTypeInfo,
     imports::ImportTypeInfo,
-    java::types::{JavaDefinitionType, JavaFqn},
+    java::{
+        imports::JavaImportType,
+        types::{JavaDefinitionType, JavaFqn},
+    },
     kotlin::types::{KotlinDefinitionType, KotlinFqn},
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
     ruby::{fqn::RubyFqn, types::RubyDefinitionType},
@@ -180,6 +183,7 @@ pub struct ImportedSymbolLocation {
 /// Represents a language-specific import type
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ImportType {
+    Java(JavaImportType),
     Python(PythonImportType),
     TypeScript(TypeScriptImportType),
 }
@@ -187,6 +191,7 @@ pub enum ImportType {
 impl ImportType {
     pub fn as_str(&self) -> &str {
         match self {
+            ImportType::Java(java_type) => java_type.as_str(),
             ImportType::Python(python_type) => python_type.as_str(),
             ImportType::TypeScript(typescript_type) => typescript_type.as_str(),
         }
