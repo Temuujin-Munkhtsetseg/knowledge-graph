@@ -81,16 +81,17 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
             name: Cow::Borrowed(self.query.name),
             description: Some(Cow::Borrowed(self.query.description)),
             input_schema: Arc::new(input_schema),
+            output_schema: None,
             annotations: None,
         }
     }
 
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::Error> {
+    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let mut query_params = JsonObject::with_capacity(self.parameters.len());
 
         for (name, parameter) in &self.parameters {
             let value = parameter.get_value(params.clone()).map_err(|e| {
-                rmcp::Error::new(
+                rmcp::ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     format!("Could not get value for parameter {name}: {e}"),
                     None,
@@ -102,7 +103,7 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
 
         let project_path = query_params.remove(PROJECT_PARAMETER.name);
         if project_path.is_none() {
-            return Err(rmcp::Error::new(
+            return Err(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 "Parameter 'project' is required to create a query but not provided.",
                 None,
@@ -119,7 +120,7 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
         {
             Some(info) => info,
             None => {
-                return Err(rmcp::Error::new(
+                return Err(rmcp::ErrorData::new(
                     rmcp::model::ErrorCode::RESOURCE_NOT_FOUND,
                     "Project not found. Please provide a valid project path.",
                     None,
@@ -135,7 +136,7 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
                 query_params,
             )
             .map_err(|e| {
-                rmcp::Error::new(
+                rmcp::ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_REQUEST,
                     format!("Could not execute query: {e}."),
                     None,
@@ -143,7 +144,7 @@ impl KnowledgeGraphTool for QueryKnowledgeGraphTool {
             })?;
 
         let json_result = result.to_json(&self.query.result).map_err(|e| {
-            rmcp::Error::new(
+            rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
                 format!("Could not convert query result to JSON: {e}."),
                 None,
@@ -383,13 +384,11 @@ mod tests {
             let result = tool.call(params).unwrap();
 
             assert!(!result.is_error.unwrap());
-            assert_eq!(result.content.len(), 2);
+            let content = result.content.as_ref().unwrap();
+            assert_eq!(content.len(), 2);
 
-            // Assert against the content array directly
-            assert_eq!(result.content.len(), 2);
-
-            let first_content = &result.content[0];
-            let second_content = &result.content[1];
+            let first_content = &content[0];
+            let second_content = &content[1];
 
             if let Ok(json_data) =
                 serde_json::from_str::<serde_json::Value>(&first_content.as_text().unwrap().text)

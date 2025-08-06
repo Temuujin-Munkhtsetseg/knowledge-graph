@@ -60,10 +60,10 @@ impl AvailableToolsService {
         &self,
         tool_name: &str,
         params: JsonObject,
-    ) -> Result<CallToolResult, rmcp::Error> {
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
         self.tools
             .get(tool_name)
-            .ok_or(rmcp::Error::new(
+            .ok_or(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
                 format!("Tool {tool_name} not found."),
                 None,

@@ -34,11 +34,12 @@ impl KnowledgeGraphTool for ListProjectsTool {
                 "Get a list of all projects in the knowledge graph.",
             )),
             input_schema: Arc::new(input_schema),
+            output_schema: None,
             annotations: None,
         }
     }
 
-    fn call(&self, _params: JsonObject) -> Result<CallToolResult, rmcp::Error> {
+    fn call(&self, _params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let projects = self.workspace_manager.list_all_projects();
 
         let project_data: Vec<Value> = projects
@@ -56,7 +57,7 @@ impl KnowledgeGraphTool for ListProjectsTool {
 
         Ok(CallToolResult::success(vec![
             Content::json(result).map_err(|e| {
-                rmcp::Error::new(
+                rmcp::ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
                     format!("Failed to serialize result: {e}"),
                     None,
@@ -118,9 +119,10 @@ mod tests {
         let result = tool.call(empty_params).unwrap();
 
         assert!(!result.is_error.unwrap_or(false));
-        assert_eq!(result.content.len(), 1);
+        let content = result.content.as_ref().unwrap();
+        assert_eq!(content.len(), 1);
 
-        let content = &result.content[0];
+        let content = &content[0];
         let json_data: Value = serde_json::from_str(&content.as_text().unwrap().text).unwrap();
 
         assert!(json_data["projects"].is_array());

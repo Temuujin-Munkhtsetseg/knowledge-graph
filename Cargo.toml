@@ -28,19 +28,19 @@ parser-core = { git = "https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git
 gitalisk-core = { git = "https://gitlab.com/gitlab-org/rust/gitalisk.git", tag = "v0.5.1" }
 
 anyhow = "1.0.98"
-clap = { version = "4.5.40", features = ["derive"] }
-toml = "0.8.23"
+clap = { version = "4.5.42", features = ["derive"] }
+toml = "0.9.5"
 ignore = "0.4.23"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
+serde_json = "1.0.142"
 crossbeam-channel = "0.5.15"
 log = "0.4.27"
 num_cpus = "1.17.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tempfile = "3.20.0"
-parquet = "55.2.0"
-arrow = "55.2.0"
+parquet = "56.0.0"
+arrow = "56.0.0"
 kuzu = "=0.11.1"
 thiserror = "2.0.12"
 dirs = "6.0.0"
@@ -48,7 +48,7 @@ chrono = { version = "0.4.41", features = ["serde"] }
 sha2 = "0.10.9"
 hex = "0.4.3"
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
-tokio = { version = "1.46.1", features = ["full"] }
+tokio = { version = "1.47.1", features = ["full"] }
 ctrlc = "3.4.7"
 single-instance = "0.3.3"
 home = "0.5.11"
@@ -64,18 +64,18 @@ tokio-stream = "0.1.17"
 ts-rs = "11.0.1"
 tracing-appender = "0.2.3"
 file-rotate = "0.8.0"
-rmcp = { version = "0.2.1", features = ["server", "transport-streamable-http-server", "transport-worker", "transport-sse-server"] }
+rmcp = { version = "0.4.0", features = ["server", "transport-streamable-http-server", "transport-worker", "transport-sse-server"] }
 dashmap = "6.1.0"
-tokio-util = "0.7.15"
+tokio-util = "0.7.16"
 miette = "7.6.0"
 walkdir = "2.5.0"
 watchexec = "8.0.1"
 watchexec-events = "6.0.0"
 watchexec-filterer-ignore = "7.0.0"
 watchexec-signals = "5.0.0"
-criterion = "0.6.0"
+criterion = "0.7.0"
 ignore-files = "3.0.4"
-strum = { version = "0.27", features = ["derive"] }
+strum = { version = "0.27.2", features = ["derive"] }
 
 # Test dependencies
 axum-test = "17.3.0"

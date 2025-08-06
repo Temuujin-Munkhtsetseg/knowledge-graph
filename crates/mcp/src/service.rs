@@ -4,7 +4,7 @@ use rmcp::model::{
     Implementation, InitializeRequestParam, InitializeResult, ServerCapabilities, ToolsCapability,
 };
 use rmcp::service::RequestContext;
-use rmcp::{Error, RoleServer, ServerHandler};
+use rmcp::{ErrorData, RoleServer, ServerHandler};
 use std::sync::Arc;
 use workspace_manager::WorkspaceManager;
 
@@ -28,7 +28,7 @@ impl ServerHandler for DefaultMcpService {
         &self,
         request: InitializeRequestParam,
         _context: RequestContext<RoleServer>,
-    ) -> Result<InitializeResult, Error> {
+    ) -> Result<InitializeResult, ErrorData> {
         Ok(InitializeResult {
             protocol_version: request.protocol_version,
             capabilities: ServerCapabilities {
@@ -46,7 +46,7 @@ impl ServerHandler for DefaultMcpService {
         &self,
         _request: Option<rmcp::model::PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<rmcp::model::ListToolsResult, Error> {
+    ) -> Result<rmcp::model::ListToolsResult, ErrorData> {
         Ok(rmcp::model::ListToolsResult {
             tools: self.available_tools_service.get_available_tools(),
             next_cursor: None,
@@ -57,7 +57,7 @@ impl ServerHandler for DefaultMcpService {
         &self,
         request: rmcp::model::CallToolRequestParam,
         _context: RequestContext<RoleServer>,
-    ) -> Result<rmcp::model::CallToolResult, Error> {
+    ) -> Result<rmcp::model::CallToolResult, ErrorData> {
         self.available_tools_service
             .call_tool(request.name.as_ref(), request.arguments.unwrap_or_default())
     }
