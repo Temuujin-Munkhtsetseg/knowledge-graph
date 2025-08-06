@@ -7,7 +7,7 @@ use serde_json::Value;
 pub trait KnowledgeGraphTool: Send + Sync {
     fn name(&self) -> &str;
     fn to_mcp_tool(&self) -> Tool;
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::Error>;
+    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData>;
 }
 
 pub enum ToolParameterDefinition {
