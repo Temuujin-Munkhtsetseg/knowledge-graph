@@ -246,8 +246,8 @@ fn setup_reindexing_pipeline(
         );
     } else if language == SupportedLanguage::TypeScript {
         assert_eq!(
-            all_definition_count, 101,
-            "Should have 101 definitions globally after initial indexing"
+            all_definition_count, 84,
+            "Should have 84 definitions globally after initial indexing (with mandatory FQN)"
         );
     }
     // file_paths: ["app/models/user_model.rb", "app/models/base_model.rb"]
@@ -278,8 +278,8 @@ fn setup_reindexing_pipeline(
         );
     } else if language == SupportedLanguage::TypeScript {
         assert_eq!(
-            definition_count, 40,
-            "Should have 40 definitions after initial indexing (user_model.ts and base_model.ts)"
+            definition_count, 32,
+            "Should have 32 definitions after initial indexing (user_model.ts and base_model.ts, with mandatory FQN)"
         );
     }
 
@@ -450,8 +450,8 @@ async fn test_full_reindexing_pipeline_git_status_typescript() {
     println!("definition_count: {definition_count}");
     println!("definition_count: {definition_count}");
     assert_eq!(
-        definition_count, 101,
-        "Should have 101 definitions globally after reindexing"
+        definition_count, 84,
+        "Should have 84 definitions globally after reindexing (with mandatory FQN)"
     );
 
     let file_paths = vec![
@@ -466,8 +466,8 @@ async fn test_full_reindexing_pipeline_git_status_typescript() {
         )
         .unwrap();
     assert_eq!(
-        definition_count, 40,
-        "Should have 40 definitions after reindexing (user_model.ts and base_model.ts)"
+        definition_count, 32,
+        "Should have 32 definitions after reindexing (user_model.ts and base_model.ts, with mandatory FQN)"
     );
 
     let mut imported_symbols = node_database_service
