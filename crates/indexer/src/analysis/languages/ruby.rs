@@ -6,8 +6,8 @@ use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
 use parser_core::ruby::{
     definitions::RubyDefinitionInfo,
-    fqn::{RubyFqn, ruby_fqn_to_string},
-    types::RubyDefinitionType,
+    fqn::ruby_fqn_to_string,
+    types::{RubyDefinitionType, RubyFqn},
 };
 use std::collections::HashMap;
 
@@ -79,28 +79,17 @@ impl RubyAnalyzer {
         definition: &RubyDefinitionInfo,
         file_path: &str,
     ) -> Result<Option<(DefinitionLocation, RubyFqn)>, String> {
-        // Only create definition locations if we have an FQN
-        if let Some(ref fqn) = definition.fqn {
-            let location = DefinitionLocation {
-                file_path: file_path.to_string(),
-                start_byte: definition.range.byte_offset.0 as i64,
-                end_byte: definition.range.byte_offset.1 as i64,
-                start_line: definition.range.start.line as i32,
-                end_line: definition.range.end.line as i32,
-                start_col: definition.range.start.column as i32,
-                end_col: definition.range.end.column as i32,
-            };
+        let location = DefinitionLocation {
+            file_path: file_path.to_string(),
+            start_byte: definition.range.byte_offset.0 as i64,
+            end_byte: definition.range.byte_offset.1 as i64,
+            start_line: definition.range.start.line as i32,
+            end_line: definition.range.end.line as i32,
+            start_col: definition.range.start.column as i32,
+            end_col: definition.range.end.column as i32,
+        };
 
-            Ok(Some((location, fqn.clone())))
-        } else {
-            // Skip definitions without FQNs
-            log::debug!(
-                "Skipping definition '{}' without FQN in file '{}'",
-                definition.name,
-                file_path
-            );
-            Ok(None)
-        }
+        Ok(Some((location, definition.fqn.clone())))
     }
 
     /// Create definition-to-definition relationships using definitions map

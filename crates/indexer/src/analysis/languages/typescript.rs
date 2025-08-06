@@ -47,7 +47,7 @@ impl TypeScriptAnalyzer {
                 if let Ok(Some((location, fqn))) =
                     self.create_definition_location(definition, relative_file_path)
                 {
-                    let fqn_string = typescript_fqn_to_string(definition.fqn.as_ref().unwrap());
+                    let fqn_string = typescript_fqn_to_string(&definition.fqn);
                     let definition_node = DefinitionNode::new(
                         fqn_string.clone(),
                         definition.name.clone(),
@@ -56,7 +56,7 @@ impl TypeScriptAnalyzer {
                     );
 
                     // If top-level definition, add file-to-definition relationship
-                    if definition.fqn.as_ref().unwrap().len() == 1 {
+                    if definition.fqn.len() == 1 {
                         file_definition_relationships.push(FileDefinitionRelationship {
                             file_path: relative_file_path.to_string(),
                             definition_fqn: fqn_string.clone(),
@@ -177,28 +177,17 @@ impl TypeScriptAnalyzer {
         definition: &TypeScriptDefinitionInfo,
         file_path: &str,
     ) -> Result<Option<(DefinitionLocation, TypeScriptFqn)>, String> {
-        // Only create definition locations if we have an FQN
-        if definition.fqn.is_some() {
-            let location = DefinitionLocation {
-                file_path: file_path.to_string(),
-                start_byte: definition.range.byte_offset.0 as i64,
-                end_byte: definition.range.byte_offset.1 as i64,
-                start_line: definition.range.start.line as i32,
-                end_line: definition.range.end.line as i32,
-                start_col: definition.range.start.column as i32,
-                end_col: definition.range.end.column as i32,
-            };
+        let location = DefinitionLocation {
+            file_path: file_path.to_string(),
+            start_byte: definition.range.byte_offset.0 as i64,
+            end_byte: definition.range.byte_offset.1 as i64,
+            start_line: definition.range.start.line as i32,
+            end_line: definition.range.end.line as i32,
+            start_col: definition.range.start.column as i32,
+            end_col: definition.range.end.column as i32,
+        };
 
-            Ok(Some((location, definition.fqn.as_ref().unwrap().clone())))
-        } else {
-            // Skip definitions without FQNs
-            log::debug!(
-                "Skipping definition '{}' without FQN in file '{}'",
-                definition.name,
-                file_path
-            );
-            Ok(None)
-        }
+        Ok(Some((location, definition.fqn.clone())))
     }
 
     /// Create an imported symbol location from an imported symbol info

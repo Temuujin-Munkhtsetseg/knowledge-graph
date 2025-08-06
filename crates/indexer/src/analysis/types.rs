@@ -11,7 +11,7 @@ use parser_core::{
         types::{KotlinDefinitionType, KotlinFqn},
     },
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
-    ruby::{fqn::RubyFqn, types::RubyDefinitionType},
+    ruby::types::{RubyDefinitionType, RubyFqn},
     typescript::types::{TypeScriptDefinitionType, TypeScriptFqn, TypeScriptImportType},
     utils::{Position, Range},
 };
