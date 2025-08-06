@@ -2,14 +2,8 @@ use database::graph::RelationshipType;
 use parser_core::{
     definitions::DefinitionTypeInfo,
     imports::ImportTypeInfo,
-    java::{
-        imports::JavaImportType,
-        types::{JavaDefinitionType, JavaFqn},
-    },
-    kotlin::{
-        imports::KotlinImportType,
-        types::{KotlinDefinitionType, KotlinFqn},
-    },
+    java::types::{JavaDefinitionType, JavaFqn, JavaImportType},
+    kotlin::types::{KotlinDefinitionType, KotlinFqn, KotlinImportType},
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
     ruby::types::{RubyDefinitionType, RubyFqn},
     typescript::types::{TypeScriptDefinitionType, TypeScriptFqn, TypeScriptImportType},

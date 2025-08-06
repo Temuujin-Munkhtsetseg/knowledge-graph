@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use database::graph::RelationshipType;
 use parser_core::java::{
-    fqn::java_fqn_to_string,
-    imports::JavaImportedSymbolInfo,
-    types::{JavaDefinitionInfo, JavaDefinitionType, JavaFqn, JavaFqnPartType},
+    ast::java_fqn_to_string,
+    types::{
+        JavaDefinitionInfo, JavaDefinitionType, JavaFqn, JavaFqnPartType, JavaImportedSymbolInfo,
+    },
 };
 
 use crate::{
