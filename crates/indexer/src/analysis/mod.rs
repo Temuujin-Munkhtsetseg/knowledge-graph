@@ -22,6 +22,7 @@ pub use languages::java::JavaAnalyzer;
 pub use languages::kotlin::KotlinAnalyzer;
 pub use languages::python::PythonAnalyzer;
 pub use languages::ruby::RubyAnalyzer;
+pub use languages::rust::RustAnalyzer;
 pub use languages::typescript::TypeScriptAnalyzer;
 
 /// Analysis service that orchestrates the transformation of parsing results into graph data
@@ -35,6 +36,7 @@ pub struct AnalysisService {
     java_analyzer: JavaAnalyzer,
     csharp_analyzer: CSharpAnalyzer,
     typescript_analyzer: TypeScriptAnalyzer,
+    rust_analyzer: RustAnalyzer,
 }
 
 impl AnalysisService {
@@ -48,6 +50,7 @@ impl AnalysisService {
         let java_analyzer = JavaAnalyzer::new();
         let csharp_analyzer = CSharpAnalyzer::new();
         let typescript_analyzer = TypeScriptAnalyzer::new();
+        let rust_analyzer = RustAnalyzer::new();
 
         Self {
             repository_name,
@@ -59,6 +62,7 @@ impl AnalysisService {
             java_analyzer,
             csharp_analyzer,
             typescript_analyzer,
+            rust_analyzer,
         }
     }
 
@@ -303,7 +307,14 @@ impl AnalysisService {
                     file_imported_symbol_relationships,
                 );
             }
-            _ => {}
+            SupportedLanguage::Rust => {
+                self.rust_analyzer.process_definitions(
+                    file_result,
+                    &relative_path,
+                    definition_map,
+                    file_definition_relationships,
+                );
+            }
         }
     }
 
@@ -372,7 +383,10 @@ impl AnalysisService {
                     definition_imported_symbol_relationships,
                 );
             }
-            _ => {}
+            SupportedLanguage::Rust => {
+                self.rust_analyzer
+                    .add_definition_relationships(&definition_map, definition_relationships);
+            }
         }
     }
 }

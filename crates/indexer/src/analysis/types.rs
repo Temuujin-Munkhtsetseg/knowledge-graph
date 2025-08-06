@@ -7,6 +7,7 @@ use parser_core::{
     kotlin::types::{KotlinDefinitionType, KotlinFqn, KotlinImportType},
     python::types::{PythonDefinitionType, PythonFqn, PythonImportType},
     ruby::types::{RubyDefinitionType, RubyFqn},
+    rust::types::{RustDefinitionType, RustFqn, RustImportType},
     typescript::types::{TypeScriptDefinitionType, TypeScriptFqn, TypeScriptImportType},
     utils::{Position, Range},
 };
@@ -104,6 +105,7 @@ pub enum DefinitionType {
     Java(JavaDefinitionType),
     CSharp(CSharpDefinitionType),
     TypeScript(TypeScriptDefinitionType),
+    Rust(RustDefinitionType),
     Unsupported(),
 }
 
@@ -116,6 +118,7 @@ impl DefinitionType {
             DefinitionType::Java(java_type) => java_type.as_str(),
             DefinitionType::CSharp(csharp_type) => csharp_type.as_str(),
             DefinitionType::TypeScript(typescript_type) => typescript_type.as_str(),
+            DefinitionType::Rust(rust_type) => rust_type.as_str(),
             DefinitionType::Unsupported() => "unsupported",
         }
     }
@@ -130,6 +133,7 @@ pub enum FqnType {
     Java(JavaFqn),
     CSharp(CSharpFqn),
     TypeScript(TypeScriptFqn),
+    Rust(RustFqn),
 }
 
 /// Represents a definition node in the graph
@@ -189,6 +193,7 @@ pub enum ImportType {
     Python(PythonImportType),
     CSharp(CSharpImportType),
     TypeScript(TypeScriptImportType),
+    Rust(RustImportType),
 }
 
 impl ImportType {
@@ -199,6 +204,7 @@ impl ImportType {
             ImportType::Python(python_type) => python_type.as_str(),
             ImportType::CSharp(csharp_type) => csharp_type.as_str(),
             ImportType::TypeScript(typescript_type) => typescript_type.as_str(),
+            ImportType::Rust(rust_type) => rust_type.as_str(),
         }
     }
 }
