@@ -7,7 +7,7 @@ use crate::analysis::types::{
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
 use parser_core::typescript::{
-    fqn::typescript_fqn_to_string,
+    ast::typescript_fqn_to_string,
     types::{
         TypeScriptDefinitionInfo, TypeScriptDefinitionType, TypeScriptFqn,
         TypeScriptImportedSymbolInfo,

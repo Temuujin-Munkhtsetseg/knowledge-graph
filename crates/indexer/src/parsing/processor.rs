@@ -1,9 +1,13 @@
 use crate::project::file_info::FileInfo;
 use parser_core::{
     definitions::DefinitionTypeInfo,
-    java::{analyzer::JavaAnalyzer, imports::JavaImportedSymbolInfo, types::JavaDefinitionInfo},
+    java::{
+        analyzer::JavaAnalyzer,
+        types::{JavaDefinitionInfo, JavaImportedSymbolInfo},
+    },
     kotlin::{
-        analyzer::KotlinAnalyzer, imports::KotlinImportedSymbolInfo, types::KotlinDefinitionInfo,
+        analyzer::KotlinAnalyzer,
+        types::{KotlinDefinitionInfo, KotlinImportedSymbolInfo},
     },
     parser::{
         GenericParser, LanguageParser, ParseResult, SupportedLanguage,
@@ -285,7 +289,7 @@ impl<'a> FileProcessor<'a> {
             }
             SupportedLanguage::Kotlin => {
                 let analyzer = KotlinAnalyzer::new();
-                match analyzer.analyze(matches, parse_result) {
+                match analyzer.analyze(parse_result) {
                     Ok(analysis_result) => Ok((
                         Definitions::Kotlin(analysis_result.definitions),
                         Some(ImportedSymbols::Kotlin(analysis_result.imports)),
@@ -299,7 +303,7 @@ impl<'a> FileProcessor<'a> {
             }
             SupportedLanguage::Java => {
                 let analyzer = JavaAnalyzer::new();
-                match analyzer.analyze(matches, parse_result) {
+                match analyzer.analyze(parse_result) {
                     Ok(analysis_result) => Ok((
                         Definitions::Java(analysis_result.definitions),
                         Some(ImportedSymbols::Java(analysis_result.imports)),
@@ -313,7 +317,7 @@ impl<'a> FileProcessor<'a> {
             }
             SupportedLanguage::TypeScript => {
                 let analyzer = TypeScriptAnalyzer::new();
-                match analyzer.analyze(matches, parse_result) {
+                match analyzer.analyze(parse_result) {
                     Ok(analysis_result) => Ok((
                         Definitions::TypeScript(analysis_result.definitions),
                         Some(ImportedSymbols::TypeScript(analysis_result.imports)),

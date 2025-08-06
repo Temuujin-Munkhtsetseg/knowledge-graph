@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use parser_core::kotlin::{
-    fqn::kotlin_fqn_to_string,
-    imports::KotlinImportedSymbolInfo,
-    types::{KotlinDefinitionInfo, KotlinDefinitionType, KotlinFqn, KotlinFqnPartType},
+    ast::kotlin_fqn_to_string,
+    types::{
+        KotlinDefinitionInfo, KotlinDefinitionType, KotlinFqn, KotlinFqnPartType,
+        KotlinImportedSymbolInfo,
+    },
 };
 
 use crate::{
