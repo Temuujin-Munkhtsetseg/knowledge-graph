@@ -473,8 +473,8 @@ impl IndexingExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::node_database_service::NodeDatabaseService;
     use crate::execution::config::IndexingConfigBuilder;
+    use database::kuzu::service::NodeDatabaseService;
     use event_bus::{EventBus, GkgEvent, ProjectIndexingEvent, WorkspaceIndexingEvent};
     use kuzu::{Database, SystemConfig};
     use std::fs;

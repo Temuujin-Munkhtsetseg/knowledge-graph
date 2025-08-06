@@ -1,16 +1,16 @@
 use database::kuzu::schema::SchemaManager;
-use kuzu::Database;
-
-use crate::analysis::types::GraphData;
-use crate::database::utils::NodeIdGenerator;
-use crate::node_database_service::NodeDatabaseService;
-use crate::parsing::changes::{FileChanges, FileChangesPathType};
-use crate::writer::{WriterResult, WriterService};
-use anyhow::Error;
+use database::kuzu::service::NodeDatabaseService;
 use database::kuzu::types::{
     DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, FromKuzuNode,
     ImportedSymbolNodeFromKuzu, KuzuNodeType,
 };
+use kuzu::Database;
+
+use crate::analysis::types::GraphData;
+use crate::mutation::utils::NodeIdGenerator;
+use crate::parsing::changes::{FileChanges, FileChangesPathType};
+use crate::writer::{WriterResult, WriterService};
+use anyhow::Error;
 use tracing::error;
 
 #[derive(Debug, Clone)]
