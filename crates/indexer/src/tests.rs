@@ -2,7 +2,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::analysis::types::{DefinitionType, GraphData};
-use crate::database::node_database_service::NodeDatabaseService;
 use crate::deployed::executor::DeployedIndexingExecutor;
 use crate::execution::config::IndexingConfigBuilder;
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
@@ -12,6 +11,7 @@ use crate::project::source::{GitaliskFileSource, PathFileSource};
 use database::graph::{RelationshipType, RelationshipTypeMapping};
 use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;
+use database::kuzu::service::NodeDatabaseService;
 use database::kuzu::types::{
     DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, ImportedSymbolNodeFromKuzu,
     KuzuNodeType,

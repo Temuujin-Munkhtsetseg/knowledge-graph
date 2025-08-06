@@ -1,7 +1,8 @@
 use crate::analysis::types::{
     DefinitionNode, DirectoryNode, FileNode, GraphData, ImportedSymbolNode,
 };
-use crate::database::utils::{ConsolidatedRelationship, GraphMapper, NodeIdGenerator};
+use crate::mutation::types::ConsolidatedRelationship;
+use crate::mutation::utils::{GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Error, Result};
 use arrow::{
     array::{Int32Array, Int64Array, StringArray, UInt8Array, UInt32Array},

@@ -22,14 +22,14 @@ use std::time::{Duration, Instant};
 
 // Simplified imports - file processing is now handled by the File module
 use crate::analysis::{AnalysisService, types::GraphData};
-use crate::database::changes::KuzuChanges;
+use crate::mutation::changes::KuzuChanges;
 use database::kuzu::config::DatabaseConfig;
 
 use crate::parsing::processor::{FileProcessor, ProcessingResult};
 use crate::project::source::FileSource;
 use crate::writer::{WriterResult, WriterService};
 
-use crate::database::utils::NodeIdGenerator;
+use crate::mutation::utils::NodeIdGenerator;
 pub use crate::parsing::changes::{FileChanges, FileChangesPathType};
 pub use crate::parsing::processor::{
     ErroredFile, FileProcessingResult, ProcessingStage, ProcessingStats, SkippedFile,

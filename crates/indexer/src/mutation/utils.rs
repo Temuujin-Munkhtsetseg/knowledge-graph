@@ -2,28 +2,10 @@ use std::collections::HashMap;
 use tracing::{info, warn};
 
 use crate::analysis::types::{GraphData, ImportedSymbolLocation};
+use crate::mutation::types::{ConsolidatedRelationship, ConsolidatedRelationships};
 use database::graph::RelationshipType;
 use database::graph::RelationshipTypeMapping;
 use parser_core::utils::Range;
-
-/// Consolidated relationship data for efficient storage
-#[derive(Debug, Clone, Default, Copy)]
-pub struct ConsolidatedRelationship {
-    pub source_id: Option<u32>,
-    pub target_id: Option<u32>,
-    pub relationship_type: u8,
-}
-
-/// Container for different types of consolidated relationships
-#[derive(Default, Clone)]
-pub struct ConsolidatedRelationships {
-    pub directory_to_directory: Vec<ConsolidatedRelationship>,
-    pub directory_to_file: Vec<ConsolidatedRelationship>,
-    pub file_to_definition: Vec<ConsolidatedRelationship>,
-    pub file_to_imported_symbol: Vec<ConsolidatedRelationship>,
-    pub definition_to_definition: Vec<ConsolidatedRelationship>,
-    pub definition_to_imported_symbol: Vec<ConsolidatedRelationship>,
-}
 
 /// Node ID generator for assigning integer IDs to nodes
 #[derive(Debug, Clone)]
