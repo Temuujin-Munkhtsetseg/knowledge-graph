@@ -49,10 +49,10 @@ pub fn extract_zip(zip_path: &Path, extract_to: &Path) -> Result<()> {
         if file.name().ends_with('/') {
             std::fs::create_dir_all(&outpath).context("Failed to create directory")?;
         } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    std::fs::create_dir_all(p).context("Failed to create parent directory")?;
-                }
+            if let Some(p) = outpath.parent()
+                && !p.exists()
+            {
+                std::fs::create_dir_all(p).context("Failed to create parent directory")?;
             }
             let mut outfile = File::create(&outpath).context("Failed to create extracted file")?;
             std::io::copy(&mut file, &mut outfile).context("Failed to copy file contents")?;

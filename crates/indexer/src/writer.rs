@@ -74,10 +74,10 @@ impl WriterService {
         }
 
         // Check if the output directory is empty
-        if let Ok(entries) = std::fs::read_dir(&self.output_directory) {
-            if entries.flatten().count() == 0 {
-                return Ok(true);
-            }
+        if let Ok(entries) = std::fs::read_dir(&self.output_directory)
+            && entries.flatten().count() == 0
+        {
+            return Ok(true);
         }
         Ok(false)
     }

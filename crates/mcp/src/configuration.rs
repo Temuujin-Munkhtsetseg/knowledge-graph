@@ -67,10 +67,10 @@ pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) 
     let config = McpConfig::get_or_create(expanded_path)?;
 
     let server_url = format!("http://localhost:{port}/mcp");
-    if let Some(McpServer::Url { url }) = config.mcp_servers.get(MCP_NAME) {
-        if url.as_str() == server_url {
-            return Ok(());
-        }
+    if let Some(McpServer::Url { url }) = config.mcp_servers.get(MCP_NAME)
+        && url.as_str() == server_url
+    {
+        return Ok(());
     }
 
     let server = McpServer::Url { url: server_url };
@@ -119,18 +119,18 @@ fn expand_windows_path(path: PathBuf) -> Result<PathBuf> {
     let mut expanded_path = path_str.to_string();
 
     // Handle Windows-style environment variables %VAR%
-    if let Some(start) = expanded_path.find('%') {
-        if let Some(end) = expanded_path[start + 1..].find('%') {
-            let end = start + 1 + end;
-            let var_name = &expanded_path[start + 1..end];
+    if let Some(start) = expanded_path.find('%')
+        && let Some(end) = expanded_path[start + 1..].find('%')
+    {
+        let end = start + 1 + end;
+        let var_name = &expanded_path[start + 1..end];
 
-            match env::var(var_name) {
-                Ok(var_value) => {
-                    expanded_path.replace_range(start..=end, &var_value);
-                }
-                Err(_) => {
-                    // If environment variable doesn't exist, leave it as is
-                }
+        match env::var(var_name) {
+            Ok(var_value) => {
+                expanded_path.replace_range(start..=end, &var_value);
+            }
+            Err(_) => {
+                // If environment variable doesn't exist, leave it as is
             }
         }
     }

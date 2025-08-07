@@ -183,10 +183,10 @@ impl Watcher {
         for folder in folders_to_remove {
             info!("Stopping project watcher for removed folder: {:?}", folder);
             // Join on the abandoned watchers
-            if let Ok(mut handles) = self.watcher_handles.lock() {
-                if let Some(handle) = handles.remove(&folder) {
-                    handle.abort();
-                }
+            if let Ok(mut handles) = self.watcher_handles.lock()
+                && let Some(handle) = handles.remove(&folder)
+            {
+                handle.abort();
             }
 
             // Remove events, debounce windows, and watched folder
@@ -409,27 +409,28 @@ impl Watcher {
                 continue;
             }
 
-            if entry.file_type().is_some_and(|ft| ft.is_dir()) && path != project_path {
-                if let Some(parent) = path.parent() {
-                    let parent_has_conflicts = other_project_paths
+            if entry.file_type().is_some_and(|ft| ft.is_dir())
+                && path != project_path
+                && let Some(parent) = path.parent()
+            {
+                let parent_has_conflicts = other_project_paths
+                    .iter()
+                    .any(|other_project| other_project.starts_with(parent));
+
+                if parent_has_conflicts || parent == project_path {
+                    let dir_has_conflicts = other_project_paths
                         .iter()
-                        .any(|other_project| other_project.starts_with(parent));
+                        .any(|other_project| other_project.starts_with(&path));
 
-                    if parent_has_conflicts || parent == project_path {
-                        let dir_has_conflicts = other_project_paths
-                            .iter()
-                            .any(|other_project| other_project.starts_with(&path));
-
-                        if dir_has_conflicts {
-                            debug!(
-                                "Adding non-recursive watch for directory with nested conflicts: {:?}",
-                                path
-                            );
-                            pathset.push(WatchedPath::non_recursive(path));
-                        } else {
-                            debug!("Adding recursive watch for clean subdirectory: {:?}", path);
-                            pathset.push(WatchedPath::recursive(path));
-                        }
+                    if dir_has_conflicts {
+                        debug!(
+                            "Adding non-recursive watch for directory with nested conflicts: {:?}",
+                            path
+                        );
+                        pathset.push(WatchedPath::non_recursive(path));
+                    } else {
+                        debug!("Adding recursive watch for clean subdirectory: {:?}", path);
+                        pathset.push(WatchedPath::recursive(path));
                     }
                 }
             }

@@ -47,7 +47,7 @@ impl<'a> NodeDatabaseService<'a> {
     }
 
     // HELPERS
-    fn get_connection(&self) -> KuzuConnection {
+    fn get_connection(&self) -> KuzuConnection<'_> {
         match KuzuConnection::new(self.database) {
             Ok(connection) => connection,
             Err(connection_error) => {

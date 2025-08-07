@@ -224,10 +224,10 @@ impl DataDirectory {
             let size_ref = Arc::clone(&size_clone);
             Box::new(move |entry| match entry {
                 Ok(dir_entry) => {
-                    if let Ok(metadata) = dir_entry.metadata() {
-                        if metadata.is_file() {
-                            size_ref.fetch_add(metadata.len(), Ordering::Relaxed);
-                        }
+                    if let Ok(metadata) = dir_entry.metadata()
+                        && metadata.is_file()
+                    {
+                        size_ref.fetch_add(metadata.len(), Ordering::Relaxed);
                     }
                     ignore::WalkState::Continue
                 }
@@ -249,10 +249,10 @@ impl DataDirectory {
 
         for entry in std::fs::read_dir(workspace_folder_dir)? {
             let entry = entry?;
-            if entry.metadata()?.is_dir() {
-                if let Some(dir_name) = entry.file_name().to_str() {
-                    workspace_folder_dirs.push(dir_name.to_string());
-                }
+            if entry.metadata()?.is_dir()
+                && let Some(dir_name) = entry.file_name().to_str()
+            {
+                workspace_folder_dirs.push(dir_name.to_string());
             }
         }
 
@@ -271,10 +271,10 @@ impl DataDirectory {
 
         for entry in std::fs::read_dir(workspace_folder_dir)? {
             let entry = entry?;
-            if entry.metadata()?.is_dir() {
-                if let Some(dir_name) = entry.file_name().to_str() {
-                    project_dirs.push(dir_name.to_string());
-                }
+            if entry.metadata()?.is_dir()
+                && let Some(dir_name) = entry.file_name().to_str()
+            {
+                project_dirs.push(dir_name.to_string());
             }
         }
 

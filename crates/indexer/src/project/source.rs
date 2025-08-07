@@ -70,12 +70,12 @@ impl PathFileSource {
                 let supported_extensions = supported_extensions.clone();
 
                 Box::new(move |result| {
-                    if let Ok(entry) = result {
-                        if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                            let file_info = FileInfo::from_path(entry.path().to_path_buf());
-                            if should_process_file_info(&file_info, &supported_extensions) {
-                                files.lock().unwrap().push(file_info);
-                            }
+                    if let Ok(entry) = result
+                        && entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
+                    {
+                        let file_info = FileInfo::from_path(entry.path().to_path_buf());
+                        if should_process_file_info(&file_info, &supported_extensions) {
+                            files.lock().unwrap().push(file_info);
                         }
                     }
                     ignore::WalkState::Continue

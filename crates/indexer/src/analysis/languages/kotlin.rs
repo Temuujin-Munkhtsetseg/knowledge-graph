@@ -73,34 +73,34 @@ impl KotlinAnalyzer {
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
         file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
     ) {
-        if let Some(imported_symbols) = &file_result.imported_symbols {
-            if let Some(imports) = imported_symbols.iter_kotlin() {
-                for imported_symbol in imports {
-                    let location =
-                        self.create_imported_symbol_location(imported_symbol, relative_file_path);
-                    let identifier = self.create_imported_symbol_identifier(imported_symbol);
+        if let Some(imported_symbols) = &file_result.imported_symbols
+            && let Some(imports) = imported_symbols.iter_kotlin()
+        {
+            for imported_symbol in imports {
+                let location =
+                    self.create_imported_symbol_location(imported_symbol, relative_file_path);
+                let identifier = self.create_imported_symbol_identifier(imported_symbol);
 
-                    let imported_symbol_node = ImportedSymbolNode::new(
-                        ImportType::Kotlin(imported_symbol.import_type),
+                let imported_symbol_node = ImportedSymbolNode::new(
+                    ImportType::Kotlin(imported_symbol.import_type),
+                    imported_symbol.import_path.clone(),
+                    identifier,
+                    location.clone(),
+                );
+
+                imported_symbol_map.insert(
+                    (
                         imported_symbol.import_path.clone(),
-                        identifier,
-                        location.clone(),
-                    );
+                        relative_file_path.to_string(),
+                    ),
+                    vec![imported_symbol_node],
+                );
 
-                    imported_symbol_map.insert(
-                        (
-                            imported_symbol.import_path.clone(),
-                            relative_file_path.to_string(),
-                        ),
-                        vec![imported_symbol_node],
-                    );
-
-                    file_import_relationships.push(FileImportedSymbolRelationship {
-                        file_path: relative_file_path.to_string(),
-                        import_location: location.clone(),
-                        relationship_type: RelationshipType::FileImports,
-                    });
-                }
+                file_import_relationships.push(FileImportedSymbolRelationship {
+                    file_path: relative_file_path.to_string(),
+                    import_location: location.clone(),
+                    relationship_type: RelationshipType::FileImports,
+                });
             }
         }
     }
@@ -111,25 +111,23 @@ impl KotlinAnalyzer {
         definition_relationships: &mut Vec<DefinitionRelationship>,
     ) {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
-            if let Some(parent_fqn) = self.get_parent_fqn_string(child_fqn) {
-                if let Some((parent_def, _)) =
+            if let Some(parent_fqn) = self.get_parent_fqn_string(child_fqn)
+                && let Some((parent_def, _)) =
                     definition_map.get(&(parent_fqn.clone(), child_file_path.to_string()))
-                {
-                    if let Some(relationship_type) = self.get_definition_relationship_type(
-                        &parent_def.definition_type,
-                        &child_def.definition_type,
-                    ) {
-                        definition_relationships.push(DefinitionRelationship {
-                            from_file_path: parent_def.location.file_path.clone(),
-                            to_file_path: child_def.location.file_path.clone(),
-                            from_definition_fqn: parent_fqn,
-                            to_definition_fqn: child_fqn_string.clone(),
-                            from_location: parent_def.location.clone(),
-                            to_location: child_def.location.clone(),
-                            relationship_type,
-                        });
-                    }
-                }
+                && let Some(relationship_type) = self.get_definition_relationship_type(
+                    &parent_def.definition_type,
+                    &child_def.definition_type,
+                )
+            {
+                definition_relationships.push(DefinitionRelationship {
+                    from_file_path: parent_def.location.file_path.clone(),
+                    to_file_path: child_def.location.file_path.clone(),
+                    from_definition_fqn: parent_fqn,
+                    to_definition_fqn: child_fqn_string.clone(),
+                    from_location: parent_def.location.clone(),
+                    to_location: child_def.location.clone(),
+                    relationship_type,
+                });
             }
         }
     }
