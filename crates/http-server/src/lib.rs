@@ -68,10 +68,10 @@ pub async fn run(
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
         |origin: &HeaderValue, _| {
-            if let Ok(origin_str) = origin.to_str() {
-                if let Ok(uri) = origin_str.parse::<http::Uri>() {
-                    return uri.host() == Some("localhost");
-                }
+            if let Ok(origin_str) = origin.to_str()
+                && let Ok(uri) = origin_str.parse::<http::Uri>()
+            {
+                return uri.host() == Some("localhost");
             }
             false
         },

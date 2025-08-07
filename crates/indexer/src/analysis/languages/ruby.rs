@@ -100,25 +100,24 @@ impl RubyAnalyzer {
     ) {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             // Find parent definition by using FQN parts directly
-            if let Some(parent_fqn_string) = self.get_parent_fqn_from_parts(child_fqn) {
-                if let Some((parent_def, _)) =
+            if let Some(parent_fqn_string) = self.get_parent_fqn_from_parts(child_fqn)
+                && let Some((parent_def, _)) =
                     definition_map.get(&(parent_fqn_string.clone(), child_file_path.clone()))
-                {
-                    // Determine relationship type based on parent and child types
-                    if let Some(relationship_type) = self.get_definition_relationship_type(
-                        &parent_def.definition_type,
-                        &child_def.definition_type,
-                    ) {
-                        definition_relationships.push(DefinitionRelationship {
-                            from_file_path: parent_def.location.file_path.clone(),
-                            to_file_path: child_def.location.file_path.clone(),
-                            from_definition_fqn: parent_fqn_string,
-                            to_definition_fqn: child_fqn_string.clone(),
-                            from_location: parent_def.location.clone(),
-                            to_location: child_def.location.clone(),
-                            relationship_type,
-                        });
-                    }
+            {
+                // Determine relationship type based on parent and child types
+                if let Some(relationship_type) = self.get_definition_relationship_type(
+                    &parent_def.definition_type,
+                    &child_def.definition_type,
+                ) {
+                    definition_relationships.push(DefinitionRelationship {
+                        from_file_path: parent_def.location.file_path.clone(),
+                        to_file_path: child_def.location.file_path.clone(),
+                        from_definition_fqn: parent_fqn_string,
+                        to_definition_fqn: child_fqn_string.clone(),
+                        from_location: parent_def.location.clone(),
+                        to_location: child_def.location.clone(),
+                        relationship_type,
+                    });
                 }
             }
         }

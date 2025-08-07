@@ -75,7 +75,7 @@ impl<'a> SchemaManager<'a> {
         Self { database }
     }
 
-    fn get_connection(&self) -> KuzuConnection {
+    fn get_connection(&self) -> KuzuConnection<'_> {
         match KuzuConnection::new(self.database) {
             Ok(connection) => connection,
             Err(e) => panic!("Failed to create database connection: {e}"),

@@ -461,10 +461,10 @@ impl IndexingExecutor {
         cancellation_token: &Option<CancellationToken>,
         stage: &str,
     ) -> Result<()> {
-        if let Some(token) = cancellation_token {
-            if token.is_cancelled() {
-                return Err(anyhow::anyhow!("Operation cancelled {}", stage));
-            }
+        if let Some(token) = cancellation_token
+            && token.is_cancelled()
+        {
+            return Err(anyhow::anyhow!("Operation cancelled {}", stage));
         }
         Ok(())
     }

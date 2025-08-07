@@ -193,12 +193,12 @@ impl LocalStateService {
         F: FnOnce(&mut crate::manifest::ProjectMetadata),
     {
         self.with_manifest_mut(|manifest| {
-            if let Some(workspace_metadata) = manifest.get_workspace_folder_mut(workspace_path) {
-                if let Some(project_metadata) = workspace_metadata.get_project_mut(project_path) {
-                    f(project_metadata);
-                    workspace_metadata.update_status_from_projects();
-                    return true;
-                }
+            if let Some(workspace_metadata) = manifest.get_workspace_folder_mut(workspace_path)
+                && let Some(project_metadata) = workspace_metadata.get_project_mut(project_path)
+            {
+                f(project_metadata);
+                workspace_metadata.update_status_from_projects();
+                return true;
             }
             false
         })

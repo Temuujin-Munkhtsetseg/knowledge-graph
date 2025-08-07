@@ -408,17 +408,16 @@ impl WorkspaceManager {
                 for (project_path, project_metadata) in &workspace_metadata.projects {
                     if let Ok(repository) =
                         self.get_repository_for_project(workspace_folder_path, project_path)
-                    {
-                        if let Ok(project_info) = self.register_project_internal(
+                        && let Ok(project_info) = self.register_project_internal(
                             workspace_folder_path,
                             workspace_metadata,
                             project_path.clone(),
                             project_metadata.project_hash.clone(),
                             project_metadata,
                             repository,
-                        ) {
-                            project_infos.push(project_info);
-                        }
+                        )
+                    {
+                        project_infos.push(project_info);
                     }
                 }
             }
@@ -442,17 +441,16 @@ impl WorkspaceManager {
         for (project_path, project_metadata) in &workspace_metadata.projects {
             if let Ok(repository) =
                 self.get_repository_for_project(workspace_folder_path, project_path)
-            {
-                if let Ok(project_info) = self.register_project_internal(
+                && let Ok(project_info) = self.register_project_internal(
                     workspace_folder_path,
                     &workspace_metadata,
                     project_path.clone(),
                     project_metadata.project_hash.clone(),
                     project_metadata,
                     repository,
-                ) {
-                    project_infos.push(project_info);
-                }
+                )
+            {
+                project_infos.push(project_info);
             }
         }
 

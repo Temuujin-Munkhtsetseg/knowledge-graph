@@ -43,7 +43,7 @@ impl<'a> KuzuConnection<'a> {
         })
     }
 
-    pub fn query(&self, query: &str) -> Result<kuzu::QueryResult, DatabaseError> {
+    pub fn query(&self, query: &str) -> Result<kuzu::QueryResult<'_>, DatabaseError> {
         self.connection
             .query(query)
             .map_err(|e| DatabaseError::QueryExecutionError {
@@ -57,7 +57,7 @@ impl<'a> KuzuConnection<'a> {
         &self,
         statement: &mut kuzu::PreparedStatement,
         params: Vec<(&str, kuzu::Value)>,
-    ) -> Result<kuzu::QueryResult, DatabaseError> {
+    ) -> Result<kuzu::QueryResult<'_>, DatabaseError> {
         debug!(
             "Executing prepared statement with {} parameters",
             params.len()
@@ -231,22 +231,21 @@ impl<'a> KuzuConnection<'a> {
             // Check if it's a node or relationship table by trying to count
             let count_query = format!("MATCH (n:{table_name}) RETURN count(n)");
             if let Ok(mut result) = self.query(&count_query) {
-                if let Some(row) = result.next() {
-                    if let Some(kuzu::Value::Int64(count)) = row.first() {
-                        total_nodes += count;
-                        node_tables += 1;
-                    }
+                if let Some(row) = result.next()
+                    && let Some(kuzu::Value::Int64(count)) = row.first()
+                {
+                    total_nodes += count;
+                    node_tables += 1;
                 }
             } else {
                 // Try as relationship table
                 let rel_count_query = format!("MATCH ()-[r:{table_name}]-() RETURN count(r)");
-                if let Ok(mut result) = self.query(&rel_count_query) {
-                    if let Some(row) = result.next() {
-                        if let Some(kuzu::Value::Int64(count)) = row.first() {
-                            total_relationships += count;
-                            rel_tables += 1;
-                        }
-                    }
+                if let Ok(mut result) = self.query(&rel_count_query)
+                    && let Some(row) = result.next()
+                    && let Some(kuzu::Value::Int64(count)) = row.first()
+                {
+                    total_relationships += count;
+                    rel_tables += 1;
                 }
             }
         }
