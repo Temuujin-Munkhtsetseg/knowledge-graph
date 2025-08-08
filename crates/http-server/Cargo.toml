@@ -48,3 +48,8 @@ test-log = { workspace = true }
 [[bin]]
 name = "dev-server"
 path = "src/bin/dev.rs"
+
+# Enabling this feature with `--features no-frontend` allows to run any lint checks
+# with no frontend assets built
+[features]
+no-frontend = []

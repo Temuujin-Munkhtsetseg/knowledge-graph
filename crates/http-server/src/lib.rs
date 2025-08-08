@@ -53,9 +53,16 @@ pub struct AppState {
     pub job_dispatcher: Arc<JobDispatcher>,
 }
 
+#[cfg(feature = "no-frontend")]
 #[derive(Embed, Clone)]
 #[folder = "../../packages/frontend/dist"]
 #[allow_missing = true]
+struct Assets;
+
+#[cfg(not(feature = "no-frontend"))]
+#[derive(Embed, Clone)]
+#[folder = "../../packages/frontend/dist"]
+#[allow_missing = false]
 struct Assets;
 
 pub async fn run(
