@@ -35,7 +35,7 @@ impl DeployedIndexingExecutor {
         }
     }
 
-    pub fn execute(&self) -> Result<ProjectStatistics, String> {
+    pub async fn execute(&self) -> Result<ProjectStatistics, String> {
         let repo_name = std::path::Path::new(&self.repository_path)
             .file_name()
             .and_then(|name| name.to_str())
@@ -60,6 +60,7 @@ impl DeployedIndexingExecutor {
                 self.parquet_path.to_str().unwrap(),
                 self.database_path.to_str().unwrap(),
             )
+            .await
             .map_err(|e| e.to_string());
 
         match result {

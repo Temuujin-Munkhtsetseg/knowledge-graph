@@ -2354,9 +2354,9 @@ dependencies = [
  "arrow",
  "chrono",
  "criterion",
- "crossbeam-channel",
  "database",
  "event-bus",
+ "futures",
  "gitalisk-core",
  "ignore",
  "kuzu",
@@ -2384,6 +2384,7 @@ name = "indexer-c-bindings"
 version = "0.9.0"
 dependencies = [
  "indexer",
+ "tokio",
 ]
 
 [[package]]

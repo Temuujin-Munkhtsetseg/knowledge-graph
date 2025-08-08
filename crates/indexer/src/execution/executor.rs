@@ -43,7 +43,7 @@ impl IndexingExecutor {
         }
     }
 
-    pub fn execute_workspace_indexing(
+    pub async fn execute_workspace_indexing(
         &mut self,
         workspace_folder_path: PathBuf,
         cancellation_token: Option<CancellationToken>,
@@ -93,11 +93,14 @@ impl IndexingExecutor {
         for project_discovery in projects.iter() {
             self.check_cancellation(&cancellation_token, "during project iteration")?;
 
-            match self.execute_project_indexing(
-                workspace_folder_path_str,
-                &project_discovery.project_path,
-                cancellation_token.clone(),
-            ) {
+            match self
+                .execute_project_indexing(
+                    workspace_folder_path_str,
+                    &project_discovery.project_path,
+                    cancellation_token.clone(),
+                )
+                .await
+            {
                 Ok(project_stats) => {
                     // Event sent inside process_single_project
                     println!("Project reindexed: {}", &project_discovery.project_path);
@@ -141,7 +144,7 @@ impl IndexingExecutor {
         Ok(workspace_stats)
     }
 
-    pub fn execute_workspace_reindexing(
+    pub async fn execute_workspace_reindexing(
         &mut self,
         workspace_folder_path: PathBuf,
         workspace_changes: Vec<PathBuf>,
@@ -188,12 +191,15 @@ impl IndexingExecutor {
                 .cloned()
                 .collect();
 
-            match self.execute_project_reindexing(
-                workspace_folder_path_str,
-                &project_discovery.project_path,
-                project_changes,
-                cancellation_token.clone(),
-            ) {
+            match self
+                .execute_project_reindexing(
+                    workspace_folder_path_str,
+                    &project_discovery.project_path,
+                    project_changes,
+                    cancellation_token.clone(),
+                )
+                .await
+            {
                 Ok(_) => {
                     // Event sent inside process_single_project
                     println!("Project reindexed: {}", &project_discovery.project_path);
@@ -236,7 +242,7 @@ impl IndexingExecutor {
     // TODO: abstract this into its own executor
     // So that the server side, who cannot use `gitalisk` or the `workspace-manager`
     // can use this executor to index projects.
-    pub fn execute_project_indexing(
+    pub async fn execute_project_indexing(
         &mut self,
         workspace_folder_path: &str,
         project_path: &str,
@@ -269,13 +275,16 @@ impl IndexingExecutor {
         let indexer = RepositoryIndexer::new(repo_name.clone(), project_info.project_path.clone());
         let file_source = GitaliskFileSource::new(project_info.repository.clone());
 
-        match indexer.process_files_full_with_database(
-            &self.database,
-            file_source,
-            &self.config,
-            &parquet_directory,
-            &database_path,
-        ) {
+        match indexer
+            .process_files_full_with_database(
+                &self.database,
+                file_source,
+                &self.config,
+                &parquet_directory,
+                &database_path,
+            )
+            .await
+        {
             Ok(project_stats) => {
                 self.check_cancellation(&cancellation_token, "after re-indexing completed")?;
                 self.mark_project_status(
@@ -328,7 +337,7 @@ impl IndexingExecutor {
         }
     }
 
-    pub fn execute_project_reindexing(
+    pub async fn execute_project_reindexing(
         &mut self,
         workspace_folder_path: &str,
         project_path: &str,
@@ -388,13 +397,16 @@ impl IndexingExecutor {
         );
         info!("Re-indexing project with repo name: {:?}", repo_name);
 
-        match indexer.reindex_repository(
-            &self.database,
-            changes,
-            &self.config,
-            &database_path,
-            &parquet_directory,
-        ) {
+        match indexer
+            .reindex_repository(
+                &self.database,
+                changes,
+                &self.config,
+                &database_path,
+                &parquet_directory,
+            )
+            .await
+        {
             Ok(_) => {
                 self.check_cancellation(&cancellation_token, "after re-indexing completed")?;
                 self.mark_project_status(
@@ -606,7 +618,7 @@ mod tests {
 
         let result = execution.execute_workspace_indexing(empty_workspace, None);
 
-        assert!(result.is_ok());
+        assert!(result.await.is_ok());
     }
 
     #[tokio::test]
@@ -631,7 +643,7 @@ mod tests {
         let canonical_workspace_path = workspace_path.canonicalize().unwrap();
         let result = execution.execute_workspace_indexing(canonical_workspace_path.clone(), None);
 
-        assert!(result.is_ok());
+        assert!(result.await.is_ok());
 
         let mut events = Vec::new();
         while let Ok(event) = event_receiver.try_recv() {
@@ -689,7 +701,7 @@ mod tests {
             workspace_manager.list_projects_in_workspace(&canonical_workspace_path_str);
 
         let result = execution.execute_workspace_indexing(canonical_workspace_path, None);
-        assert!(result.is_ok());
+        assert!(result.await.is_ok());
 
         let mut events = Vec::new();
         while let Ok(event) = event_receiver.try_recv() {
@@ -762,8 +774,9 @@ mod tests {
         let discovered_projects = workspace_manager.list_projects_in_workspace(&workspace_str);
 
         if discovered_projects.is_empty() {
-            let result =
-                execution.execute_project_indexing(&workspace_str, "nonexistent_project", None);
+            let result = execution
+                .execute_project_indexing(&workspace_str, "nonexistent_project", None)
+                .await;
             assert!(result.is_err());
             assert!(
                 result
@@ -789,7 +802,7 @@ mod tests {
         let result =
             execution.execute_project_indexing(&workspace_str, &project.project_path, None);
 
-        assert!(result.is_ok());
+        assert!(result.await.is_ok());
 
         let mut events = Vec::new();
         while let Ok(event) = event_receiver.try_recv() {
@@ -827,11 +840,9 @@ mod tests {
 
         let mut event_receiver = event_bus.subscribe();
 
-        let result = execution.execute_project_indexing(
-            "nonexistent_workspace",
-            "nonexistent_project",
-            None,
-        );
+        let result = execution
+            .execute_project_indexing("nonexistent_workspace", "nonexistent_project", None)
+            .await;
 
         assert!(result.is_err());
         assert!(
@@ -875,7 +886,9 @@ mod tests {
         let discovered_projects =
             workspace_manager.list_projects_in_workspace(&canonical_workspace_path_str);
 
-        let _result = execution.execute_workspace_indexing(canonical_workspace_path, None);
+        let _result = execution
+            .execute_workspace_indexing(canonical_workspace_path, None)
+            .await;
 
         let mut events = Vec::new();
         while let Ok(event) = event_receiver.try_recv() {
@@ -956,7 +969,9 @@ mod tests {
         let token = CancellationToken::new();
         token.cancel();
 
-        let result = execution.execute_workspace_indexing(workspace_path, Some(token));
+        let result = execution
+            .execute_workspace_indexing(workspace_path, Some(token))
+            .await;
 
         assert!(result.is_err());
         assert!(
@@ -982,8 +997,9 @@ mod tests {
         let token = CancellationToken::new();
         token.cancel();
 
-        let result =
-            execution.execute_project_indexing("some_workspace", "some_project", Some(token));
+        let result = execution
+            .execute_project_indexing("some_workspace", "some_project", Some(token))
+            .await;
 
         assert!(result.is_err());
         assert!(
@@ -1104,7 +1120,7 @@ mod tests {
         let initial_indexing_result =
             execution.execute_workspace_indexing(canonical_workspace_path.clone(), None);
         assert!(
-            initial_indexing_result.is_ok(),
+            initial_indexing_result.await.is_ok(),
             "Initial workspace indexing should succeed"
         );
 
@@ -1154,7 +1170,7 @@ mod tests {
             None,
         );
 
-        assert!(result.is_ok(), "Workspace reindexing should succeed");
+        assert!(result.await.is_ok(), "Workspace reindexing should succeed");
 
         check_db_def_count(&database_path, 90);
 

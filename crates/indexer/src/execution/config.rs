@@ -4,8 +4,9 @@ pub struct IndexingConfigBuilder;
 
 impl IndexingConfigBuilder {
     pub fn build(threads: usize) -> IndexingConfig {
+        let effective_threads = IndexingConfigBuilder::get_effective_threads(threads);
         IndexingConfig {
-            worker_threads: IndexingConfigBuilder::get_effective_threads(threads),
+            worker_threads: effective_threads,
             max_file_size: 5_000_000,
             respect_gitignore: true,
         }

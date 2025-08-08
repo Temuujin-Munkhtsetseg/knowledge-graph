@@ -181,7 +181,7 @@ struct ReindexingPipelineSetup {
     output_path: String,
 }
 
-fn setup_reindexing_pipeline(
+async fn setup_reindexing_pipeline(
     database: &Arc<KuzuDatabase>,
     language: SupportedLanguage,
 ) -> ReindexingPipelineSetup {
@@ -224,6 +224,7 @@ fn setup_reindexing_pipeline(
             output_path,
             &database_path,
         )
+        .await
         .expect("Failed to process repository");
 
     // Verify we have graph data and that the database path is set
@@ -330,7 +331,7 @@ fn setup_reindexing_pipeline(
 #[tokio::test]
 async fn test_full_reindexing_pipeline_git_status_ruby() {
     let database = Arc::new(KuzuDatabase::new());
-    let mut setup = setup_reindexing_pipeline(&database, SupportedLanguage::Ruby);
+    let mut setup = setup_reindexing_pipeline(&database, SupportedLanguage::Ruby).await;
 
     // Modify the test repo, we should optionally allow
     modify_test_repo_ruby(&setup.local_repo.workspace_path, "test-repo")
@@ -362,6 +363,7 @@ async fn test_full_reindexing_pipeline_git_status_ruby() {
             &setup.database_path,
             &setup.output_path,
         )
+        .await
         .expect("Failed to reindex repository");
 
     println!("result: {:?}", result.writer_result);
@@ -405,7 +407,7 @@ async fn test_full_reindexing_pipeline_git_status_ruby() {
 #[tokio::test]
 async fn test_full_reindexing_pipeline_git_status_typescript() {
     let database = Arc::new(KuzuDatabase::new());
-    let mut setup = setup_reindexing_pipeline(&database, SupportedLanguage::TypeScript);
+    let mut setup = setup_reindexing_pipeline(&database, SupportedLanguage::TypeScript).await;
 
     // Modify the test repo, we should optionally allow
     modify_test_repo_typescript(&setup.local_repo.workspace_path, "test-repo")
@@ -437,6 +439,7 @@ async fn test_full_reindexing_pipeline_git_status_typescript() {
             &setup.database_path,
             &setup.output_path,
         )
+        .await
         .expect("Failed to reindex repository");
 
     println!("result: {:?}", result.writer_result);
@@ -485,7 +488,7 @@ async fn test_full_reindexing_pipeline_git_status_typescript() {
     assert_eq!(imported_symbols.len(), 5);
 }
 
-fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDatabase> {
+async fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDatabase> {
     // Create temporary repository with test files
     let repo_path = temp_repo.path.to_str().unwrap();
 
@@ -519,6 +522,7 @@ fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDatabase> {
             output_path,
             database_path_str,
         )
+        .await
         .expect("Failed to process repository");
 
     println!("✅ Kuzu database created and data imported successfully");
@@ -526,8 +530,8 @@ fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDatabase> {
     database
 }
 
-#[test]
-fn test_new_indexer_with_gitalisk_file_source() {
+#[tokio::test]
+async fn test_new_indexer_with_gitalisk_file_source() {
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
     let repo_path = temp_repo.path.to_str().unwrap();
 
@@ -550,6 +554,7 @@ fn test_new_indexer_with_gitalisk_file_source() {
 
     let result = indexer
         .index_files(&database, output_path, db_path, file_source, &config)
+        .await
         .expect("Failed to index files");
 
     assert!(
@@ -562,8 +567,8 @@ fn test_new_indexer_with_gitalisk_file_source() {
     println!("📊 Processed {} files", result.file_results.len());
 }
 
-#[test]
-fn test_new_indexer_with_path_file_source() {
+#[tokio::test]
+async fn test_new_indexer_with_path_file_source() {
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
     let repo_path = temp_repo.path.to_str().unwrap();
 
@@ -592,6 +597,7 @@ fn test_new_indexer_with_path_file_source() {
 
     let result = indexer
         .index_files(&database, output_path, db_path, file_source, &config)
+        .await
         .expect("Failed to index files");
 
     assert!(
@@ -604,8 +610,8 @@ fn test_new_indexer_with_path_file_source() {
     println!("📊 Processed {} files", result.file_results.len());
 }
 
-#[test]
-fn test_full_indexing_pipeline() {
+#[tokio::test]
+async fn test_full_indexing_pipeline() {
     // Create temporary repository with test files
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
     let repo_path = temp_repo.path.to_str().unwrap();
@@ -640,6 +646,7 @@ fn test_full_indexing_pipeline() {
             output_path,
             database_path_str,
         )
+        .await
         .expect("Failed to process repository");
 
     // Verify we processed files
@@ -749,8 +756,8 @@ fn test_full_indexing_pipeline() {
     );
 }
 
-#[test]
-fn test_inheritance_relationships() {
+#[tokio::test]
+async fn test_inheritance_relationships() {
     // Create temporary repository with test files
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
     let repo_path = temp_repo.path.to_str().unwrap();
@@ -784,6 +791,7 @@ fn test_inheritance_relationships() {
             output_path,
             database_path_str,
         )
+        .await
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -845,11 +853,11 @@ fn test_inheritance_relationships() {
     println!("📊 BaseModel has {} methods", base_model_methods.len());
 }
 
-#[test]
-fn test_simple_end_to_end_kuzu() {
+#[tokio::test]
+async fn test_simple_end_to_end_kuzu() {
     // Create temporary repository with test files
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
-    let database = setup_end_to_end_kuzu(&temp_repo);
+    let database = setup_end_to_end_kuzu(&temp_repo).await;
 
     let db_dir = temp_repo.workspace_path.join("db.kuzu");
     let database_instance = database
@@ -1069,8 +1077,8 @@ fn test_simple_end_to_end_kuzu() {
     }
 }
 
-#[test]
-fn test_detailed_data_inspection() {
+#[tokio::test]
+async fn test_detailed_data_inspection() {
     // Create temporary repository with test files
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
     let repo_path = temp_repo.path.to_str().unwrap();
@@ -1104,6 +1112,7 @@ fn test_detailed_data_inspection() {
             output_path,
             database_path_str,
         )
+        .await
         .expect("Failed to process repository");
 
     let graph_data = result.graph_data.expect("Should have graph data");
@@ -1227,8 +1236,8 @@ fn test_detailed_data_inspection() {
     println!("✅ All verification checks passed!");
 }
 
-#[test]
-fn test_server_side_repository_processing() {
+#[tokio::test]
+async fn test_server_side_repository_processing() {
     let repository_temp_path = create_non_git_test_repository();
     // convert repository_temp_path to path_buf. No mode code. 1 line
     let repository_path = repository_temp_path.path().to_path_buf();
@@ -1245,6 +1254,7 @@ fn test_server_side_repository_processing() {
         DeployedIndexingExecutor::new(repository_path, database_path, parquet_path, config);
     let result = server_indexer
         .execute()
+        .await
         .expect("Failed to process repository");
 
     assert!(!result.total_files > 0, "Should have processed some files");
@@ -1256,8 +1266,8 @@ fn test_server_side_repository_processing() {
     );
 }
 
-#[test]
-fn test_parquet_file_structure() {
+#[tokio::test]
+async fn test_parquet_file_structure() {
     use std::fs;
 
     // Create temporary repository with test files
@@ -1295,6 +1305,7 @@ fn test_parquet_file_structure() {
             output_path,
             database_path_str,
         )
+        .await
         .expect("Failed to process repository");
 
     let writer_result = result.writer_result.expect("Should have writer result");

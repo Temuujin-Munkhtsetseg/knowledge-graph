@@ -145,8 +145,10 @@ pub fn spawn_indexing_task(
         let threads = num_cpus::get();
         let config = IndexingConfigBuilder::build(threads);
         let mut executor = IndexingExecutor::new(database, workspace_manager, event_bus, config);
-        let result = tokio::task::spawn_blocking(move || {
-            executor.execute_workspace_indexing(workspace_path_buf, None)
+        let result = tokio::task::spawn(async move {
+            executor
+                .execute_workspace_indexing(workspace_path_buf, None)
+                .await
         })
         .await;
 

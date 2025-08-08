@@ -11,7 +11,6 @@ parser-core = { workspace = true }
 gitalisk-core = { workspace = true }
 workspace-manager = { path = "../workspace-manager" }
 anyhow = { workspace = true }
-crossbeam-channel = { workspace = true }
 log = { workspace = true }
 num_cpus = { workspace = true }
 serde = { workspace = true }
@@ -21,6 +20,7 @@ kuzu = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+futures = { workspace = true }
 event-bus = { path = "../event-bus" }
 chrono = { workspace = true }
 database = { path = "../database" }
