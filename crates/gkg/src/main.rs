@@ -203,7 +203,10 @@ async fn main() -> anyhow::Result<()> {
             let canonical_workspace_path = workspace_path.canonicalize()?;
             let start_time = std::time::Instant::now();
 
-            match executor.execute_workspace_indexing(canonical_workspace_path.clone(), None) {
+            match executor
+                .execute_workspace_indexing(canonical_workspace_path.clone(), None)
+                .await
+            {
                 Ok(workspace_stats) => {
                     let indexing_duration = start_time.elapsed();
                     println!(

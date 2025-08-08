@@ -215,8 +215,10 @@ impl WorkspaceWorker {
         );
 
         let cancellation_token = CancellationToken::new();
-        let result = tokio::task::spawn_blocking(move || {
-            executor.execute_workspace_indexing(workspace_path_buf, Some(cancellation_token))
+        let result = tokio::task::spawn(async move {
+            executor
+                .execute_workspace_indexing(workspace_path_buf, Some(cancellation_token))
+                .await
         })
         .await;
 
@@ -261,12 +263,14 @@ impl WorkspaceWorker {
         );
 
         let cancellation_token = CancellationToken::new();
-        let result = tokio::task::spawn_blocking(move || {
-            executor.execute_workspace_reindexing(
-                workspace_path_buf,
-                workspace_changes,
-                Some(cancellation_token),
-            )
+        let result = tokio::task::spawn(async move {
+            executor
+                .execute_workspace_reindexing(
+                    workspace_path_buf,
+                    workspace_changes,
+                    Some(cancellation_token),
+                )
+                .await
         })
         .await;
 
@@ -313,13 +317,15 @@ impl WorkspaceWorker {
         );
 
         let cancellation_token = CancellationToken::new();
-        let result = tokio::task::spawn_blocking(move || {
-            executor.execute_project_reindexing(
-                &workspace_path_copy,
-                &project_path_copy,
-                project_changes,
-                Some(cancellation_token),
-            )
+        let result = tokio::task::spawn(async move {
+            executor
+                .execute_project_reindexing(
+                    &workspace_path_copy,
+                    &project_path_copy,
+                    project_changes,
+                    Some(cancellation_token),
+                )
+                .await
         })
         .await;
 

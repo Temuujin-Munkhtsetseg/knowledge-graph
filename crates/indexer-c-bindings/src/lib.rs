@@ -31,7 +31,14 @@ pub extern "C" fn execute_repository_full_indexing(
 
     let server_indexer =
         DeployedIndexingExecutor::new(repository_path, database_path, parquet_path, config);
-    let result = server_indexer.execute();
+
+    // Create tokio runtime for async execution
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(_) => return 1, // Return error code if runtime creation fails
+    };
+
+    let result = rt.block_on(server_indexer.execute());
     result.map_or(1, |_| 0)
 }
 

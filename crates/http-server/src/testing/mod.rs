@@ -68,7 +68,7 @@ pub fn build_app_state(
 
 // Test helper function to index data for the test app state
 // This writes to the file system, so it should be called after the temp dir is created
-pub fn index_data(app_state: &AppState, workspace_folder_paths: Vec<PathBuf>) {
+pub async fn index_data(app_state: &AppState, workspace_folder_paths: Vec<PathBuf>) {
     let threads = num_cpus::get();
     let config = IndexingConfigBuilder::build(threads);
     let mut executor = IndexingExecutor::new(
@@ -79,7 +79,10 @@ pub fn index_data(app_state: &AppState, workspace_folder_paths: Vec<PathBuf>) {
     );
 
     for workspace_folder_path in workspace_folder_paths {
-        match executor.execute_workspace_indexing(workspace_folder_path.clone(), None) {
+        match executor
+            .execute_workspace_indexing(workspace_folder_path.clone(), None)
+            .await
+        {
             Ok(_stats) => {
                 info!("Successfully indexed workspace: {workspace_folder_path:?}");
             }

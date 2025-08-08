@@ -10,3 +10,4 @@ crate-type = ["staticlib"]
 
 [dependencies]
 indexer = { path = "../indexer" }
+tokio = { workspace = true }

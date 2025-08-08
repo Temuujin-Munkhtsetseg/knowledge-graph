@@ -11,21 +11,23 @@
 // ██║   ██║██╔══██╗██╔══██║██╔═══╝ ██╔══██║
 // ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║
 //  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
 use database::kuzu::database::KuzuDatabase;
 use database::kuzu::schema::SchemaManager;
+use futures::stream::{self, StreamExt};
 use gitalisk_core::repository::gitalisk_repository::FileInfo;
-use log::{debug, error, info, warn};
+use log::{info, warn};
 use std::path::Path;
-use std::thread;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::Semaphore;
+use tokio::task;
 
 // Simplified imports - file processing is now handled by the File module
 use crate::analysis::{AnalysisService, types::GraphData};
 use crate::mutation::changes::KuzuChanges;
 use database::kuzu::config::DatabaseConfig;
 
-use crate::parsing::processor::{FileProcessor, ProcessingResult};
+use crate::parsing::processor::FileProcessor;
 use crate::project::source::FileSource;
 use crate::writer::{WriterResult, WriterService};
 
@@ -34,12 +36,8 @@ pub use crate::parsing::changes::{FileChanges, FileChangesPathType};
 pub use crate::parsing::processor::{
     ErroredFile, FileProcessingResult, ProcessingStage, ProcessingStats, SkippedFile,
 };
+use crate::project::io::{ProcessingError, read_text_file};
 use crate::project::source::ChangesFileSource;
-
-const DEFAULT_WORKER_THREADS: usize = 8;
-const WORK_QUEUE_CAPACITY: usize = 10000;
-const RESULT_QUEUE_CAPACITY: usize = 10000;
-const RESULT_TIMEOUT_SECS: u64 = 30;
 
 type ParseFilesResult = (
     Vec<FileProcessingResult>,
@@ -48,7 +46,16 @@ type ParseFilesResult = (
     Vec<(String, String)>,
 );
 
+// Removed legacy worker task struct in favor of pipelined processing
+
 #[derive(Debug)]
+enum IndexingProcessingResult {
+    Success(FileProcessingResult),
+    Skipped(SkippedFile),
+    Error(ErroredFile),
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct IndexingConfig {
     pub worker_threads: usize,
     pub max_file_size: usize,
@@ -129,17 +136,6 @@ impl std::fmt::Display for FatalIndexingError {
     }
 }
 
-/// Internal messages for worker communication
-enum WorkMessage {
-    ProcessFile(FileInfo),
-}
-
-enum ResultMessage {
-    Success(FileProcessingResult),
-    Skipped(String, String),
-    Error(String, String),
-}
-
 pub struct RepositoryIndexer {
     pub name: String,
     pub path: String,
@@ -159,7 +155,7 @@ impl RepositoryIndexer {
     }
 
     /// FIXME: SEPARATE THIS INTO A SEPARATE MODULE/EXECUTOR
-    pub fn index_files<F: FileSource>(
+    pub async fn index_files<F: FileSource>(
         &self,
         database: &KuzuDatabase,
         output_directory: &str,
@@ -177,7 +173,7 @@ impl RepositoryIndexer {
         let total_files = files.len();
 
         let (file_results, skipped_files, errored_files, errors) =
-            self.parse_files(files, config)?;
+            self.parse_files(files, config).await?;
 
         let (graph_data, writer_result) = self.analyze_and_write_graph_data(
             database,
@@ -222,8 +218,7 @@ impl RepositoryIndexer {
         Ok(indexing_result)
     }
 
-    /// FIXME: SEPARATE THIS INTO A SEPARATE MODULE/EXECUTOR
-    pub fn parse_files(
+    pub async fn parse_files(
         &self,
         files: Vec<FileInfo>,
         config: &IndexingConfig,
@@ -232,169 +227,147 @@ impl RepositoryIndexer {
             return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
         }
 
-        let num_cores: usize = num_cpus::get();
+        let total_files = files.len();
+        info!("Processing {total_files} files");
+
+        // Calculate optimal worker count
+        let num_cores = num_cpus::get();
         let worker_count = if config.worker_threads == 0 {
-            if files.len() < num_cores && !files.is_empty() {
-                files.len()
-            } else {
-                std::cmp::max(num_cores, DEFAULT_WORKER_THREADS)
-            }
+            std::cmp::max(num_cores, 4)
         } else {
             config.worker_threads
         };
 
-        let total_files = files.len();
-        info!("Processing {total_files} files using {worker_count} worker threads");
+        info!("Using {worker_count} CPU workers (spawn_blocking)");
+        // FIXME: make this configurable in the future
+        let io_concurrency = std::cmp::max(worker_count * 2, 8);
+        let cpu_sem = Arc::new(Semaphore::new(worker_count));
 
-        let (work_sender, work_receiver) =
-            bounded::<WorkMessage>(WORK_QUEUE_CAPACITY.max(total_files));
-        let (result_sender, result_receiver) = bounded::<ResultMessage>(RESULT_QUEUE_CAPACITY);
-
-        let feeder_work_sender = work_sender;
-        let feeder_handle = thread::spawn(move || {
-            info!("Feeder thread started, distributing {} files", files.len());
-            for file_info in files {
-                if feeder_work_sender
-                    .send(WorkMessage::ProcessFile(file_info))
-                    .is_err()
-                {
-                    error!("Work channel closed unexpectedly");
-                    break;
-                }
-            }
-            drop(feeder_work_sender);
-            info!("Feeder thread finished");
-        });
-
-        let mut worker_handles = Vec::with_capacity(worker_count);
-        for worker_id in 0..worker_count {
-            let worker_receiver = work_receiver.clone();
-            let worker_sender = result_sender.clone();
-            let repo_path = self.path.clone();
-            let max_file_size = config.max_file_size;
-
-            let handle = thread::spawn(move || {
-                debug!("Worker {worker_id} started");
-                Self::worker_task(
-                    worker_id,
-                    worker_receiver,
-                    worker_sender,
-                    repo_path,
-                    max_file_size,
-                );
-                debug!("Worker {worker_id} finished");
-            });
-            worker_handles.push(handle);
-        }
-
-        drop(work_receiver);
-        drop(result_sender);
-
-        let mut file_results = Vec::new();
-        let mut errors = Vec::new();
-        let mut messages_received = 0;
-        let mut last_reported_percentage: u8 = 0;
-
+        // Collect results
+        let mut file_results = Vec::with_capacity(total_files);
         let mut skipped_files = Vec::new();
         let mut errored_files = Vec::new();
-        let mut processed_files = 0;
+        let mut errors = Vec::new();
 
-        // Use timeout-based result collection to prevent hanging
-        loop {
-            let timeout = Duration::from_secs(RESULT_TIMEOUT_SECS);
-            match result_receiver.recv_timeout(timeout) {
-                Ok(result_msg) => {
-                    messages_received += 1;
-                    match result_msg {
-                        ResultMessage::Success(file_result) => {
-                            processed_files += 1;
+        let repo_path = self.path.clone();
+        let max_file_size = config.max_file_size;
+        let start_time = Instant::now();
+        let mut last_progress = 0usize;
 
-                            file_results.push(file_result);
-                        }
-                        ResultMessage::Skipped(file_path, reason) => {
-                            skipped_files.push(SkippedFile {
-                                file_path: file_path.clone(),
-                                reason: reason.clone(),
-                                file_size: None,
-                            });
-                            debug!("Skipped {file_path}: {reason}");
-                        }
-                        ResultMessage::Error(file_path, error_msg) => {
-                            errored_files.push(ErroredFile {
-                                file_path: file_path.clone(),
-                                error_message: error_msg.clone(),
+        // Stage 1: async read -> Stage 2: CPU parse (bounded)
+        // TODO: investigate splitting the pipeline into multiple modules
+        // and turning the entire execution pipeline into a streaming model.
+        let pipeline = stream::iter(files.into_iter().map(|file_info| {
+            let file_path_str = file_info.path.to_string_lossy().to_string();
+            let full_path = if file_path_str.starts_with(&repo_path) {
+                file_info.path.to_path_buf()
+            } else {
+                Path::new(&repo_path).join(&file_info.path)
+            };
+            (file_info, full_path)
+        }))
+        .map(move |(file_info, full_path)| async move {
+            let content_res = read_text_file(&full_path, max_file_size).await;
+            (file_info, content_res)
+        })
+        .buffer_unordered(io_concurrency)
+        .map(|(file_info, content_res)| {
+            let cpu_sem = Arc::clone(&cpu_sem);
+            async move {
+                match content_res {
+                    Ok(content) => {
+                        // Acquire CPU permit then parse in blocking pool
+                        let _permit = cpu_sem.acquire_owned().await.expect("semaphore closed");
+                        let file_path_for_error = file_info.path.to_string_lossy().to_string();
+                        let fi_for_parse = file_info;
+                        let parse_res = task::spawn_blocking(move || {
+                            let processor = FileProcessor::from_file_info(fi_for_parse, &content);
+                            processor.process()
+                        })
+                        .await;
+
+                        match parse_res {
+                            Ok(proc_res) => match proc_res {
+                                crate::parsing::processor::ProcessingResult::Success(
+                                    file_result,
+                                ) => IndexingProcessingResult::Success(file_result),
+                                crate::parsing::processor::ProcessingResult::Skipped(skipped) => {
+                                    IndexingProcessingResult::Skipped(skipped)
+                                }
+                                crate::parsing::processor::ProcessingResult::Error(errored) => {
+                                    IndexingProcessingResult::Error(errored)
+                                }
+                            },
+                            Err(e) => IndexingProcessingResult::Error(ErroredFile {
+                                file_path: file_path_for_error,
+                                error_message: format!("Task execution failed: {e}"),
                                 error_stage: ProcessingStage::Unknown,
-                            });
-                            errors.push((file_path.clone(), error_msg.clone()));
-                            error!("Error processing {file_path}: {error_msg}");
+                            }),
                         }
                     }
-
-                    // Log progress only on each 5% chunk
-                    let progress_pct = (processed_files as f64 / total_files as f64) * 100.0;
-                    let current_percentage_chunk = (progress_pct / 5.0) as u8 * 5;
-
-                    if current_percentage_chunk > last_reported_percentage
-                        && current_percentage_chunk <= 100
-                    {
-                        let completed = processed_files;
-                        info!(
-                            "🔄 Progress: {}% ({}/{} files) - {} processed, {} skipped, {} errors",
-                            current_percentage_chunk,
-                            completed,
-                            total_files,
-                            processed_files,
-                            skipped_files.len(),
-                            errored_files.len()
-                        );
-                        last_reported_percentage = current_percentage_chunk;
-                    }
-
-                    if messages_received >= total_files {
-                        info!("All {total_files} files processed, finishing result collection");
-                        break;
-                    }
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    warn!(
-                        "Result collection timeout after {RESULT_TIMEOUT_SECS}s. Received {messages_received}/{total_files} messages. Checking if workers are still alive..."
-                    );
-
-                    let mut active_workers = 0;
-                    for handle in &worker_handles {
-                        if !handle.is_finished() {
-                            active_workers += 1;
+                    Err(processing_error) => match processing_error {
+                        ProcessingError::Skipped(file_path, reason) => {
+                            IndexingProcessingResult::Skipped(SkippedFile {
+                                file_path,
+                                reason,
+                                file_size: None,
+                            })
                         }
-                    }
+                        ProcessingError::Error(file_path, error_msg) => {
+                            IndexingProcessingResult::Error(ErroredFile {
+                                file_path,
+                                error_message: error_msg,
+                                error_stage: ProcessingStage::FileSystem,
+                            })
+                        }
+                    },
+                }
+            }
+        })
+        .buffer_unordered(worker_count);
 
-                    if active_workers == 0 {
-                        warn!("No active workers remaining, breaking from result collection");
-                        break;
-                    } else {
-                        info!("{active_workers} workers still active, continuing to wait...");
-                    }
+        tokio::pin!(pipeline);
+        while let Some(result) = pipeline.next().await {
+            match result {
+                IndexingProcessingResult::Success(file_result) => {
+                    file_results.push(file_result);
                 }
-                Err(RecvTimeoutError::Disconnected) => {
-                    info!("Result channel closed, all workers finished");
-                    break;
+                IndexingProcessingResult::Skipped(skipped) => {
+                    skipped_files.push(skipped);
                 }
+                IndexingProcessingResult::Error(errored) => {
+                    errors.push((errored.file_path.clone(), errored.error_message.clone()));
+                    errored_files.push(errored);
+                }
+            }
+
+            let completed = file_results.len() + skipped_files.len() + errored_files.len();
+            let progress = (completed * 100) / total_files;
+            if progress >= last_progress + 10 && progress <= 100 {
+                let elapsed = start_time.elapsed();
+                let files_per_sec = completed as f64 / elapsed.as_secs_f64();
+                info!(
+                    "🔄 Progress: {}% ({}/{} files) - {:.1} files/sec - {} processed, {} skipped, {} errors",
+                    progress,
+                    completed,
+                    total_files,
+                    files_per_sec,
+                    file_results.len(),
+                    skipped_files.len(),
+                    errored_files.len()
+                );
+                last_progress = progress;
             }
         }
 
-        info!("Waiting for feeder thread to complete...");
-        feeder_handle.join().map_err(|_| {
-            FatalIndexingError::FailedToProcessFiles("Feeder thread panicked".to_string())
-        })?;
-
+        let final_completed = file_results.len() + skipped_files.len() + errored_files.len();
         info!(
-            "Waiting for {} worker threads to complete...",
-            worker_handles.len()
+            "✅ Pipelined processing completed: {} processed, {} skipped, {} errors ({} total)",
+            file_results.len(),
+            skipped_files.len(),
+            errored_files.len(),
+            final_completed
         );
-        for (i, handle) in worker_handles.into_iter().enumerate() {
-            handle.join().map_err(|_| {
-                FatalIndexingError::FailedToProcessFiles(format!("Worker thread {i} panicked"))
-            })?;
-        }
 
         Ok((file_results, skipped_files, errored_files, errors))
     }
@@ -478,7 +451,7 @@ impl RepositoryIndexer {
         Ok((graph_data, writer_result))
     }
 
-    pub fn process_files_full_with_database<F: FileSource>(
+    pub async fn process_files_full_with_database<F: FileSource>(
         &self,
         database: &KuzuDatabase,
         file_source: F,
@@ -486,18 +459,20 @@ impl RepositoryIndexer {
         output_directory: &str,
         database_path: &str,
     ) -> Result<RepositoryIndexingResult, FatalIndexingError> {
-        let indexing_result = self.index_files(
-            database,
-            output_directory,
-            database_path,
-            file_source,
-            config,
-        )?;
+        let indexing_result = self
+            .index_files(
+                database,
+                output_directory,
+                database_path,
+                file_source,
+                config,
+            )
+            .await?;
 
         Ok(indexing_result)
     }
 
-    pub fn reindex_repository(
+    pub async fn reindex_repository(
         &mut self,
         database: &KuzuDatabase,
         file_changes: FileChanges,
@@ -540,7 +515,7 @@ impl RepositoryIndexer {
         let files = self.get_files(file_source, config)?;
 
         let (file_results, skipped_files, errored_files, errors) =
-            self.parse_files(files, config)?;
+            self.parse_files(files, config).await?;
 
         let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
@@ -620,88 +595,4 @@ impl RepositoryIndexer {
 
         Ok(())
     }
-
-    fn worker_task(
-        worker_id: usize,
-        work_receiver: Receiver<WorkMessage>,
-        result_sender: Sender<ResultMessage>,
-        repo_path: String,
-        max_file_size: usize,
-    ) {
-        while let Ok(work_msg) = work_receiver.recv() {
-            match work_msg {
-                WorkMessage::ProcessFile(file_info) => {
-                    let result =
-                        Self::process_single_file_info(file_info, &repo_path, max_file_size);
-
-                    let result_msg = match result {
-                        Ok(file_result) => ResultMessage::Success(file_result),
-                        Err(ProcessingError::Skipped(file_path, reason)) => {
-                            ResultMessage::Skipped(file_path, reason)
-                        }
-                        Err(ProcessingError::Error(file_path, error_msg)) => {
-                            ResultMessage::Error(file_path, error_msg)
-                        }
-                    };
-
-                    if result_sender.send(result_msg).is_err() {
-                        error!("Worker {worker_id}: Result channel closed");
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    fn process_single_file_info(
-        file_info: FileInfo,
-        repo_path: &str,
-        max_file_size: usize,
-    ) -> Result<FileProcessingResult, ProcessingError> {
-        let file_path = file_info.path.to_string_lossy().to_string();
-
-        let full_path = if file_path.starts_with(repo_path) {
-            file_path.clone()
-        } else {
-            Path::new(repo_path)
-                .join(&file_path)
-                .to_string_lossy()
-                .to_string()
-        };
-
-        let metadata = std::fs::metadata(&full_path).map_err(|e| {
-            ProcessingError::Error(file_path.clone(), format!("Failed to read metadata: {e}"))
-        })?;
-
-        // FIXME: MOVE THIS TO THE PROCESSOR
-        if metadata.len() as usize > max_file_size {
-            return Err(ProcessingError::Skipped(
-                file_path.clone(),
-                format!("File too large: {} bytes", metadata.len()),
-            ));
-        }
-
-        let content = std::fs::read_to_string(&full_path).map_err(|e| {
-            ProcessingError::Error(file_path.clone(), format!("Failed to read file: {e}"))
-        })?;
-
-        let file = FileProcessor::from_file_info(file_info, &content);
-
-        match file.process() {
-            ProcessingResult::Success(file_result) => Ok(file_result),
-            ProcessingResult::Skipped(skipped) => {
-                Err(ProcessingError::Skipped(skipped.file_path, skipped.reason))
-            }
-            ProcessingResult::Error(errored) => Err(ProcessingError::Error(
-                errored.file_path,
-                errored.error_message,
-            )),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum ProcessingError {
-    Skipped(String, String), // file_path, reason
-    Error(String, String),   // file_path, error_message
 }

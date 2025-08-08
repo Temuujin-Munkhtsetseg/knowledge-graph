@@ -346,7 +346,8 @@ mod tests {
         index_data(
             &app_state,
             workspace_folder_paths.iter().map(PathBuf::from).collect(),
-        );
+        )
+        .await;
 
         let app = Router::new()
             .route(
@@ -506,7 +507,8 @@ mod tests {
         index_data(
             &app_state,
             workspace_folder_paths.iter().map(PathBuf::from).collect(),
-        );
+        )
+        .await;
 
         let app = Router::new()
             .route(
@@ -635,7 +637,8 @@ mod tests {
         index_data(
             &app_state,
             workspace_folder_paths.iter().map(PathBuf::from).collect(),
-        );
+        )
+        .await;
 
         let app = Router::new()
             .route(
