@@ -178,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             if let Some(port) = is_server_running()? {
                 error!(
-                    "Error: gkg server is running on port {port}. Please stop it to run indexing."
+                    "Error: gkg server is running on port {port}. Please stop it to run indexing from the CLI."
                 );
                 process::exit(1);
             }
@@ -209,7 +209,7 @@ async fn main() -> anyhow::Result<()> {
             {
                 Ok(workspace_stats) => {
                     let indexing_duration = start_time.elapsed();
-                    println!(
+                    info!(
                         "✅ Workspace indexing completed in {:.2} seconds",
                         indexing_duration.as_secs_f64()
                     );
@@ -236,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
 
                 let lock_file_path = get_lock_file_path()?;
                 let mut file = fs::File::create(&lock_file_path)?;
-                println!("GKG Server started on http://127.0.0.1:{port}");
+                info!("GKG Server started on http://127.0.0.1:{port}");
                 // TODO: Change how we write to the logs
                 // Use color, severity, emoji, etc.
                 write!(file, "GKG Server started on http://127.0.0.1:{port}")?;
@@ -247,7 +247,7 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 let l_file = lock_file_path.clone();
-                println!("GKG Server logging to: {}", l_file.display());
+                info!("GKG Server logging to: {}", l_file.display());
                 ctrlc::set_handler(move || {
                     let _ = fs::remove_file(&l_file);
                     process::exit(0);
@@ -268,8 +268,8 @@ async fn main() -> anyhow::Result<()> {
 
                 Ok(())
             } else {
-                println!(
-                    "gkg server is in an inconsistent state. Please remove ~/.gkg/gkg-server.lock and try again."
+                info!(
+                    "gkg server is in an inconsistent state. Please check for stale processes and remove ~/.gkg/gkg-server.lock."
                 );
                 process::exit(1);
             }
