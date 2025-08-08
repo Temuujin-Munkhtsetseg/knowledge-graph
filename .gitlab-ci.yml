@@ -51,7 +51,7 @@ rust-lint-check:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   script:
-    - cargo clippy --all-targets --all-features -- -D warnings  
+    - cargo clippy --all-targets --all-features --features no-frontend -- -D warnings  
   extends: .rust-job-template
 
 xtasks-verify-newlines:
@@ -228,7 +228,8 @@ go-tests:
       else
         cargo install --locked hyperfine
       fi
-      
+      # Build gkg with no-frontend feature before running the benchmark
+      cargo build --bin gkg --release --features no-frontend
       # Run benchmark with unique filename
       OUTPUT_FILE="gkg-benchmark-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}-${ARCH}-${SCENARIO}.json"
       gitlab-xtasks benchmark hyperfine \
