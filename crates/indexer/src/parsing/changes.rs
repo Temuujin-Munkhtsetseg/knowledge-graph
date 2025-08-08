@@ -114,29 +114,29 @@ impl FileChanges {
     }
 
     pub fn pretty_print(&self) {
-        println!("Changed files: {:?}", self.changed_files.len());
-        println!("Deleted files: {:?}", self.deleted_files.len());
-        println!("Changed dirs: {:?}", self.changed_dirs.len());
-        println!("Deleted dirs: {:?}", self.deleted_dirs.len());
+        tracing::info!("Changed files: {:?}", self.changed_files.len());
+        tracing::info!("Deleted files: {:?}", self.deleted_files.len());
+        tracing::info!("Changed dirs: {:?}", self.changed_dirs.len());
+        tracing::info!("Deleted dirs: {:?}", self.deleted_dirs.len());
 
-        println!("\nChanged files:");
+        tracing::info!("\nChanged files:");
         for file in &self.changed_files {
-            println!("  {file}");
+            tracing::info!("  {file}");
         }
 
-        println!("Deleted files:");
+        tracing::info!("Deleted files:");
         for file in &self.deleted_files {
-            println!("  {file}");
+            tracing::info!("  {file}");
         }
 
-        println!("Changed dirs:");
+        tracing::info!("Changed dirs:");
         for dir in &self.changed_dirs {
-            println!("  {dir}");
+            tracing::info!("  {dir}");
         }
 
-        println!("Deleted dirs:");
+        tracing::info!("Deleted dirs:");
         for dir in &self.deleted_dirs {
-            println!("  {dir}");
+            tracing::info!("  {dir}");
         }
     }
 

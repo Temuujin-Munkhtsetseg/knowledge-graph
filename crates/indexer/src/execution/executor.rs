@@ -103,7 +103,7 @@ impl IndexingExecutor {
             {
                 Ok(project_stats) => {
                     // Event sent inside process_single_project
-                    println!("Project reindexed: {}", &project_discovery.project_path);
+                    info!("Project reindexed: {}", &project_discovery.project_path);
                     workspace_stats.add_project(project_stats);
                 }
                 Err(e) => {
@@ -202,7 +202,7 @@ impl IndexingExecutor {
             {
                 Ok(_) => {
                     // Event sent inside process_single_project
-                    println!("Project reindexed: {}", &project_discovery.project_path);
+                    info!("Project reindexed: {}", &project_discovery.project_path);
                 }
                 Err(e) => {
                     let error_msg = format!("Failed to re-index repository: {e}");
