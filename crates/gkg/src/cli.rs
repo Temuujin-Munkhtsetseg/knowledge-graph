@@ -49,5 +49,13 @@ pub enum Commands {
         /// Enable reindexing
         #[arg(long, default_value_t = false)]
         enable_reindexing: bool,
+
+        /// Start the server in detached mode (Unix only)
+        #[arg(long, default_value_t = false)]
+        detached: bool,
+
+        /// Internal: specify port to bind (used by detached launcher)
+        #[arg(long, hide = true)]
+        port: Option<u16>,
     },
 }

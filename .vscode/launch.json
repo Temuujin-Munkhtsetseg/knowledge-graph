@@ -6,7 +6,7 @@
             "request": "launch",
             "name": "Debug gkg index",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "cargo build",
+            "preLaunchTask": "build gkg",
             "program": "${workspaceFolder}/target/debug/gkg",
             "env": {
                 "RUST_BACKTRACE": "short"
@@ -20,14 +20,14 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug dev server",
+            "name": "Debug server",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "cargo build",
-            "program": "${workspaceFolder}/target/debug/dev-server",
+            "preLaunchTask": "build gkg",
+            "program": "${workspaceFolder}/target/debug/gkg",
             "env": {
                 "RUST_BACKTRACE": "short"
             },
-            "args": [],
+            "args": ["server"],
             "sourceMap": {},
             "sourceLanguages": [
                 "rust"

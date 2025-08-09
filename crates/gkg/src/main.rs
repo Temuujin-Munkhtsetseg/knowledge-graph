@@ -12,9 +12,12 @@ use logging::LogMode;
 use mcp::configuration::add_local_http_server_to_mcp_config;
 use serde::{Deserialize, Serialize};
 use single_instance::SingleInstance;
+use std::env;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, process};
@@ -65,10 +68,14 @@ fn is_server_running() -> Result<Option<u16>> {
     fs::File::open(&lock_file)?
         .read_to_string(&mut contents)
         .map_err(|e| anyhow::anyhow!("Could not read lock file: {}", e))?;
-    let port: u16 = contents
-        .trim()
-        .parse()
-        .map_err(|e| anyhow::anyhow!("Could not parse port from file: {}", e))?;
+    let port: u16 = match contents.trim().parse() {
+        Ok(p) => p,
+        Err(_) => {
+            // Stale or legacy lock file content, remove it and treat as not running
+            let _ = fs::remove_file(lock_file);
+            return Ok(None);
+        }
+    };
 
     if TcpStream::connect_timeout(
         &format!("127.0.0.1:{port}").parse()?,
@@ -146,6 +153,12 @@ fn handle_statistics_output(
             // Do not display statistics when option is not specified
         }
     }
+}
+
+fn print_server_info(port: u16) -> Result<()> {
+    let server_info = ServerInfo { port };
+    println!("{}", serde_json::to_string(&server_info)?);
+    Ok(())
 }
 
 #[tokio::main]
@@ -228,18 +241,92 @@ async fn main() -> anyhow::Result<()> {
         Commands::Server {
             register_mcp,
             enable_reindexing,
+            detached,
+            port: port_override,
             ..
         } => {
+            // Handle detached mode on Unix systems by spawning a background process
+            if detached {
+                // Ensure single instance first
+                let instance = get_single_instance()?;
+                if !instance.is_single() {
+                    if let Some(existing_port) = is_server_running()? {
+                        if let Some(mcp_config_path) = register_mcp {
+                            add_local_http_server_to_mcp_config(mcp_config_path, existing_port)?;
+                        }
+                        // Print and exit regardless of detached
+                        print_server_info(existing_port)?;
+                        return Ok(());
+                    } else {
+                        eprintln!(
+                            "gkg server is in an inconsistent state. Please check for stale processes and remove ~/.gkg/gkg.lock."
+                        );
+                        process::exit(1);
+                    }
+                }
+
+                // Preselect a port and create lock file before forking
+                let port = port_override.unwrap_or(http_server::find_unused_port()?);
+                let lock_file_path = get_lock_file_path()?;
+                let mut file = fs::File::create(&lock_file_path)?;
+                write!(file, "{port}")?;
+
+                // Print server info for caller then spawn child
+                print_server_info(port)?;
+
+                // Release instance lock before spawning the child
+                drop(instance);
+
+                #[cfg(unix)]
+                {
+                    let current_exe = env::current_exe()?;
+                    let mut args: Vec<String> = vec!["server".to_string()];
+                    if let Some(path) = register_mcp.as_ref() {
+                        args.push("--register-mcp".to_string());
+                        args.push(path.display().to_string());
+                    }
+                    if enable_reindexing {
+                        args.push("--enable-reindexing".to_string());
+                    }
+                    args.push("--port".to_string());
+                    args.push(port.to_string());
+
+                    let mut cmd = Command::new(current_exe);
+                    cmd.args(args)
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null());
+                    unsafe {
+                        cmd.pre_exec(|| {
+                            // Create a new session to fully detach from the controlling terminal
+                            libc::setsid();
+                            Ok(())
+                        });
+                    }
+
+                    let _child = cmd.spawn()?;
+                    return Ok(());
+                }
+
+                #[cfg(not(unix))]
+                {
+                    eprintln!("Detached mode is only supported on Unix-like systems");
+                    process::exit(1);
+                }
+            }
+
             let instance = get_single_instance()?;
             if instance.is_single() {
-                let port = http_server::find_unused_port()?;
+                let port = port_override.unwrap_or(http_server::find_unused_port()?);
 
                 let lock_file_path = get_lock_file_path()?;
                 let mut file = fs::File::create(&lock_file_path)?;
-                info!("GKG Server started on http://127.0.0.1:{port}");
-                // TODO: Change how we write to the logs
-                // Use color, severity, emoji, etc.
-                write!(file, "GKG Server started on http://127.0.0.1:{port}")?;
+
+                // print server info to stdout for caller to allow connection
+                print_server_info(port)?;
+
+                // write port to lock file for other services to detect the running server
+                write!(file, "{port}")?;
 
                 if let Some(mcp_config_path) = register_mcp {
                     // TODO: Add logging when this happens
@@ -247,7 +334,6 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 let l_file = lock_file_path.clone();
-                info!("GKG Server logging to: {}", l_file.display());
                 ctrlc::set_handler(move || {
                     let _ = fs::remove_file(&l_file);
                     process::exit(0);
@@ -266,10 +352,13 @@ async fn main() -> anyhow::Result<()> {
                     add_local_http_server_to_mcp_config(mcp_config_path, port)?;
                 }
 
+                // print server info to stdout for caller to allow connection
+                print_server_info(port)?;
+
                 Ok(())
             } else {
-                info!(
-                    "gkg server is in an inconsistent state. Please check for stale processes and remove ~/.gkg/gkg-server.lock."
+                eprintln!(
+                    "gkg server is in an inconsistent state. Please check for stale processes and remove ~/.gkg/gkg.lock."
                 );
                 process::exit(1);
             }
