@@ -2,10 +2,10 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "cargo build",
+            "label": "build gkg",
             "type": "shell",
             "command": "cargo",
-            "args": ["build"],
+            "args": ["build", "--bin", "gkg"],
             "group": {
                 "kind": "build",
                 "isDefault": true

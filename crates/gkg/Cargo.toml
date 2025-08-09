@@ -23,6 +23,11 @@ database = { path = "../database" }
 chrono = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+libc = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+assert_cmd = "2.0.16"
+predicates = "3.1.2"
+serde_json = { workspace = true }
+single-instance = { workspace = true }
