@@ -74,9 +74,17 @@ const {
   enabled: computed(() => Boolean(props.projectPath) && Boolean(props.workspaceFolderPath)),
 });
 
+const { data: graphStatsData } = useQuery({
+  queryKey: ['graph-stats', props.projectPath, props.workspaceFolderPath],
+  queryFn: () => apiClient.fetchGraphStats(props.workspaceFolderPath, props.projectPath),
+  enabled: computed(() => Boolean(props.projectPath) && Boolean(props.workspaceFolderPath)),
+});
+
 const hasData = computed(() => currentGraphData.value.nodes.length > 0);
 const nodeCount = computed(() => currentGraphData.value.nodes.length);
 const relationshipCount = computed(() => currentGraphData.value.relationships.length);
+const totalNodes = computed(() => graphStatsData.value?.total_nodes ?? null);
+const totalRelationships = computed(() => graphStatsData.value?.total_relationships ?? null);
 
 // Graph event handlers
 const handleNodeHover = (node: TypedGraphNode, event: { x: number; y: number }) => {
@@ -153,8 +161,8 @@ const handleNodeDoubleClick = async (node: TypedGraphNode) => {
     if (newNodes.length > 0) {
       centerOnNode(node.id);
     }
-  } catch (error) {
-    console.error('Failed to fetch node neighbors:', error);
+  } catch (_error) {
+    // no-op
   }
 };
 
@@ -188,10 +196,7 @@ const handleSearchClose = () => {
 
 const handleNodeSelected = async (node: TypedGraphNode) => {
   try {
-    if (!currentGraphData.value.project_info) {
-      console.error('No project info available');
-      return;
-    }
+    if (!currentGraphData.value.project_info) return;
 
     clearGraph();
 
@@ -214,8 +219,8 @@ const handleNodeSelected = async (node: TypedGraphNode) => {
 
     centerOnNode(node.id);
     isSearchVisible.value = false;
-  } catch (error) {
-    console.error('Failed to load selected node:', error);
+  } catch (_error) {
+    // no-op
   }
 };
 
@@ -306,8 +311,8 @@ onUnmounted(() => {
       />
       <div v-if="hasData" class="mt-4 space-y-3">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-          <span>{{ nodeCount }} nodes</span>
-          <span>{{ relationshipCount }} relationships</span>
+          <span>Showing {{ nodeCount }} nodes ({{ totalNodes ?? '—' }} total)</span>
+          <span>{{ relationshipCount }} relationships ({{ totalRelationships ?? '—' }} total)</span>
         </div>
         <GraphLegend :get-node-color="getNodeColor" />
       </div>
