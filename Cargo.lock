@@ -393,9 +393,9 @@ dependencies = [
 
 [[package]]
 name = "ast-grep-config"
-version = "0.39.2"
+version = "0.39.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d5e970ee9b6fd14414e4605896da0d601f4b315409a9a87252e49e54e30b5e6"
+checksum = "83879c656839d8d77549abd168589ccf5237426b4f1c137719cc266f261a52d9"
 dependencies = [
  "ast-grep-core",
  "bit-set",
@@ -409,9 +409,9 @@ dependencies = [
 
 [[package]]
 name = "ast-grep-core"
-version = "0.39.2"
+version = "0.39.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14deaa3db5c47c733b4d154b8a8c46d54c4f5273a8799ab058300d2a3a0cb215"
+checksum = "0285930b0f85caf5700e48eaa0b04e87794f75ce312477d1b0f6065e3cb9b49f"
 dependencies = [
  "bit-set",
  "regex",
@@ -421,9 +421,9 @@ dependencies = [
 
 [[package]]
 name = "ast-grep-language"
-version = "0.39.2"
+version = "0.39.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afee51e0a175f5b2ecc1e42cfde9facafbd9b24cce1c6c4de1578893f1ff6641"
+checksum = "5b66fb75a6ab91234de1c925c8f0c7be303e6ac43ec334b459a26e742395f28e"
 dependencies = [
  "ast-grep-core",
  "ignore",
@@ -437,6 +437,7 @@ dependencies = [
  "tree-sitter-elixir",
  "tree-sitter-go",
  "tree-sitter-haskell",
+ "tree-sitter-hcl",
  "tree-sitter-html",
  "tree-sitter-java",
  "tree-sitter-javascript",
@@ -1655,7 +1656,6 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.5.1"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.5.1#abb696198f2be5bd1f4894b1af2fa057dccef543"
 dependencies = [
  "ignore",
  "serde",
@@ -3259,7 +3259,6 @@ dependencies = [
 [[package]]
 name = "parser-core"
 version = "0.11.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.11.0#8cea2083386aa49598d070ce853679d4af2bd23b"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
@@ -4826,6 +4825,16 @@ name = "tree-sitter-haskell"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "977c51e504548cba13fc27cb5a2edab2124cf6716a1934915d07ab99523b05a4"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-hcl"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a7b2cc3d7121553b84309fab9d11b3ff3d420403eef9ae50f9fd1cd9d9cf012"
 dependencies = [
  "cc",
  "tree-sitter-language",

@@ -270,6 +270,8 @@ async fn main() -> anyhow::Result<()> {
                 let lock_file_path = get_lock_file_path()?;
                 let mut file = fs::File::create(&lock_file_path)?;
                 write!(file, "{port}")?;
+                // Ensure the lock file contents are flushed before we print JSON
+                file.flush()?;
 
                 // Print server info for caller then spawn child
                 print_server_info(port)?;
@@ -322,11 +324,13 @@ async fn main() -> anyhow::Result<()> {
                 let lock_file_path = get_lock_file_path()?;
                 let mut file = fs::File::create(&lock_file_path)?;
 
-                // print server info to stdout for caller to allow connection
-                print_server_info(port)?;
-
                 // write port to lock file for other services to detect the running server
                 write!(file, "{port}")?;
+                // Ensure the lock file contents are flushed before we print JSON
+                file.flush()?;
+
+                // print server info to stdout for caller to allow connection
+                print_server_info(port)?;
 
                 if let Some(mcp_config_path) = register_mcp {
                     // TODO: Add logging when this happens
