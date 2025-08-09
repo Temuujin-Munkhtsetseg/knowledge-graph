@@ -2,7 +2,7 @@ use crate::endpoints::{
     events::EventsEndpointDef,
     graph::{
         graph_initial::GraphInitialEndpointDef, graph_neighbors::GraphNeighborsEndpointDef,
-        graph_search::GraphSearchEndpointDef,
+        graph_search::GraphSearchEndpointDef, graph_stats::GraphStatsEndpointDef,
     },
     info::InfoEndpointDef,
     workspace_delete::WorkspaceDeleteEndpointDef,
@@ -25,4 +25,5 @@ pub struct ApiContract {
     pub graph_initial: GraphInitialEndpointDef,
     pub graph_neighbors: GraphNeighborsEndpointDef,
     pub graph_search: GraphSearchEndpointDef,
+    pub graph_stats: GraphStatsEndpointDef,
 }

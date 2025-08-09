@@ -15,6 +15,7 @@ use crate::{
             graph_initial::{GraphInitialEndpoint, graph_initial_handler},
             graph_neighbors::{GraphNeighborsEndpoint, graph_neighbors_handler},
             graph_search::{GraphSearchEndpoint, graph_search_handler},
+            graph_stats::{GraphStatsEndpoint, graph_stats_handler},
         },
         info::{InfoEndpoint, info_handler},
         workspace_delete::{WorkspaceDeleteEndpoint, delete_handler},
@@ -134,6 +135,7 @@ pub async fn run(
         .route(GraphInitialEndpoint::PATH, get(graph_initial_handler))
         .route(GraphNeighborsEndpoint::PATH, get(graph_neighbors_handler))
         .route(GraphSearchEndpoint::PATH, get(graph_search_handler))
+        .route(GraphStatsEndpoint::PATH, get(graph_stats_handler))
         .with_state(state);
 
     let app = Router::new()

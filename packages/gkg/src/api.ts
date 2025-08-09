@@ -2,7 +2,7 @@
 import type { TSProjectInfo } from "./project_info";
 import type { TSWorkspaceFolderInfo } from "./workspace_folder";
 
-export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, graph_neighbors: GraphNeighborsEndpointDef, graph_search: GraphSearchEndpointDef, };
+export type ApiContract = { info: InfoEndpointDef, workspace_index: WorkspaceIndexEndpointDef, workspace_list: WorkspaceListEndpointDef, workspace_delete: WorkspaceDeleteEndpointDef, index: WorkspaceIndexEndpointDef, events: EventsEndpointDef, graph_initial: GraphInitialEndpointDef, graph_neighbors: GraphNeighborsEndpointDef, graph_search: GraphSearchEndpointDef, graph_stats: GraphStatsEndpointDef, };
 
 export type DefinitionNodeProperties = { path: string, fqn: string, definition_type: string, start_line: number, primary_start_byte: bigint, primary_end_byte: bigint, total_locations: number, };
 
@@ -36,7 +36,11 @@ export type GraphNeighborsResponses = { "200": GraphNeighborsSuccessResponse | n
 
 export type GraphNeighborsSuccessResponse = { nodes: Array<TypedGraphNode>, relationships: Array<GraphRelationship>, project_info: TSProjectInfo, };
 
+export type GraphNodeCountsResponse = { directory_count: number, file_count: number, definition_count: number, imported_symbol_count: number, };
+
 export type GraphRelationship = { id: string, source: string, target: string, relationship_type: string, properties: Record<string, any>, };
+
+export type GraphRelationshipCountsResponse = { directory_relationships: number, file_relationships: number, definition_relationships: number, };
 
 export type GraphSearchEndpointDef = { method: HttpMethod, path: "/api/graph/search/{workspace_folder_path}/{project_path}", path_request: GraphSearchPathRequest, body_request: EmptyRequest, query_request: GraphSearchQueryRequest, responses: GraphSearchSuccessResponse, };
 
@@ -47,6 +51,14 @@ export type GraphSearchQueryRequest = { search_term: string, limit: number | nul
 export type GraphSearchResponses = { "200": GraphSearchSuccessResponse | null, "404": StatusResponse | null, "400": StatusResponse | null, "500": StatusResponse | null, };
 
 export type GraphSearchSuccessResponse = { nodes: Array<TypedGraphNode>, project_info: TSProjectInfo, };
+
+export type GraphStatsEndpointDef = { method: HttpMethod, path: "/api/graph/stats/{workspace_folder_path}/{project_path}", path_request: GraphStatsPathRequest, body_request: EmptyRequest, query_request: EmptyRequest, responses: GraphStatsSuccessResponse, };
+
+export type GraphStatsPathRequest = { workspace_folder_path: string, project_path: string, };
+
+export type GraphStatsResponses = { "200": GraphStatsSuccessResponse | null, "404": StatusResponse | null, "400": StatusResponse | null, "500": StatusResponse | null, };
+
+export type GraphStatsSuccessResponse = { total_nodes: number, total_relationships: number, node_counts: GraphNodeCountsResponse, relationship_counts: GraphRelationshipCountsResponse, project_info: TSProjectInfo, };
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 

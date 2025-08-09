@@ -9,6 +9,7 @@ import type {
   GraphNeighborsSuccessResponse,
   GraphSearchQueryRequest,
   GraphSearchSuccessResponse,
+  GraphStatsSuccessResponse,
   HttpMethod,
   ServerInfoResponse,
   WorkspaceDeleteBodyRequest,
@@ -31,6 +32,7 @@ const endpointPaths = {
   graph_neighbors:
     '/api/graph/neighbors/{workspace_folder_path}/{project_path}/{node_type}/{node_id}',
   graph_search: '/api/graph/search/{workspace_folder_path}/{project_path}',
+  graph_stats: '/api/graph/stats/{workspace_folder_path}/{project_path}',
 } satisfies Record<keyof ApiContract, ApiContract[keyof ApiContract]['path']>;
 
 export class ApiError extends Error {
@@ -301,6 +303,16 @@ export class ApiClient extends HttpClient {
       },
       queryParams,
     );
+  }
+
+  async fetchGraphStats(
+    workspaceFolderPath: string,
+    projectPath: string,
+  ): Promise<GraphStatsSuccessResponse> {
+    return this.get<GraphStatsSuccessResponse>(endpointPaths.graph_stats, undefined, {
+      workspace_folder_path: workspaceFolderPath,
+      project_path: projectPath,
+    });
   }
 }
 
