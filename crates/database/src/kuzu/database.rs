@@ -86,10 +86,36 @@ impl KuzuDatabase {
         // optionally remove the database from the map and the file system, called during a fresh indexing job
         if std::path::Path::new(database_path).exists() {
             self.drop_database(database_path);
-            std::fs::remove_file(database_path).unwrap();
-            info!(
-                "KuzuDatabase::force_new_database - Force resetting database at: {database_path}"
-            );
+            match std::fs::metadata(database_path) {
+                Ok(metadata) => {
+                    let removal_result = if metadata.is_dir() {
+                        std::fs::remove_dir_all(database_path)
+                    } else {
+                        std::fs::remove_file(database_path)
+                    };
+
+                    if let Err(e) = removal_result {
+                        tracing::error!(
+                            "KuzuDatabase::force_new_database - Failed to remove existing database path '{}': {}",
+                            database_path,
+                            e
+                        );
+                        return None;
+                    }
+
+                    info!(
+                        "KuzuDatabase::force_new_database - Force reset database at: {database_path}"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "KuzuDatabase::force_new_database - Failed to stat existing database path '{}': {}",
+                        database_path,
+                        e
+                    );
+                    return None;
+                }
+            }
         } else {
             info!("KuzuDatabase::force_new_database - Database not found at: {database_path}");
         }
