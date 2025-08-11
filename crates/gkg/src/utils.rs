@@ -34,24 +34,68 @@ pub fn get_single_instance() -> Result<SingleInstance> {
     Ok(SingleInstance::new(GKG_HTTP_SERVER)?)
 }
 
-pub fn is_server_running() -> Result<Option<u16>> {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ServerLockInfo {
+    pub port: u16,
+    #[serde(default)]
+    pub pid: Option<u32>,
+}
+
+pub fn read_lock_info() -> Result<Option<ServerLockInfo>> {
     let lock_file = get_lock_file_path()?;
     if !lock_file.exists() {
         return Ok(None);
     }
 
     let mut contents = String::new();
-    fs::File::open(&lock_file)?
-        .read_to_string(&mut contents)
-        .map_err(|e| anyhow::anyhow!("Could not read lock file: {}", e))?;
-    let port: u16 = match contents.trim().parse() {
-        Ok(p) => p,
-        Err(_) => {
-            // Stale or legacy lock file content: remove and treat as not running.
-            let _ = fs::remove_file(lock_file);
-            return Ok(None);
-        }
+    fs::File::open(&lock_file)?.read_to_string(&mut contents)?;
+
+    if let Ok(info) = serde_json::from_str::<ServerLockInfo>(contents.trim()) {
+        return Ok(Some(info));
+    }
+
+    // Corrupt lock; remove and treat as not running
+    let _ = fs::remove_file(lock_file);
+    Ok(None)
+}
+
+pub fn write_lock_info(info: &ServerLockInfo) -> Result<()> {
+    let lock_file_path = get_lock_file_path()?;
+    let json = serde_json::to_string(info)?;
+    fs::write(lock_file_path, json)?;
+    Ok(())
+}
+
+pub fn remove_lock_file() -> Result<()> {
+    let lock_file = get_lock_file_path()?;
+    if lock_file.exists() {
+        let _ = fs::remove_file(lock_file);
+    }
+    Ok(())
+}
+
+pub fn is_server_running() -> Result<Option<u16>> {
+    let Some(lock) = read_lock_info()? else {
+        return Ok(None);
     };
+    let port = lock.port;
+
+    // Prefer PID-based liveness when available to reduce race with startup
+    if let Some(pid) = lock.pid {
+        #[cfg(unix)]
+        {
+            if nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), None).is_ok() {
+                return Ok(Some(port));
+            } else {
+                let _ = remove_lock_file();
+                return Ok(None);
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            return Ok(Some(port));
+        }
+    }
 
     if TcpStream::connect_timeout(
         &format!("127.0.0.1:{port}").parse()?,
@@ -61,8 +105,6 @@ pub fn is_server_running() -> Result<Option<u16>> {
     {
         Ok(Some(port))
     } else {
-        // Server not reachable; remove stale lock file.
-        fs::remove_file(lock_file)?;
         Ok(None)
     }
 }

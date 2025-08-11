@@ -1,5 +1,9 @@
 [profile.default]
 default-filter = "not test(export_bindings_)"
+[[profile.default.overrides]]
+# Apply retries to possibly flaky tests of running binary
+filter = "package(gkg) + binary(server) + test(server_)"
+retries = 3
 [profile.ci]
 fail-fast = false
 [profile.ci.junit]

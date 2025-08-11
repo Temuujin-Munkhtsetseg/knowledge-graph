@@ -1,8 +1,9 @@
 //! This crate provides logging initialization for the gkg application.
 //!
-//! It supports two modes:
+//! It supports three modes:
 //! - CLI mode: logs to STDOUT.
-//! - Server mode: logs to a rolling file in the system's data directory.
+//! - ServerForeground mode: logs to STDERR and to a rolling file (keeps STDOUT clean for protocol output).
+//! - ServerBackground mode: logs to a rolling file in the system's data directory.
 //!
 //! The server logs are rolled over when they reach 5 MB. Rotated logs are
 //! compressed. The maximum number of rotated logs is 20.
@@ -14,7 +15,8 @@ use workspace_manager::data_directory::DataDirectory;
 
 pub enum LogMode {
     Cli,
-    Server,
+    ServerForeground,
+    ServerBackground,
 }
 
 pub fn init(
@@ -35,7 +37,33 @@ pub fn init(
                 .init();
             Ok(None)
         }
-        LogMode::Server => {
+        LogMode::ServerForeground => {
+            let data_dir = DataDirectory::get_system_data_directory()?;
+            let log_dir = data_dir.join("logs");
+
+            let writer = FileRotate::new(
+                log_dir.join("logs.log"),
+                AppendCount::new(20),
+                ContentLimit::Bytes(5 * 1024 * 1024),
+                Compression::OnRotate(1),
+                None,
+            );
+
+            let (non_blocking, guard) = tracing_appender::non_blocking(writer);
+
+            tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .with_writer(
+                    non_blocking
+                        .with_max_level(tracing::Level::INFO)
+                        .and(std::io::stderr),
+                )
+                .with_ansi(false)
+                .init();
+
+            Ok(Some(guard))
+        }
+        LogMode::ServerBackground => {
             let data_dir = DataDirectory::get_system_data_directory()?;
             let log_dir = data_dir.join("logs");
 

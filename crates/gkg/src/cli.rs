@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -40,22 +40,36 @@ pub enum Commands {
         #[arg(long, value_name = "FILE", num_args = 0..=1, require_equals = true)]
         stats_output: Option<Option<PathBuf>>,
     },
-    /// Start the gkg server
+    /// Manage the gkg server
     Server {
-        /// Path to MCP configuration file (example: ~/.gitlab/duo/mcp.json)
-        #[arg(long)]
-        register_mcp: Option<PathBuf>,
-
-        /// Enable reindexing
-        #[arg(long, default_value_t = false)]
-        enable_reindexing: bool,
-
-        /// Start the server in detached mode (Unix only)
-        #[arg(long, default_value_t = false)]
-        detached: bool,
-
-        /// Internal: specify port to bind (used by detached launcher)
-        #[arg(long, hide = true)]
-        port: Option<u16>,
+        #[command(subcommand)]
+        action: ServerCommands,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ServerCommands {
+    /// Start the gkg server
+    Start(ServerStartArgs),
+    /// Stop the running gkg server
+    Stop,
+}
+
+#[derive(Args, Debug)]
+pub struct ServerStartArgs {
+    /// Path to MCP configuration file (example: ~/.gitlab/duo/mcp.json)
+    #[arg(long)]
+    pub register_mcp: Option<PathBuf>,
+
+    /// Enable reindexing
+    #[arg(long, default_value_t = false)]
+    pub enable_reindexing: bool,
+
+    /// Start the server in detached mode (Unix only)
+    #[arg(long, default_value_t = false)]
+    pub detached: bool,
+
+    /// Internal: specify port to bind (used by detached launcher)
+    #[arg(long, hide = true)]
+    pub port: Option<u16>,
 }
