@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ArrowRight, Folder, File, Code, Link } from 'lucide-vue-next';
+import { ArrowRight, Folder, File, Code, Link, Import } from 'lucide-vue-next';
 import type { TypedGraphNode, GraphRelationship } from '@gitlab-org/gkg';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,8 @@ const getNodeIcon = (nodeType: string) => {
       return File;
     case 'DefinitionNode':
       return Code;
+    case 'ImportedSymbolNode':
+      return Import;
     default:
       return Link;
   }
@@ -38,6 +40,8 @@ const getNodeColor = (nodeType: string) => {
       return 'text-emerald-500';
     case 'DefinitionNode':
       return 'text-violet-500';
+    case 'ImportedSymbolNode':
+      return 'text-blue-500';
     default:
       return 'text-muted-foreground';
   }

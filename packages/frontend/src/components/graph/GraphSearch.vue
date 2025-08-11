@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
-import { Search, X, Folder, File, Code, Loader2 } from 'lucide-vue-next';
+import { Search, X, Folder, File, Code, Loader2, Import } from 'lucide-vue-next';
 import type { TypedGraphNode } from '@gitlab-org/gkg';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -71,6 +71,8 @@ const getNodeIcon = (nodeType: string) => {
       return File;
     case 'DefinitionNode':
       return Code;
+    case 'ImportedSymbolNode':
+      return Import;
     default:
       return File;
   }
@@ -84,6 +86,8 @@ const getNodeColor = (nodeType: string) => {
       return 'text-emerald-500';
     case 'DefinitionNode':
       return 'text-violet-500';
+    case 'ImportedSymbolNode':
+      return 'text-blue-500';
     default:
       return 'text-muted-foreground';
   }
@@ -96,6 +100,8 @@ const getBadgeVariant = (nodeType: string) => {
     case 'FileNode':
       return 'secondary';
     case 'DefinitionNode':
+      return 'outline';
+    case 'ImportedSymbolNode':
       return 'outline';
     default:
       return 'outline';
@@ -271,6 +277,26 @@ const highlightSearchTerm = (text: string, term: string) => {
                       <div class="flex items-center gap-2 mt-1">
                         <Badge variant="outline" class="text-xs">
                           {{ node.properties.definition_type }}
+                        </Badge>
+                        <span class="text-xs text-muted-foreground">
+                          Line {{ node.properties.start_line }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Imported Symbol Node -->
+                    <div v-else-if="node.node_type === 'ImportedSymbolNode'">
+                      <p
+                        class="text-xs text-muted-foreground truncate font-mono"
+                        v-html="highlightSearchTerm(node.label, debouncedSearchTerm)"
+                      />
+                      <p
+                        class="text-xs text-muted-foreground truncate"
+                        v-html="highlightSearchTerm(node.properties.path, debouncedSearchTerm)"
+                      />
+                      <div class="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" class="text-xs">
+                          {{ node.properties.import_type }}
                         </Badge>
                         <span class="text-xs text-muted-foreground">
                           Line {{ node.properties.start_line }}

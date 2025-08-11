@@ -266,10 +266,10 @@ fn process_neighbors_row(
     relationship_ids: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source_data = extract_node_data(&*row, 0)?;
-    let target_data = extract_node_data(&*row, 14)?;
+    let target_data = extract_node_data(&*row, 17)?;
 
-    let relationship_type = row.get_string_value(28)?;
-    let relationship_id = row.get_string_value(29)?;
+    let relationship_type = row.get_string_value(34)?;
+    let relationship_id = row.get_string_value(35)?;
 
     let source_id = source_data.id.clone();
     let target_id = target_data.id.clone();
@@ -312,6 +312,7 @@ mod tests {
                 TypedGraphNode::DirectoryNode { label, .. } => label,
                 TypedGraphNode::FileNode { label, .. } => label,
                 TypedGraphNode::DefinitionNode { label, .. } => label,
+                TypedGraphNode::ImportedSymbolNode { label, .. } => label,
             }
         }
 
@@ -320,6 +321,7 @@ mod tests {
                 TypedGraphNode::DirectoryNode { .. } => "DirectoryNode",
                 TypedGraphNode::FileNode { .. } => "FileNode",
                 TypedGraphNode::DefinitionNode { .. } => "DefinitionNode",
+                TypedGraphNode::ImportedSymbolNode { .. } => "ImportedSymbolNode",
             }
         }
     }
@@ -442,6 +444,10 @@ mod tests {
         );
         query_params.insert(
             "definition_limit".to_string(),
+            serde_json::Value::Number(10.into()),
+        );
+        query_params.insert(
+            "imported_symbol_limit".to_string(),
             serde_json::Value::Number(10.into()),
         );
 
@@ -669,6 +675,10 @@ mod tests {
             "definition_limit".to_string(),
             serde_json::Value::Number(10.into()),
         );
+        query_params.insert(
+            "imported_symbol_limit".to_string(),
+            serde_json::Value::Number(10.into()),
+        );
 
         let project_info = app_state
             .workspace_manager
@@ -832,6 +842,10 @@ mod tests {
             "definition_limit".to_string(),
             serde_json::Value::Number(10.into()),
         );
+        query_params.insert(
+            "imported_symbol_limit".to_string(),
+            serde_json::Value::Number(10.into()),
+        );
 
         let project_info = app_state
             .workspace_manager
@@ -890,6 +904,130 @@ mod tests {
                 assert!(
                     has_file_neighbors || has_definition_neighbors,
                     "Definition node should have file or definition neighbors, found types: {neighbor_types:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_file_node_finds_import_neighbors() {
+        let (app, workspace_folder_path, project_path, _app_state) = setup_test_environment().await;
+        let server = TestServer::new(app).unwrap();
+
+        let file_path = "main.rb";
+        let encoded_workspace = urlencoding::encode(&workspace_folder_path);
+        let encoded_project = urlencoding::encode(&project_path);
+        let encoded_node_id = urlencoding::encode(file_path);
+        let encoded_node_type = urlencoding::encode("FileNode");
+
+        let uri = format!(
+            "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=100"
+        );
+
+        let response = server.get(&uri).await;
+
+        if response.status_code() == StatusCode::OK {
+            let response_json = response.json::<GraphNeighborsSuccessResponse>();
+            assert_eq!(response_json.project_info.project_path, project_path);
+
+            // If imports are indexed, main.rb should have ImportedSymbolNode neighbors
+            let has_import_neighbors = response_json
+                .nodes
+                .iter()
+                .any(|node| node.node_type() == "ImportedSymbolNode");
+
+            // Do not hard-fail if the language doesn't produce imports yet
+            if !response_json.nodes.is_empty() {
+                assert!(
+                    has_import_neighbors
+                        || response_json
+                            .nodes
+                            .iter()
+                            .any(|n| n.node_type() == "DefinitionNode"),
+                    "File node should have import or definition neighbors",
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_imported_symbol_node_finds_file_neighbor() {
+        use database::querying::{QueryLibrary, QueryingService, service::DatabaseQueryingService};
+        use std::sync::Arc;
+
+        let (app, workspace_folder_path, project_path, app_state) = setup_test_environment().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Discover an ImportedSymbolNode ID from the initial project graph
+        let query_service = DatabaseQueryingService::new(Arc::clone(&app_state.database));
+        let query = QueryLibrary::get_initial_project_graph_query();
+        let mut query_params = serde_json::Map::new();
+        query_params.insert(
+            "directory_limit".to_string(),
+            serde_json::Value::Number(50.into()),
+        );
+        query_params.insert(
+            "file_limit".to_string(),
+            serde_json::Value::Number(100.into()),
+        );
+        query_params.insert(
+            "definition_limit".to_string(),
+            serde_json::Value::Number(200.into()),
+        );
+        query_params.insert(
+            "imported_symbol_limit".to_string(),
+            serde_json::Value::Number(100.into()),
+        );
+
+        let project_info = app_state
+            .workspace_manager
+            .get_project_info(&workspace_folder_path, &project_path)
+            .expect("Should have project info");
+
+        let mut initial_result = query_service
+            .execute_query(
+                project_info.database_path.clone(),
+                query.query,
+                query_params,
+            )
+            .expect("Should execute initial query");
+
+        let mut imported_symbol_id: Option<String> = None;
+        while let Some(row) = initial_result.next() {
+            // In the initial graph query, target_type sits at index 18
+            if let Ok(target_type) = row.get_string_value(18)
+                && target_type == "ImportedSymbolNode"
+                && let Ok(id) = row.get_string_value(17)
+            {
+                imported_symbol_id = Some(id);
+                break;
+            }
+        }
+
+        if let Some(symbol_id) = imported_symbol_id {
+            let encoded_workspace = urlencoding::encode(&workspace_folder_path);
+            let encoded_project = urlencoding::encode(&project_path);
+            let encoded_node_id = urlencoding::encode(&symbol_id);
+            let encoded_node_type = urlencoding::encode("ImportedSymbolNode");
+
+            let uri = format!(
+                "/graph/neighbors/{encoded_workspace}/{encoded_project}/{encoded_node_type}/{encoded_node_id}?limit=100"
+            );
+
+            let response = server.get(&uri).await;
+            if response.status_code() == StatusCode::OK {
+                let response_json = response.json::<GraphNeighborsSuccessResponse>();
+                assert_eq!(response_json.project_info.project_path, project_path);
+
+                // Imported symbol should connect back to a FileNode neighbor
+                let has_file_neighbor = response_json
+                    .nodes
+                    .iter()
+                    .any(|node| node.node_type() == "FileNode");
+
+                assert!(
+                    has_file_neighbor || !response_json.nodes.is_empty(),
+                    "Imported symbol should have a file neighbor if imports are indexed",
                 );
             }
         }

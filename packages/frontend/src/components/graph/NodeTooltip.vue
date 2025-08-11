@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { File, Folder, Code, MapPin, Hash, Type, Calendar, GitBranch } from 'lucide-vue-next';
+import {
+  File,
+  Folder,
+  Code,
+  Import,
+  MapPin,
+  Hash,
+  Type,
+  Calendar,
+  GitBranch,
+} from 'lucide-vue-next';
 import type { TypedGraphNode } from '@gitlab-org/gkg';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +35,8 @@ const nodeIcon = computed(() => {
       return File;
     case 'DefinitionNode':
       return Code;
+    case 'ImportedSymbolNode':
+      return Import;
     default:
       return null;
   }
@@ -40,6 +52,8 @@ const nodeColor = computed(() => {
       return 'bg-emerald-500';
     case 'DefinitionNode':
       return 'bg-violet-500';
+    case 'ImportedSymbolNode':
+      return 'bg-blue-500';
     default:
       return 'bg-muted';
   }
@@ -180,6 +194,40 @@ const tooltipPosition = computed(() => {
                 {{ node.properties.total_locations }} location{{
                   node.properties.total_locations !== 1 ? 's' : ''
                 }}
+              </Badge>
+            </div>
+            <Separator />
+            <div class="text-xs text-muted-foreground">
+              <div class="flex items-center gap-2">
+                <Calendar class="w-3 h-3 flex-shrink-0" />
+                <span class="min-w-0">{{
+                  formatLocation(
+                    node.properties.start_line,
+                    node.properties.primary_start_byte,
+                    node.properties.primary_end_byte,
+                  )
+                }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Imported Symbol Node Info -->
+          <div v-if="node.node_type === 'ImportedSymbolNode'" class="space-y-2">
+            <div class="flex items-start gap-2 text-xs sm:text-sm text-muted-foreground">
+              <Import class="w-3 h-3 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+              <span class="break-words whitespace-normal min-w-0">{{
+                node.properties.import_path
+              }}</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs sm:text-sm">
+              <Type class="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <Badge variant="secondary" class="text-xs">
+                {{ node.properties.import_type }}
+              </Badge>
+            </div>
+            <div class="flex items-center gap-2 text-xs sm:text-sm">
+              <Badge variant="outline" class="text-xs">
+                {{ node.properties.import_alias ? node.properties.import_alias : node.label }}
               </Badge>
             </div>
             <Separator />

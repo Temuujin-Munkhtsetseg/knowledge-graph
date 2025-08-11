@@ -6,6 +6,7 @@ export interface GraphTheme {
     DirectoryNode: string;
     FileNode: string;
     DefinitionNode: string;
+    ImportedSymbolNode: string;
     default: string;
   };
   edge: string;
@@ -27,6 +28,7 @@ export const useGraphTheme = () => {
         DirectoryNode: '#fbbf24', // Brighter amber for directories
         FileNode: '#34d399', // Brighter emerald for files
         DefinitionNode: '#a78bfa', // Brighter violet for definitions
+        ImportedSymbolNode: '#3b82f6', // Brighter blue for imported symbols
         default: '#9ca3af',
       },
       edge: '#6b7280', // Much brighter gray for visibility
@@ -41,6 +43,7 @@ export const useGraphTheme = () => {
         DirectoryNode: '#f59e0b', // Standard amber
         FileNode: '#10b981', // Standard emerald
         DefinitionNode: '#8b5cf6', // Standard violet
+        ImportedSymbolNode: '#3b82f6', // Standard blue
         default: '#6b7280',
       },
       edge: '#9ca3af', // Better visibility in light mode
@@ -69,6 +72,8 @@ export const useGraphTheme = () => {
         return 6;
       case 'DefinitionNode':
         return 4;
+      case 'ImportedSymbolNode':
+        return 3;
       default:
         return 5;
     }

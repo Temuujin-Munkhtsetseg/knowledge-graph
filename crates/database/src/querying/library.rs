@@ -198,6 +198,9 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as source_primary_start_byte,
                     CAST(0 AS INT64) as source_primary_end_byte,
                     CAST(0 AS INT64) as source_total_locations,
+                    '' as source_import_type,
+                    '' as source_import_path,
+                    '' as source_import_alias,
                     m.id as target_id,
                     'DirectoryNode' as target_type,
                     m.name as target_name,
@@ -212,6 +215,9 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as target_primary_start_byte,
                     CAST(0 AS INT64) as target_primary_end_byte,
                     CAST(0 AS INT64) as target_total_locations,
+                    '' as target_import_type,
+                    '' as target_import_path,
+                    '' as target_import_alias,
                     'DIRECTORY_RELATIONSHIPS' as relationship_type,
                     id(r) as relationship_id,
                     1 as order_priority
@@ -233,6 +239,9 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as source_primary_start_byte,
                     CAST(0 AS INT64) as source_primary_end_byte,
                     CAST(0 AS INT64) as source_total_locations,
+                    '' as source_import_type,
+                    '' as source_import_path,
+                    '' as source_import_alias,
                     f.id as target_id,
                     'FileNode' as target_type,
                     f.name as target_name,
@@ -247,6 +256,9 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as target_primary_start_byte,
                     CAST(0 AS INT64) as target_primary_end_byte,
                     CAST(0 AS INT64) as target_total_locations,
+                    '' as target_import_type,
+                    '' as target_import_path,
+                    '' as target_import_alias,
                     'DIRECTORY_RELATIONSHIPS' as relationship_type,
                     id(r) as relationship_id,
                     1 as order_priority
@@ -268,6 +280,9 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as source_primary_start_byte,
                     CAST(0 AS INT64) as source_primary_end_byte,
                     CAST(0 AS INT64) as source_total_locations,
+                    '' as source_import_type,
+                    '' as source_import_path,
+                    '' as source_import_alias,
                     d.id as target_id,
                     'DefinitionNode' as target_type,
                     d.name as target_name,
@@ -282,6 +297,50 @@ impl QueryLibrary {
                     d.primary_start_byte as target_primary_start_byte,
                     d.primary_end_byte as target_primary_end_byte,
                     CAST(d.total_locations AS INT64) as target_total_locations,
+                    '' as target_import_type,
+                    '' as target_import_path,
+                    '' as target_import_alias,
+                    'FILE_RELATIONSHIPS' as relationship_type,
+                    id(r) as relationship_id,
+                    2 as order_priority
+                LIMIT $file_limit
+                UNION
+                MATCH (f:FileNode)-[r:FILE_RELATIONSHIPS]-(i:ImportedSymbolNode)
+                RETURN 
+                    f.id as source_id,
+                    'FileNode' as source_type,
+                    f.name as source_name,
+                    f.path as source_path,
+                    f.absolute_path as source_absolute_path,
+                    f.repository_name as source_repository_name,
+                    '' as source_fqn,
+                    '' as source_definition_type,
+                    f.language as source_language,
+                    f.extension as source_extension,
+                    CAST(0 AS INT64) as source_start_line,
+                    CAST(0 AS INT64) as source_primary_start_byte,
+                    CAST(0 AS INT64) as source_primary_end_byte,
+                    CAST(0 AS INT64) as source_total_locations,
+                    '' as source_import_type,
+                    '' as source_import_path,
+                    '' as source_import_alias,
+                    i.id as target_id,
+                    'ImportedSymbolNode' as target_type,
+                    i.name as target_name,
+                    i.file_path as target_path,
+                    '' as target_absolute_path,
+                    '' as target_repository_name,
+                    '' as target_fqn,
+                    '' as target_definition_type,
+                    '' as target_language,
+                    '' as target_extension,
+                    CAST(i.start_line AS INT64) as target_start_line,
+                    i.start_byte as target_primary_start_byte,
+                    i.end_byte as target_primary_end_byte,
+                    CAST(0 AS INT64) as target_total_locations,
+                    i.import_type as target_import_type,
+                    i.import_path as target_import_path,
+                    i.alias as target_import_alias,
                     'FILE_RELATIONSHIPS' as relationship_type,
                     id(r) as relationship_id,
                     2 as order_priority
@@ -303,6 +362,9 @@ impl QueryLibrary {
                     d1.primary_start_byte as source_primary_start_byte,
                     d1.primary_end_byte as source_primary_end_byte,
                     CAST(d1.total_locations AS INT64) as source_total_locations,
+                    '' as source_import_type,
+                    '' as source_import_path,
+                    '' as source_import_alias,
                     d2.id as target_id,
                     'DefinitionNode' as target_type,
                     d2.name as target_name,
@@ -317,10 +379,54 @@ impl QueryLibrary {
                     d2.primary_start_byte as target_primary_start_byte,
                     d2.primary_end_byte as target_primary_end_byte,
                     CAST(d2.total_locations AS INT64) as target_total_locations,
+                    '' as target_import_type,
+                    '' as target_import_path,
+                    '' as target_import_alias,
                     'DEFINITION_RELATIONSHIPS' as relationship_type,
                     id(r) as relationship_id,
                     3 as order_priority
                 LIMIT $definition_limit
+                UNION
+                MATCH (d:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]-(i:ImportedSymbolNode)
+                RETURN 
+                    d.id as source_id,
+                    'DefinitionNode' as source_type,
+                    d.name as source_name,
+                    d.primary_file_path as source_path,
+                    '' as source_absolute_path,
+                    '' as source_repository_name,
+                    d.fqn as source_fqn,
+                    d.definition_type as source_definition_type,
+                    '' as source_language,
+                    '' as source_extension,
+                    CAST(d.start_line AS INT64) as source_start_line,
+                    d.primary_start_byte as source_primary_start_byte,
+                    d.primary_end_byte as source_primary_end_byte,
+                    CAST(d.total_locations AS INT64) as source_total_locations,
+                    '' as source_import_type,
+                    '' as source_import_path,
+                    '' as source_import_alias,
+                    i.id as target_id,
+                    'ImportedSymbolNode' as target_type,
+                    i.name as target_name,
+                    i.file_path as target_path,
+                    '' as target_absolute_path,
+                    '' as target_repository_name,
+                    '' as target_fqn,
+                    '' as target_definition_type,
+                    '' as target_language,
+                    '' as target_extension,
+                    CAST(i.start_line AS INT64) as target_start_line,
+                    i.start_byte as target_primary_start_byte,
+                    i.end_byte as target_primary_end_byte,
+                    CAST(0 AS INT64) as target_total_locations,
+                    i.import_type as target_import_type,
+                    i.import_path as target_import_path,
+                    i.alias as target_import_alias,
+                    'DEFINITION_RELATIONSHIPS' as relationship_type,
+                    id(r) as relationship_id,
+                    3 as order_priority
+                LIMIT $imported_symbol_limit
             "#
             .to_string(),
             parameters: HashMap::from([
@@ -349,6 +455,15 @@ impl QueryLibrary {
                         description: "The maximum number of definition relationships to return.",
                         required: false,
                         definition: QueryParameterDefinition::Int(Some(200)),
+                    },
+                ),
+                (
+                    "imported_symbol_limit",
+                    QueryParameter {
+                        name: "imported_symbol_limit",
+                        description: "The maximum number of imported symbol relationships to return.",
+                        required: false,
+                        definition: QueryParameterDefinition::Int(Some(50)),
                     },
                 ),
             ]),
@@ -384,6 +499,9 @@ impl QueryLibrary {
                 ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
                 ("relationship_id", STRING_MAPPER),
                 ("order_priority", INT_MAPPER),
+                ("import_type", STRING_MAPPER),
+                ("import_path", STRING_MAPPER),
+                ("import_alias", STRING_MAPPER),
             ]),
         }
     }
@@ -406,6 +524,9 @@ impl QueryLibrary {
                 CAST(0 AS INT64) as {alias}_primary_start_byte,
                 CAST(0 AS INT64) as {alias}_primary_end_byte,
                 CAST(0 AS INT64) as {alias}_total_locations,
+                '' as {alias}_import_type,
+                '' as {alias}_import_path,
+                '' as {alias}_import_alias,
             "#
             ),
             "FileNode" => format!(
@@ -424,6 +545,9 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as {alias}_primary_start_byte,
                     CAST(0 AS INT64) as {alias}_primary_end_byte,
                     CAST(0 AS INT64) as {alias}_total_locations,
+                    '' as {alias}_import_type,
+                    '' as {alias}_import_path,
+                    '' as {alias}_import_alias,
                 "#
             ),
             "DefinitionNode" => format!(
@@ -442,6 +566,30 @@ impl QueryLibrary {
                     {alias}.primary_start_byte as {alias}_primary_start_byte,
                     {alias}.primary_end_byte as {alias}_primary_end_byte,
                     CAST({alias}.total_locations AS INT64) as {alias}_total_locations,
+                    '' as {alias}_import_type,
+                    '' as {alias}_import_path,
+                    '' as {alias}_import_alias,
+                "#
+            ),
+            "ImportedSymbolNode" => format!(
+                r#"
+                    {alias}.id as {alias}_id,
+                    'ImportedSymbolNode' as {alias}_type,
+                    {alias}.name as {alias}_name,
+                    {alias}.file_path as {alias}_path,
+                    '' as {alias}_absolute_path,
+                    '' as {alias}_repository_name,
+                    '' as {alias}_fqn,
+                    '' as {alias}_definition_type,
+                    '' as {alias}_language,
+                    '' as {alias}_extension,
+                    CAST({alias}.start_line AS INT64) as {alias}_start_line,
+                    {alias}.start_byte as {alias}_primary_start_byte,
+                    {alias}.end_byte as {alias}_primary_end_byte,
+                    CAST(0 AS INT64) as {alias}_total_locations,
+                    {alias}.import_type as {alias}_import_type,
+                    {alias}.import_path as {alias}_import_path,
+                    {alias}.alias as {alias}_import_alias,
                 "#
             ),
             _ => "".to_string(),
@@ -477,6 +625,12 @@ impl QueryLibrary {
                     "DefinitionNode",
                     "source.id = $node_id",
                 ),
+                (
+                    "FileNode",
+                    "FILE_RELATIONSHIPS",
+                    "ImportedSymbolNode",
+                    "source.id = $node_id",
+                ),
             ],
             "DefinitionNode" => vec![
                 (
@@ -490,6 +644,26 @@ impl QueryLibrary {
                     "DEFINITION_RELATIONSHIPS",
                     "DefinitionNode",
                     "source.id = $node_id",
+                ),
+                (
+                    "DefinitionNode",
+                    "DEFINITION_RELATIONSHIPS",
+                    "ImportedSymbolNode",
+                    "source.id = $node_id",
+                ),
+            ],
+            "ImportedSymbolNode" => vec![
+                (
+                    "FileNode",
+                    "FILE_RELATIONSHIPS",
+                    "ImportedSymbolNode",
+                    "target.id = $node_id",
+                ),
+                (
+                    "DefinitionNode",
+                    "DEFINITION_RELATIONSHIPS",
+                    "ImportedSymbolNode",
+                    "target.id = $node_id",
                 ),
             ],
             _ => return None,
@@ -599,7 +773,10 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as start_line,
                     CAST(0 AS INT64) as primary_start_byte,
                     CAST(0 AS INT64) as primary_end_byte,
-                    CAST(0 AS INT64) as total_locations
+                    CAST(0 AS INT64) as total_locations,
+                    '' as import_type,
+                    '' as import_path,
+                    '' as import_alias
                 UNION
                 MATCH (f:FileNode)
                 WHERE toLower(f.name) CONTAINS toLower($search_term)
@@ -618,7 +795,10 @@ impl QueryLibrary {
                     CAST(0 AS INT64) as start_line,
                     CAST(0 AS INT64) as primary_start_byte,
                     CAST(0 AS INT64) as primary_end_byte,
-                    CAST(0 AS INT64) as total_locations
+                    CAST(0 AS INT64) as total_locations,
+                    '' as import_type,
+                    '' as import_path,
+                    '' as import_alias
                 UNION
                 MATCH (def:DefinitionNode)
                 WHERE toLower(def.name) CONTAINS toLower($search_term)
@@ -637,7 +817,33 @@ impl QueryLibrary {
                     CAST(def.start_line AS INT64) as start_line,
                     def.primary_start_byte as primary_start_byte,
                     def.primary_end_byte as primary_end_byte,
-                    CAST(def.total_locations AS INT64) as total_locations
+                    CAST(def.total_locations AS INT64) as total_locations,
+                    '' as import_type,
+                    '' as import_path,
+                    '' as import_alias
+                UNION
+                MATCH (imp:ImportedSymbolNode)
+                WHERE toLower(imp.name) CONTAINS toLower($search_term)
+                   OR toLower(imp.import_path) CONTAINS toLower($search_term)
+                   OR toLower(imp.alias) CONTAINS toLower($search_term)
+                RETURN 
+                    imp.id as id,
+                    'ImportedSymbolNode' as node_type,
+                    imp.name as name,
+                    imp.file_path as path,
+                    '' as absolute_path,
+                    '' as repository_name,
+                    '' as fqn,
+                    '' as definition_type,
+                    '' as language,
+                    '' as extension,
+                    CAST(imp.start_line AS INT64) as start_line,
+                    imp.start_byte as primary_start_byte,
+                    imp.end_byte as primary_end_byte,
+                    CAST(0 AS INT64) as total_locations,
+                    imp.import_type as import_type,
+                    imp.import_path as import_path,
+                    imp.alias as import_alias
                 ORDER BY node_type, name
                 LIMIT $limit
             "#
@@ -677,6 +883,9 @@ impl QueryLibrary {
                 ("primary_start_byte", INT_MAPPER),
                 ("primary_end_byte", INT_MAPPER),
                 ("total_locations", INT_MAPPER),
+                ("import_type", STRING_MAPPER),
+                ("import_path", STRING_MAPPER),
+                ("import_alias", STRING_MAPPER),
             ]),
         }
     }

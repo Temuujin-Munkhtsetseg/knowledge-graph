@@ -26,5 +26,12 @@ defineProps<Props>();
       />
       <span>Definition</span>
     </div>
+    <div class="flex items-center gap-1.5">
+      <div
+        class="w-3 h-3 rounded-full"
+        :style="{ backgroundColor: getNodeColor('ImportedSymbolNode') }"
+      />
+      <span>Imported Symbol</span>
+    </div>
   </div>
 </template>
