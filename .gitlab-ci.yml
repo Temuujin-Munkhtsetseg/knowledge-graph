@@ -17,7 +17,7 @@ variables:
 .rust-job-template:
   tags:
     - saas-linux-large-amd64
-  image: registry.gitlab.com/gitlab-org/rust/build-images/rust-kuzu:1.88.0-${KUZU_VERSION}-linux-x86_64
+  image: registry.gitlab.com/gitlab-org/rust/build-images/rust-kuzu:1.89.0-${KUZU_VERSION}-linux-x86_64
   before_script:
     - rustup set auto-self-update disable
 

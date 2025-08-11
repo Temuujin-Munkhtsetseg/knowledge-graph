@@ -3,7 +3,7 @@ mod commands;
 mod utils;
 
 use crate::commands::{index, server};
-use cli::{Commands, GkgCli};
+use cli::{Commands, GkgCli, ServerCommands};
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use logging::LogMode;
@@ -21,7 +21,16 @@ async fn main() -> anyhow::Result<()> {
 
     let mode = match cli.command {
         Commands::Index { .. } => LogMode::Cli,
-        Commands::Server { .. } => LogMode::Server,
+        Commands::Server { ref action } => match action {
+            ServerCommands::Start(args) => {
+                if args.detached {
+                    LogMode::ServerBackground
+                } else {
+                    LogMode::ServerForeground
+                }
+            }
+            ServerCommands::Stop => LogMode::ServerForeground,
+        },
     };
 
     let _guard = logging::init(mode, verbose)?;
@@ -47,23 +56,20 @@ async fn main() -> anyhow::Result<()> {
             )
             .await
         }
-        Commands::Server {
-            register_mcp,
-            enable_reindexing,
-            detached,
-            port: port_override,
-            ..
-        } => {
-            server::run(
-                register_mcp,
-                enable_reindexing,
-                detached,
-                port_override,
-                Arc::clone(&database),
-                Arc::clone(&workspace_manager),
-                Arc::clone(&event_bus),
-            )
-            .await
-        }
+        Commands::Server { action } => match action {
+            ServerCommands::Start(args) => {
+                server::start(
+                    args.register_mcp,
+                    args.enable_reindexing,
+                    args.detached,
+                    args.port,
+                    Arc::clone(&database),
+                    Arc::clone(&workspace_manager),
+                    Arc::clone(&event_bus),
+                )
+                .await
+            }
+            ServerCommands::Stop => server::stop().await,
+        },
     }
 }
