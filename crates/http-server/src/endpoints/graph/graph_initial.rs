@@ -33,6 +33,7 @@ pub struct GraphInitialQueryRequest {
     pub directory_limit: Option<i32>,
     pub file_limit: Option<i32>,
     pub definition_limit: Option<i32>,
+    pub imported_symbol_limit: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, TS, Default, Debug)]
@@ -114,6 +115,7 @@ pub async fn graph_initial_handler(
     let directory_limit = query_params.directory_limit.unwrap_or(100);
     let file_limit = query_params.file_limit.unwrap_or(200);
     let definition_limit = query_params.definition_limit.unwrap_or(500);
+    let imported_symbol_limit = query_params.imported_symbol_limit.unwrap_or(50);
 
     if input_project_path.trim().is_empty() {
         return (
@@ -162,6 +164,10 @@ pub async fn graph_initial_handler(
     query_params.insert(
         "definition_limit".to_string(),
         serde_json::Value::Number(definition_limit.into()),
+    );
+    query_params.insert(
+        "imported_symbol_limit".to_string(),
+        serde_json::Value::Number(imported_symbol_limit.into()),
     );
 
     let query_service = DatabaseQueryingService::new(Arc::clone(&state.database));
@@ -223,7 +229,7 @@ fn convert_query_result_to_graph(
 
     let mut all_rows = Vec::new();
     while let Some(row) = query_result.next() {
-        let order_priority = row.get_int_value(30)?;
+        let order_priority = row.get_int_value(36)?;
         all_rows.push((row, order_priority));
     }
 
@@ -250,10 +256,10 @@ fn process_graph_row(
     relationship_ids: &mut std::collections::HashSet<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source_data = extract_node_data(&*row, 0)?;
-    let target_data = extract_node_data(&*row, 14)?;
+    let target_data = extract_node_data(&*row, 17)?;
 
-    let relationship_type = row.get_string_value(28)?;
-    let relationship_id = row.get_string_value(29)?;
+    let relationship_type = row.get_string_value(34)?;
+    let relationship_id = row.get_string_value(35)?;
 
     let source_id = source_data.id.clone();
     let target_id = target_data.id.clone();
@@ -371,7 +377,7 @@ mod tests {
         let encoded_workspace_folder_path = urlencoding::encode(workspace_folder_path);
 
         let url_string = format!(
-            "/graph/initial/{encoded_workspace_folder_path}/{encoded_project_path}?directory_limit=100&file_limit=200&definition_limit=500"
+            "/graph/initial/{encoded_workspace_folder_path}/{encoded_project_path}?directory_limit=100&file_limit=200&definition_limit=500&imported_symbol_limit=50"
         );
 
         let response = server.get(&url_string).await;

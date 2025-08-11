@@ -246,6 +246,7 @@ export class ApiClient extends HttpClient {
       directory_limit: 20,
       file_limit: 100,
       definition_limit: 500,
+      imported_symbol_limit: 50,
     };
 
     return this.get<GraphInitialSuccessResponse>(

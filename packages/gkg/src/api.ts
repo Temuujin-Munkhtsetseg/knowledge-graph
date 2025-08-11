@@ -20,7 +20,7 @@ export type GraphInitialEndpointDef = { method: HttpMethod, path: "/api/graph/in
 
 export type GraphInitialPathRequest = { workspace_folder_path: string, project_path: string, };
 
-export type GraphInitialQueryRequest = { directory_limit: number | null, file_limit: number | null, definition_limit: number | null, };
+export type GraphInitialQueryRequest = { directory_limit: number | null, file_limit: number | null, definition_limit: number | null, imported_symbol_limit: number | null, };
 
 export type GraphInitialResponses = { "200": GraphInitialSuccessResponse | null, "404": StatusResponse | null, "400": StatusResponse | null, "500": StatusResponse | null, };
 
@@ -62,6 +62,8 @@ export type GraphStatsSuccessResponse = { total_nodes: number, total_relationshi
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 
+export type ImportedSymbolNodeProperties = { path: string, start_line: number, primary_start_byte: bigint, primary_end_byte: bigint, import_type: string, import_path: string, import_alias: string, };
+
 export type InfoEndpointDef = { method: HttpMethod, path: "/api/info", path_request: EmptyRequest, body_request: EmptyRequest, query_request: EmptyRequest, responses: InfoResponses, };
 
 export type InfoResponses = { "200": ServerInfoResponse, };
@@ -90,7 +92,7 @@ export type ServerInfoResponse = { port: number, version: string, };
 
 export type StatusResponse = { status: string, };
 
-export type TypedGraphNode = { "node_type": "DirectoryNode", id: string, node_id: string, label: string, properties: DirectoryNodeProperties, } | { "node_type": "FileNode", id: string, node_id: string, label: string, properties: FileNodeProperties, } | { "node_type": "DefinitionNode", id: string, node_id: string, label: string, properties: DefinitionNodeProperties, };
+export type TypedGraphNode = { "node_type": "DirectoryNode", id: string, node_id: string, label: string, properties: DirectoryNodeProperties, } | { "node_type": "FileNode", id: string, node_id: string, label: string, properties: FileNodeProperties, } | { "node_type": "DefinitionNode", id: string, node_id: string, label: string, properties: DefinitionNodeProperties, } | { "node_type": "ImportedSymbolNode", id: string, node_id: string, label: string, properties: ImportedSymbolNodeProperties, };
 
 export type WorkspaceDeleteBodyRequest = { workspace_folder_path: string, };
 

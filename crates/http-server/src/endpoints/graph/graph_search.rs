@@ -364,6 +364,51 @@ mod tests {
                         "DefinitionNode should match search term"
                     );
                 }
+                TypedGraphNode::ImportedSymbolNode {
+                    label, properties, ..
+                } => {
+                    assert!(
+                        label.to_lowercase().contains("main")
+                            || properties.import_path.to_lowercase().contains("main"),
+                        "ImportedSymbolNode should match search term"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_graph_search_with_imported_symbol() {
+        let (app, app_state, _temp_dir) = create_test_app_with_indexed_data().await;
+        let server = TestServer::new(app).unwrap();
+
+        let workspaces = app_state.workspace_manager.list_workspace_folders();
+        let workspace_folder_path = &workspaces[0].workspace_folder_path;
+        let projects = app_state
+            .workspace_manager
+            .list_projects_in_workspace(workspace_folder_path);
+        let project_path = &projects[0].project_path;
+
+        let encoded_project_path = urlencoding::encode(project_path);
+        let encoded_workspace_folder_path = urlencoding::encode(workspace_folder_path);
+
+        let url_string = format!(
+            "/graph/search/{encoded_workspace_folder_path}/{encoded_project_path}?search_term=lib&limit=50"
+        );
+
+        let response = server.get(&url_string).await;
+
+        response.assert_status(StatusCode::OK);
+        let body = response.json::<GraphSearchSuccessResponse>();
+
+        assert_eq!(body.project_info.project_path, *project_path);
+
+        for node in &body.nodes {
+            if let TypedGraphNode::ImportedSymbolNode { label, .. } = node {
+                assert!(
+                    label.to_lowercase().contains("lib"),
+                    "ImportedSymbolNode should match search term"
+                );
             }
         }
     }

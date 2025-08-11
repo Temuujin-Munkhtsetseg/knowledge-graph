@@ -36,6 +36,18 @@ pub struct DefinitionNodeProperties {
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
 #[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
+pub struct ImportedSymbolNodeProperties {
+    pub path: String,
+    pub start_line: i32,
+    pub primary_start_byte: i64,
+    pub primary_end_byte: i64,
+    pub import_type: String,
+    pub import_path: String,
+    pub import_alias: String,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 #[serde(tag = "node_type")]
 pub enum TypedGraphNode {
     DirectoryNode {
@@ -55,6 +67,12 @@ pub enum TypedGraphNode {
         node_id: String,
         label: String,
         properties: DefinitionNodeProperties,
+    },
+    ImportedSymbolNode {
+        id: String,
+        node_id: String,
+        label: String,
+        properties: ImportedSymbolNodeProperties,
     },
 }
 
@@ -86,6 +104,9 @@ pub struct NodeData {
     pub primary_start_byte: i64,
     pub primary_end_byte: i64,
     pub total_locations: i64,
+    pub import_type: String,
+    pub import_path: String,
+    pub import_alias: String,
 }
 
 pub fn extract_node_data(
@@ -110,6 +131,9 @@ pub fn extract_node_data(
         primary_start_byte: row.get_int_value(start_index + 11)?,
         primary_end_byte: row.get_int_value(start_index + 12)?,
         total_locations: row.get_int_value(start_index + 13)?,
+        import_type: row.get_string_value(start_index + 14)?,
+        import_path: row.get_string_value(start_index + 15)?,
+        import_alias: row.get_string_value(start_index + 16)?,
     })
 }
 
@@ -149,6 +173,20 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
                 primary_start_byte: data.primary_start_byte,
                 primary_end_byte: data.primary_end_byte,
                 total_locations: data.total_locations as i32,
+            },
+        },
+        "ImportedSymbolNode" => TypedGraphNode::ImportedSymbolNode {
+            id: data.id,
+            node_id: data.node_id,
+            label: data.name,
+            properties: ImportedSymbolNodeProperties {
+                path: data.path,
+                start_line: data.start_line as i32,
+                primary_start_byte: data.primary_start_byte,
+                primary_end_byte: data.primary_end_byte,
+                import_type: data.import_type,
+                import_path: data.import_path,
+                import_alias: data.import_alias,
             },
         },
         _ => TypedGraphNode::DirectoryNode {

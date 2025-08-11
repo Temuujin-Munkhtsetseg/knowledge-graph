@@ -45,8 +45,8 @@ impl QueryResultRow for DatabaseQueryResultRow {
             kuzu::Value::Int16(value) => Ok((*value).into()),
             kuzu::Value::Int8(value) => Ok((*value).into()),
             _ => Err(Error::msg(format!(
-                "Expected integer value, got: {:?}",
-                self.row[index]
+                "Expected index {} to be an integer value, got: {:?}",
+                index, self.row[index]
             ))),
         }
     }
