@@ -8,7 +8,7 @@ This guide will help you get GitLab Knowledge Graph up and running on your first
 ## Prerequisites
 
 - GitLab Knowledge Graph [installed](/getting-started/installation)
-- A Git repository or workspace folder to index
+- A workspace folder with Git repository initialized
 
 ## Basic Indexing
 
@@ -29,7 +29,7 @@ This will:
 3. Store the results in a local graph database
 4. Display progress and completion statistics
 
-### Index Specific Directory
+### Index a Specific Directory
 
 You can also specify a path to index:
 
@@ -52,40 +52,27 @@ Workspace Statistics:
 
 ## Server Mode
 
-For more advanced usage, you can start GitLab Knowledge Graph in server mode, which provides:
-
-- Web-based interface
-- HTTP API for programmatic access
-- Real-time file watching and re-indexing
-- Background job processing
+For more advanced usage, you can start GitLab Knowledge Graph in server mode:
 
 ### Start the Server
 
 ```bash
-gkg server
+gkg server start
 ```
 
-The server will start on `http://localhost:3000` by default. You'll see output like:
+The server will start on `http://localhost:27495` by default. You will see output like this:
 
 ```bash
-INFO HTTP server listening on 127.0.0.1:3000
+INFO http_server: HTTP server listening on 127.0.0.1:27495
 ```
 
 ### Access the Web Interface
 
-Open your web browser and navigate to `http://localhost:3000` to access the GitLab Knowledge Graph web interface. From here you can:
+Open your web browser and navigate to `http://localhost:27495` to access the GitLab Knowledge Graph web interface. From here you can:
 
 - View indexed workspaces and projects
 - Browse the knowledge graph visually
 - Search for code entities and relationships
 - Monitor indexing progress in real-time
 
-### Enable Auto-Reindexing
-
-To automatically re-index files when they change:
-
-```bash
-gkg server --enable-reindexing
-```
-
-This will watch for file changes and queue re-indexing jobs automatically.
+For more information on the server, see the [gkg server](../cli/server.md) command.

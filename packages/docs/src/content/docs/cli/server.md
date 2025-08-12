@@ -1,14 +1,14 @@
 ---
 title: gkg server
-description: Start the GitLab Knowledge Graph HTTP server with web interface and API
+description: Manage the GitLab Knowledge Graph HTTP server with web interface and API
 ---
 
-Start the GitLab Knowledge Graph HTTP server, providing a web interface, HTTP API, and optional file watching for automatic re-indexing.
+Manage the GitLab Knowledge Graph HTTP server, providing a web interface, HTTP API, and optional file watching for automatic re-indexing.
 
 ## Synopsis
 
 ```bash
-gkg server [OPTIONS]
+gkg server start [OPTIONS]
 ```
 
 ## Description
@@ -22,7 +22,7 @@ The `gkg server` command starts a long-running HTTP server that provides:
 - **Background Jobs**: Queue-based processing for concurrent operations
 - **MCP Integration**: Model Context Protocol support for AI tools
 
-The server is designed for ongoing development workflows where you want continuous access to the knowledge graph and automatic updates as your code changes.
+The server is designed for ongoing development workflows, providing continuous access to the knowledge graph and automatic updates as your code changes.
 
 ## Options
 
@@ -39,7 +39,7 @@ This option automatically registers the GitLab Knowledge Graph server with your 
 **Example:**
 
 ```bash
-gkg server --register-mcp ~/.gitlab/duo/mcp.json
+gkg server start --register-mcp ~/.gitlab/duo/mcp.json
 ```
 
 ### `--enable-reindexing`
@@ -54,5 +54,25 @@ When enabled, the server monitors registered workspaces for file changes and aut
 **Example:**
 
 ```bash
-gkg server --enable-reindexing
+gkg server start --enable-reindexing
 ```
+
+### `--detached`
+
+Starts the server in detached (background) mode. This is useful when the server should not be bound to a terminal session, for example, when running it in a CI pipeline for integration testing or registering it for system autostart.
+
+**Example:**
+
+```bash
+gkg server start --detached
+```
+
+## Stopping the server
+
+You can stop both foreground and background servers from any terminal session with:
+
+```bash
+gkg server stop
+```
+
+The server also respects `SIGINT` and `SIGTERM` signals on Unix-like systems. You can gracefully stop the server from the attached terminal by pressing `Ctrl+C`.
