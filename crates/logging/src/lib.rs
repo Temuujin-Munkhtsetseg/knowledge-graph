@@ -54,9 +54,7 @@ pub fn init(
             tracing_subscriber::fmt()
                 .with_env_filter(filter)
                 .with_writer(
-                    non_blocking
-                        .with_max_level(tracing::Level::INFO)
-                        .and(std::io::stderr),
+                    non_blocking.with_max_level(tracing::Level::INFO), // .and(std::io::stderr), // FIXME: This causes the application to freeze after a lot of logs when in a node process.
                 )
                 .with_ansi(false)
                 .init();
