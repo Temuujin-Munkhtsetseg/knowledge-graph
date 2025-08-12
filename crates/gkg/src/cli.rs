@@ -5,7 +5,8 @@ use std::path::PathBuf;
 #[command(
     name = "gkg",
     author = "GitLab Inc.",
-    version = "0.1.0",
+    // Use the default attributes feature of clap to set the proper version of gkg at compile time
+    version,
     about = "GitLab Knowledge Graph CLI",
     long_about = "Creates a structured, queryable representation of code repositories."
 )]
