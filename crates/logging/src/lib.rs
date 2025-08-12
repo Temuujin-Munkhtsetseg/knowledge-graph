@@ -10,6 +10,7 @@
 
 use anyhow::Result;
 use file_rotate::{ContentLimit, FileRotate, compression::Compression, suffix::AppendCount};
+use tracing_appender::non_blocking::{NonBlockingBuilder, WorkerGuard};
 use tracing_subscriber::{EnvFilter, fmt::writer::MakeWriterExt};
 use workspace_manager::data_directory::DataDirectory;
 
@@ -19,10 +20,12 @@ pub enum LogMode {
     ServerBackground,
 }
 
-pub fn init(
-    mode: LogMode,
-    verbose: bool,
-) -> Result<Option<tracing_appender::non_blocking::WorkerGuard>> {
+/// Guard that keeps background logging workers alive.
+pub struct LoggingGuards {
+    _guards: Vec<WorkerGuard>,
+}
+
+pub fn init(mode: LogMode, verbose: bool) -> Result<Option<LoggingGuards>> {
     let filter = if verbose {
         EnvFilter::new("debug")
     } else {
@@ -49,17 +52,28 @@ pub fn init(
                 None,
             );
 
-            let (non_blocking, guard) = tracing_appender::non_blocking(writer);
+            let (file_non_blocking, file_guard) = tracing_appender::non_blocking(writer);
+            // Caller of gkg may not consume logs from the stderr which will cause app to hang
+            // Limit the number of buffered lines to avoid blowing up the memory
+            // Drop the lines that go over the buffer limit with lossy=true
+            let (stderr_non_blocking, stderr_guard) = NonBlockingBuilder::default()
+                .lossy(true)
+                .buffered_lines_limit(10_000)
+                .finish(std::io::stderr());
 
             tracing_subscriber::fmt()
                 .with_env_filter(filter)
                 .with_writer(
-                    non_blocking.with_max_level(tracing::Level::INFO), // .and(std::io::stderr), // FIXME: This causes the application to freeze after a lot of logs when in a node process.
+                    file_non_blocking
+                        .with_max_level(tracing::Level::INFO)
+                        .and(stderr_non_blocking),
                 )
                 .with_ansi(false)
                 .init();
 
-            Ok(Some(guard))
+            Ok(Some(LoggingGuards {
+                _guards: vec![file_guard, stderr_guard],
+            }))
         }
         LogMode::ServerBackground => {
             let data_dir = DataDirectory::get_system_data_directory()?;
@@ -82,7 +96,9 @@ pub fn init(
                 .json()
                 .init();
 
-            Ok(Some(guard))
+            Ok(Some(LoggingGuards {
+                _guards: vec![guard],
+            }))
         }
     }
 }
