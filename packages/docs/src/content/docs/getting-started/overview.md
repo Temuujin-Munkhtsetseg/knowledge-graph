@@ -1,6 +1,8 @@
 ---
 title: Overview
 description: An introduction to the GitLab Knowledge Graph, a system that creates a structured, queryable representation of your code.
+sidebar:
+  order: 1
 ---
 
 The GitLab Knowledge Graph is a powerful system designed to create a queryable map of your code repositories and tie them to the GitLab SDLC. This structured data provides deep insights into your codebase, paving the way for advanced code analysis and AI-driven features.
@@ -29,4 +31,4 @@ You can follow our progress and contribute to the discussion in the [Knowledge G
 
 ## Next Steps
 
-Ready to dive in? Check out the [Installation](/getting-started/installation) guide to get the GitLab Knowledge Graph up and running on your local machine.
+Ready to dive in? Check out the [Installation](/getting-started/install) guide to get the GitLab Knowledge Graph up and running on your local machine.

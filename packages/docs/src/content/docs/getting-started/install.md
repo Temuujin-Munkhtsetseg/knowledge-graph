@@ -1,6 +1,8 @@
 ---
 title: Install
 description: Install GitLab Knowledge Graph on Linux, macOS, or Windows
+sidebar:
+  order: 2
 ---
 
 GitLab Knowledge Graph (`gkg`) can be installed on Linux, macOS, and Windows using automated installation scripts.
@@ -29,7 +31,7 @@ curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install
 
 **Force re-installation:**
 
-> **Note**: A forced installation does not handle database schema upgrades. For that, you may need to [reset your data](troubleshooting.md#data-reset).
+> **Note**: A forced installation does not handle database schema upgrades. For that, you may need to [reset your data](/getting-started/troubleshooting#data-reset).
 
 ```bash
 curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.sh | bash -s -- --force

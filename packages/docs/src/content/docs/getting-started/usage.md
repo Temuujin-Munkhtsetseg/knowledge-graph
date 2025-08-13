@@ -1,14 +1,16 @@
 ---
-title: Quick Start
+title: Usage
 description: Get up and running with GitLab Knowledge Graph in minutes
+sidebar:
+  order: 3
 ---
 
 This guide will help you get GitLab Knowledge Graph up and running on your first project in just a few minutes.
 
 ## Prerequisites
 
-- GitLab Knowledge Graph [installed](/getting-started/installation)
-- A workspace folder with Git repository initialized
+- GitLab Knowledge Graph [installed](../install)
+- A workspace folder with an initialized Git repository
 
 ## Basic Indexing
 
@@ -75,4 +77,8 @@ Open your web browser and navigate to `http://localhost:27495` to access the Git
 - Search for code entities and relationships
 - Monitor indexing progress in real-time
 
-For more information on the server, see the [gkg server](../cli/server.md) command.
+For more information on the server, see the [gkg server](/cli/server) command.
+
+## IDE integration
+
+GitLab Knowledge Graph integrates with your IDE. See [IDE Integration](../ide-integration) for details.
