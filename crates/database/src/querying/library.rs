@@ -8,8 +8,6 @@ pub struct QueryLibrary;
 
 #[derive(Debug, Clone)]
 pub struct Query {
-    pub name: &'static str,
-    pub description: &'static str,
     pub query: String,
     pub parameters: HashMap<&'static str, QueryParameter>,
     pub result: HashMap<&'static str, QueryResultMapper>,
@@ -37,8 +35,6 @@ pub enum QueryParameterDefinition {
 impl QueryLibrary {
     pub fn get_definition_relations_query() -> Query {
         Query {
-            name: "list_relations",
-            description: "Get all related definitions for any given definition.",
             query: r#"
                 MATCH (n:DefinitionNode)-[r]-(related:DefinitionNode)
                 WHERE n.fqn = $fqn
@@ -85,8 +81,6 @@ impl QueryLibrary {
 
     pub fn get_file_definitions_query() -> Query {
         Query {
-            name: "list_file_definitions",
-            description: "List all definitions inside a specific file.",
             query: r#"
                 MATCH (file:FileNode)-[r:FILE_RELATIONSHIPS]->(definition:DefinitionNode)
                 WHERE file.path = $file_path OR file.absolute_path = $file_path
@@ -130,10 +124,50 @@ impl QueryLibrary {
         }
     }
 
+    pub fn get_file_imports_query() -> Query {
+        Query {
+            query: r#"
+                MATCH (file:FileNode)-[:FILE_RELATIONSHIPS]->(imp:ImportedSymbolNode)
+                WHERE file.path = $file_path OR file.absolute_path = $file_path
+                RETURN
+                    imp.name as name,
+                    imp.import_path as import_path,
+                    imp.alias as alias,
+                    imp.start_line as line_number
+                LIMIT $limit
+            "#
+            .to_string(),
+            parameters: HashMap::from([
+                (
+                    "file_path",
+                    QueryParameter {
+                        name: "file_path",
+                        description: "The path of the file to get imports for.",
+                        required: true,
+                        definition: QueryParameterDefinition::String(None),
+                    },
+                ),
+                (
+                    "limit",
+                    QueryParameter {
+                        name: "limit",
+                        description: "The maximum number of imports to return.",
+                        required: false,
+                        definition: QueryParameterDefinition::Int(Some(100)),
+                    },
+                ),
+            ]),
+            result: HashMap::from([
+                ("name", STRING_MAPPER),
+                ("import_path", STRING_MAPPER),
+                ("alias", STRING_MAPPER),
+                ("line_number", INT_MAPPER),
+            ]),
+        }
+    }
+
     pub fn get_list_matches_query() -> Query {
         Query {
-            name: "list_matches",
-            description: "Get all definitions with FQNs that contain the provided string (case insensitive).",
             query: r#"
                 MATCH (n:DefinitionNode)
                 WHERE toLower(n.fqn) CONTAINS toLower($search_string)
@@ -179,8 +213,6 @@ impl QueryLibrary {
 
     pub fn get_initial_project_graph_query() -> Query {
         Query {
-            name: "initial_project_graph",
-            description: "Get the initial graph of a project, including nodes and relationships. Used in the KG panel explorer.",
             query: r#"
                 MATCH (n:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]-(m:DirectoryNode)
                 RETURN 
@@ -693,8 +725,6 @@ impl QueryLibrary {
         let query = format!("{query} LIMIT $limit");
 
         Some(Query {
-            name: "get_node_neighbors",
-            description: "Get all neighbors for a given node ID and their relationships.",
             query,
             parameters: HashMap::from([
                 (
@@ -753,8 +783,6 @@ impl QueryLibrary {
 
     pub fn get_search_nodes_query() -> Query {
         Query {
-            name: "search_nodes",
-            description: "Search across all node types by name, path, or FQN (case insensitive).",
             query: r#"
                 MATCH (d:DirectoryNode)
                 WHERE toLower(d.name) CONTAINS toLower($search_term) 
