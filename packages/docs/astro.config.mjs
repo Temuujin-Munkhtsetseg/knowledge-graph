@@ -99,7 +99,7 @@ export default defineConfig({
       ? `/rust/knowledge-graph/${process.env.PAGES_PREFIX}/`
       : "/rust/knowledge-graph/"
     : "/",
-  trailingSlash: "always",
+  trailingSlash: "ignore",
   build: {
     format: "directory",
   },
@@ -126,6 +126,10 @@ export default defineConfig({
         {
           label: "Getting Started",
           autogenerate: { directory: "getting-started" },
+        },
+        {
+          label: "Languages",
+          autogenerate: { directory: "languages" },
         },
         {
           label: "CLI Reference",

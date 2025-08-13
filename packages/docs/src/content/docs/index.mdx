@@ -84,7 +84,7 @@ import FeatureCard from "../../components/FeatureCard.astro";
 
 1. **Install GitLab Knowledge Graph**
 
-   One-line installation for Linux, macOS, and Windows:
+   One-line installation:
 
    ```bash
    curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.sh | bash
@@ -103,7 +103,7 @@ import FeatureCard from "../../components/FeatureCard.astro";
    Start the server and open your browser:
 
    ```bash
-   gkg server --enable-reindexing
+   gkg server start --enable-reindexing
    ```
 
 </Steps>
@@ -119,7 +119,7 @@ import FeatureCard from "../../components/FeatureCard.astro";
   <LinkCard
     title="Code Navigation"
     description="Find all references, dependencies, and relationships across your codebase"
-    href="getting-started/quick-start/"
+    href="getting-started/overview"
   />
   <LinkCard
     title="Impact Analysis"
@@ -129,7 +129,7 @@ import FeatureCard from "../../components/FeatureCard.astro";
   <LinkCard
     title="Architecture Visualization"
     description="Generate interactive graphs of system structure and dependencies"
-    href="getting-started/quick-start/#server-mode"
+    href="getting-started/usage/#server-mode"
   />
 </CardGrid>
 
