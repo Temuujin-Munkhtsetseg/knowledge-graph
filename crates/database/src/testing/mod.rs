@@ -1,16 +1,19 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::RwLock};
 
 use crate::{querying::QueryResult, querying::QueryResultRow, querying::QueryingService};
 use anyhow::{Error, anyhow};
 use serde_json::{Map, Value};
+
+type ReturnData = Vec<Vec<String>>;
+type ColumnNames = Vec<String>;
 
 pub struct MockQueryingService {
     pub should_fail: bool,
     pub expected_project_path: Option<String>,
     pub expected_query: Option<String>,
     pub expected_params: Option<Map<String, Value>>,
-    pub return_data: Vec<Vec<String>>,
-    pub column_names: Vec<String>,
+    pub return_data: RwLock<Vec<ReturnData>>,
+    pub column_names: RwLock<Vec<ColumnNames>>,
 }
 
 impl Default for MockQueryingService {
@@ -26,8 +29,8 @@ impl MockQueryingService {
             expected_project_path: None,
             expected_query: None,
             expected_params: None,
-            return_data: vec![vec!["test_value".to_string()]],
-            column_names: vec!["test_column".to_string()],
+            return_data: RwLock::new(vec![vec![vec!["test_value".to_string()]]]),
+            column_names: RwLock::new(vec![vec!["test_column".to_string()]]),
         }
     }
 
@@ -48,9 +51,9 @@ impl MockQueryingService {
         self
     }
 
-    pub fn with_return_data(mut self, column_names: Vec<String>, data: Vec<Vec<String>>) -> Self {
-        self.column_names = column_names;
-        self.return_data = data;
+    pub fn with_return_data(self, column_names: Vec<String>, data: Vec<Vec<String>>) -> Self {
+        self.column_names.write().unwrap().push(column_names);
+        self.return_data.write().unwrap().push(data);
         self
     }
 }
@@ -82,8 +85,8 @@ impl QueryingService for MockQueryingService {
         }
 
         Ok(Box::new(MockQueryResult::new(
-            self.column_names.clone(),
-            self.return_data.clone(),
+            self.column_names.write().unwrap().pop().unwrap(),
+            self.return_data.write().unwrap().pop().unwrap(),
         )))
     }
 }
