@@ -136,6 +136,10 @@ export default defineConfig({
           autogenerate: { directory: "cli" },
         },
         {
+          label: "MCP",
+          autogenerate: { directory: "mcp" },
+        },
+        {
           label: "Architecture",
           autogenerate: { directory: "architecture" },
         },
