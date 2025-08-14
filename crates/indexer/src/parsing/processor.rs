@@ -23,6 +23,7 @@ use parser_core::{
     },
     ruby::{analyzer::RubyAnalyzer, definitions::RubyDefinitionInfo},
     rules::{MatchWithNodes, RuleManager, run_rules},
+    rust::{analyzer::RustAnalyzer, imports::RustImportedSymbolInfo, types::RustDefinitionInfo},
     typescript::{
         analyzer::TypeScriptAnalyzer,
         types::{TypeScriptDefinitionInfo, TypeScriptImportedSymbolInfo},
@@ -190,6 +191,7 @@ impl<'a> FileProcessor<'a> {
                 | SupportedLanguage::Java
                 | SupportedLanguage::CSharp
                 | SupportedLanguage::TypeScript
+                | SupportedLanguage::Rust
         );
         if !is_supported {
             return ProcessingResult::Skipped(SkippedFile {
@@ -348,8 +350,20 @@ impl<'a> FileProcessor<'a> {
                     )),
                 }
             }
-            // This should not happen due to the is_supported check earlier
-            _ => Err(anyhow::anyhow!("Unsupported language: {:?}", language)),
+            SupportedLanguage::Rust => {
+                let analyzer = RustAnalyzer::new();
+                match analyzer.analyze(matches, parse_result) {
+                    Ok(analysis_result) => Ok((
+                        Definitions::Rust(analysis_result.definitions),
+                        Some(ImportedSymbols::Rust(analysis_result.imports)),
+                    )),
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Failed to analyze Rust file '{}': {}",
+                        self.path,
+                        e
+                    )),
+                }
+            }
         }
     }
 }
@@ -363,6 +377,7 @@ pub enum Definitions {
     Java(Vec<JavaDefinitionInfo>),
     CSharp(Vec<CSharpDefinitionInfo>),
     TypeScript(Vec<TypeScriptDefinitionInfo>),
+    Rust(Vec<RustDefinitionInfo>),
 }
 
 impl Definitions {
@@ -375,6 +390,7 @@ impl Definitions {
             Definitions::Java(defs) => defs.len(),
             Definitions::CSharp(defs) => defs.len(),
             Definitions::TypeScript(defs) => defs.len(),
+            Definitions::Rust(defs) => defs.len(),
         }
     }
 
@@ -407,6 +423,10 @@ impl Definitions {
                     .map(|def| def.definition_type.as_str().to_string()),
             ),
             Definitions::TypeScript(defs) => Box::new(
+                defs.iter()
+                    .map(|def| def.definition_type.as_str().to_string()),
+            ),
+            Definitions::Rust(defs) => Box::new(
                 defs.iter()
                     .map(|def| def.definition_type.as_str().to_string()),
             ),
@@ -454,6 +474,13 @@ impl Definitions {
             _ => None,
         }
     }
+
+    pub fn iter_rust(&self) -> Option<impl Iterator<Item = &RustDefinitionInfo>> {
+        match self {
+            Definitions::Rust(defs) => Some(defs.iter()),
+            _ => None,
+        }
+    }
 }
 
 /// Enum to hold imported symbols based on language
@@ -464,6 +491,7 @@ pub enum ImportedSymbols {
     Python(Vec<PythonImportedSymbolInfo>),
     CSharp(Vec<CSharpImportedSymbolInfo>),
     TypeScript(Vec<TypeScriptImportedSymbolInfo>),
+    Rust(Vec<RustImportedSymbolInfo>),
 }
 
 impl ImportedSymbols {
@@ -475,6 +503,7 @@ impl ImportedSymbols {
             ImportedSymbols::Python(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::CSharp(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::TypeScript(imported_symbols) => imported_symbols.len(),
+            ImportedSymbols::Rust(imported_symbols) => imported_symbols.len(),
         }
     }
 
@@ -523,6 +552,13 @@ impl ImportedSymbols {
     pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptImportedSymbolInfo>> {
         match self {
             ImportedSymbols::TypeScript(imported_symbols) => Some(imported_symbols.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_rust(&self) -> Option<impl Iterator<Item = &RustImportedSymbolInfo>> {
+        match self {
+            ImportedSymbols::Rust(imported_symbols) => Some(imported_symbols.iter()),
             _ => None,
         }
     }

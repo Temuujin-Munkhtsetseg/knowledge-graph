@@ -27,6 +27,7 @@ database = { path = "../database" }
 tempfile = { workspace = true }
 ignore = { workspace = true }
 serde_json = { workspace = true }
+smallvec = { workspace = true }
 
 [dev-dependencies]
 miette = { workspace = true }
