@@ -120,7 +120,8 @@
       "@semantic-release/exec",
       {
         "verifyReleaseCmd": "echo ${nextRelease.version} > .VERSION",
-        "prepareCmd": "./scripts/semantic-release-prepare.sh ${nextRelease.version}"
+        "prepareCmd": "./scripts/semantic-release-prepare.sh ${nextRelease.version}",
+        "successCmd": "./scripts/semantic-release-finish.sh ${nextRelease.gitTag}"
       }
     ],
     [
@@ -133,7 +134,6 @@
           "Cargo.toml",
           "Cargo.lock",
           "crates/*/Cargo.toml",
-          "bindings/go/include/*",
           "bindings/go/cmd/download/main.go"
         ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
@@ -153,14 +153,14 @@
           { "path": "gkg-darwin-x86_64.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/gkg-darwin-x86_64.tar.gz.sha256", "label": "gkg-darwin-x86_64.tar.gz.sha256"},
           { "path": "gkg-windows-x86_64.tar.gz", "type": "package", "target": "generic_package", "filepath": "/gkg-windows-x86_64.tar.gz", "label": "gkg-windows-x86_64.tar.gz"},
           { "path": "gkg-windows-x86_64.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/gkg-windows-x86_64.tar.gz.sha256", "label": "gkg-windows-x86_64.tar.gz.sha256"},
-          { "path": "lib/linux_amd64/libindexer_c_bindings.a.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-amd64.a.gz", "label": "libindexer_c_bindings-linux-amd64.a.gz"},
-          { "path": "lib/linux_amd64/libindexer_c_bindings.a.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-amd64.a.gz.sha256", "label": "libindexer_c_bindings-linux-amd64.a.gz.sha256"},
-          { "path": "lib/linux_arm64/libindexer_c_bindings.a.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-arm64.a.gz", "label": "libindexer_c_bindings-linux-arm64.a.gz"},
-          { "path": "lib/linux_arm64/libindexer_c_bindings.a.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-arm64.a.gz.sha256", "label": "libindexer_c_bindings-linux-arm64.a.gz.sha256"},
-          { "path": "lib/darwin_amd64/libindexer_c_bindings.a.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-amd64.a.gz", "label": "libindexer_c_bindings-darwin-amd64.a.gz"},
-          { "path": "lib/darwin_amd64/libindexer_c_bindings.a.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-amd64.a.gz.sha256", "label": "libindexer_c_bindings-darwin-amd64.a.gz.sha256"},
-          { "path": "lib/darwin_arm64/libindexer_c_bindings.a.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-arm64.a.gz", "label": "libindexer_c_bindings-darwin-arm64.a.gz"},
-          { "path": "lib/darwin_arm64/libindexer_c_bindings.a.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-arm64.a.gz.sha256", "label": "libindexer_c_bindings-darwin-arm64.a.gz.sha256"}
+          { "path": "lib/linux_amd64/libindexer_c_bindings.tar.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-amd64.tar.gz", "label": "libindexer_c_bindings-linux-amd64.tar.gz"},
+          { "path": "lib/linux_amd64/libindexer_c_bindings.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-amd64.tar.gz.sha256", "label": "libindexer_c_bindings-linux-amd64.tar.gz.sha256"},
+          { "path": "lib/linux_arm64/libindexer_c_bindings.tar.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-arm64.tar.gz", "label": "libindexer_c_bindings-linux-arm64.tar.gz"},
+          { "path": "lib/linux_arm64/libindexer_c_bindings.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-linux-arm64.tar.gz.sha256", "label": "libindexer_c_bindings-linux-arm64.tar.gz.sha256"},
+          { "path": "lib/darwin_amd64/libindexer_c_bindings.tar.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-amd64.tar.gz", "label": "libindexer_c_bindings-darwin-amd64.tar.gz"},
+          { "path": "lib/darwin_amd64/libindexer_c_bindings.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-amd64.tar.gz.sha256", "label": "libindexer_c_bindings-darwin-amd64.tar.gz.sha256"},
+          { "path": "lib/darwin_arm64/libindexer_c_bindings.tar.gz", "type": "package", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-arm64.tar.gz", "label": "libindexer_c_bindings-darwin-arm64.tar.gz"},
+          { "path": "lib/darwin_arm64/libindexer_c_bindings.tar.gz.sha256", "type": "other", "target": "generic_package", "filepath": "/libindexer_c_bindings-darwin-arm64.tar.gz.sha256", "label": "libindexer_c_bindings-darwin-arm64.tar.gz.sha256"}
         ]
       }
     ],

@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-INC_DIR="$PROJECT_ROOT/bindings/go/include"
+RELEASE_DIR="$PROJECT_ROOT/release"
 
 PLATFORM=${PLATFORM:-$(uname -s)}
 PLATFORM=$(echo "$PLATFORM" | tr '[:upper:]' '[:lower:]')
@@ -61,15 +61,15 @@ build_bin() {
 }
 
 build_lib() {
-    mkdir -p $LIB_DIR
+    mkdir -p "$RELEASE_DIR/lib"
+    mkdir -p "$RELEASE_DIR/include"
 
     cargo build $CARGO_PARAMS --target $TARGET -p indexer-c-bindings
-    cp target/${TARGET}/release/libindexer_c_bindings.a "$LIB_DIR/"
-    gzip $LIB_DIR/libindexer_c_bindings.a
-    echo "created $LIB_DIR/libindexer_c_bindings.a.gz"
-
-    cp crates/indexer-c-bindings/c_bindings.h $INC_DIR
-    echo "copied crates/indexer-c-bindings/c_bindings.h to $INC_DIR"
+    cp target/${TARGET}/release/libindexer_c_bindings.a "$RELEASE_DIR/lib"
+    cp crates/indexer-c-bindings/c_bindings.h "$RELEASE_DIR/include"
+    mkdir -p $LIB_DIR
+    tar -czvf $LIB_DIR/libindexer_c_bindings.tar.gz -C $RELEASE_DIR include lib
+    echo "created $LIB_DIR/libindexer_c_bindings.tar.gz"
 }
 
 TASK="${1:-all}"

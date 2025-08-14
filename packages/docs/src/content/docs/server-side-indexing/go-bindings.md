@@ -24,7 +24,7 @@ of libraries is >500 MB so we were hitting maximum `go` module size.
 indexing from Go apps. Because this module depends on the pre-compiled bindings
 library, this library needs to be fetched when compiling the Go app.
 `go:generate` helper directive is used to make this download easier - it uses
-`download` command which is part of the go module and it takes care of
+`libindexer-download` command which is part of the go module and it takes care of
 downloading proper version of the library from release assets.
 
 Example of calling indexer from a Go app:
@@ -32,8 +32,8 @@ Example of calling indexer from a Go app:
 ```go
 import "gitlab.com/gitlab-org/rust/knowledge-graph.git/bindings/go/indexer"
 
-+// downloads pre-compiled static bindings lib into "lib/" directory
-+//go:generate go run gitlab.com/gitlab-org/rust/knowledge-graph.git/bindings/go/cmd/download lib
++// downloads pre-compiled static bindings lib into "libindexer/" directory
++//go:generate go run gitlab.com/gitlab-org/rust/knowledge-graph.git/bindings/go/cmd/libindexer-download libindexer
 
 func main() {
     repoDir := "/tmp/gitlab"
@@ -49,5 +49,5 @@ Then you can compile this application with following commands:
 go generate ./...
 
 # build Go app with passing `lib/` directory to CGo:
-CGO_LDFLAGS="-L$(LIB_DIR)" go build
+CGO_LDFLAGS="-L$(pwd)/libindexer/lib" CGO_CFLAGS="-I$(pwd)/libindexer/include" go build
 ```
