@@ -21,7 +21,13 @@ use parser_core::{
         analyzer::PythonAnalyzer,
         types::{PythonDefinitionInfo, PythonImportedSymbolInfo},
     },
-    ruby::{analyzer::RubyAnalyzer, definitions::RubyDefinitionInfo},
+    references::ReferenceInfo,
+    ruby::{
+        analyzer::RubyAnalyzer,
+        definitions::RubyDefinitionInfo,
+        imports::RubyImportedSymbolInfo,
+        references::types::{RubyExpressionMetadata, RubyReferenceType, RubyTargetResolution},
+    },
     rules::{MatchWithNodes, RuleManager, run_rules},
     rust::{analyzer::RustAnalyzer, imports::RustImportedSymbolInfo, types::RustDefinitionInfo},
     typescript::{
@@ -201,63 +207,68 @@ impl<'a> FileProcessor<'a> {
             });
         }
 
-        // 2. Parse the file
-        let parse_start = Instant::now();
-        let parser = GenericParser::default_for_language(language);
-        let parse_result = match parser.parse(self.content, Some(&self.path)) {
-            Ok(result) => result,
-            Err(e) => {
-                return ProcessingResult::Error(ErroredFile {
-                    file_path: self.path.clone(),
-                    error_message: format!("Failed to parse: {e}"),
-                    error_stage: ProcessingStage::Parsing,
-                });
-            }
-        };
-        let parse_time = parse_start.elapsed();
+        // Use unified pipeline for all languages (GenericParser + rules + analyzer)
+        {
+            // 2. Parse the file
+            let parse_start = Instant::now();
+            let parser = GenericParser::default_for_language(language);
+            let parse_result = match parser.parse(self.content, Some(&self.path)) {
+                Ok(result) => result,
+                Err(e) => {
+                    return ProcessingResult::Error(ErroredFile {
+                        file_path: self.path.clone(),
+                        error_message: format!("Failed to parse: {e}"),
+                        error_stage: ProcessingStage::Parsing,
+                    });
+                }
+            };
+            let parse_time = parse_start.elapsed();
 
-        // 3. Run rules to find matches
-        let rules_start = Instant::now();
-        let rule_manager = RuleManager::new(language);
-        let matches = run_rules(&parse_result.ast, Some(&self.path), &rule_manager);
-        let rules_time = rules_start.elapsed();
+            // 3. Run rules to find matches
+            let rules_start = Instant::now();
+            let rule_manager = RuleManager::new(language);
+            let matches = run_rules(&parse_result.ast, Some(&self.path), &rule_manager);
+            let rules_time = rules_start.elapsed();
 
-        // 4. Use language-specific analyzer to extract constructs
-        let analysis_start = Instant::now();
-        let (definitions, imports) = match self.analyze_file(language, &parse_result, &matches) {
-            Ok(result) => result,
-            Err(e) => {
-                return ProcessingResult::Error(ErroredFile {
-                    file_path: self.path.clone(),
-                    error_message: format!("Failed to analyze: {e}"),
-                    error_stage: ProcessingStage::Parsing,
-                });
-            }
-        };
-        let analysis_time = analysis_start.elapsed();
+            // 4. Use language-specific analyzer to extract constructs
+            let analysis_start = Instant::now();
+            let (definitions, imports, references) =
+                match self.analyze_file(language, &parse_result, &matches) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        return ProcessingResult::Error(ErroredFile {
+                            file_path: self.path.clone(),
+                            error_message: format!("Failed to analyze: {e}"),
+                            error_stage: ProcessingStage::Parsing,
+                        });
+                    }
+                };
+            let analysis_time = analysis_start.elapsed();
 
-        let matches_count = matches.len();
-        let definitions_count = definitions.count();
-        let imported_symbols_count = imports.as_ref().map_or(0, |i| i.count());
+            let matches_count = matches.len();
+            let definitions_count = definitions.count();
+            let imported_symbols_count = imports.as_ref().map_or(0, |i| i.count());
 
-        ProcessingResult::Success(FileProcessingResult {
-            file_path: self.path.clone(),
-            extension: self.extension.clone(),
-            file_size: self.size(),
-            language,
-            definitions,
-            imported_symbols: imports,
-            stats: ProcessingStats {
-                total_time: start_time.elapsed(),
-                parse_time,
-                rules_time,
-                analysis_time,
-                rule_matches: matches_count,
-                definitions_count,
-                imported_symbols_count,
-            },
-            is_supported: true,
-        })
+            ProcessingResult::Success(FileProcessingResult {
+                file_path: self.path.clone(),
+                extension: self.extension.clone(),
+                file_size: self.size(),
+                language,
+                definitions,
+                imported_symbols: imports,
+                references,
+                stats: ProcessingStats {
+                    total_time: start_time.elapsed(),
+                    parse_time,
+                    rules_time,
+                    analysis_time,
+                    rule_matches: matches_count,
+                    definitions_count,
+                    imported_symbols_count,
+                },
+                is_supported: true,
+            })
+        }
     }
 
     fn analyze_file(
@@ -265,13 +276,28 @@ impl<'a> FileProcessor<'a> {
         language: SupportedLanguage,
         parse_result: &ParseResult,
         matches: &[MatchWithNodes],
-    ) -> Result<(Definitions, Option<ImportedSymbols>), anyhow::Error> {
+    ) -> Result<(Definitions, Option<ImportedSymbols>, Option<References>), anyhow::Error> {
         match language {
             SupportedLanguage::Ruby => {
                 let analyzer = RubyAnalyzer::new();
-                match analyzer.analyze(matches, parse_result) {
+                match analyzer.parse_and_analyze(self.content) {
                     Ok(analysis_result) => {
-                        Ok((Definitions::Ruby(analysis_result.definitions), None))
+                        // Return references directly instead of converting to expressions
+                        let references = if analysis_result.references.is_empty() {
+                            None
+                        } else {
+                            Some(References::Ruby(analysis_result.references))
+                        };
+
+                        Ok((
+                            Definitions::Ruby(analysis_result.definitions),
+                            if analysis_result.imports.is_empty() {
+                                None
+                            } else {
+                                Some(ImportedSymbols::Ruby(analysis_result.imports))
+                            },
+                            references,
+                        ))
                     }
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Ruby file '{}': {}",
@@ -286,6 +312,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::Python(analysis_result.definitions),
                         Some(ImportedSymbols::Python(analysis_result.imports)),
+                        None, // Python doesn't extract expressions currently
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Python file '{}': {}",
@@ -300,6 +327,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::Kotlin(analysis_result.definitions),
                         Some(ImportedSymbols::Kotlin(analysis_result.imports)),
+                        None, // Kotlin doesn't extract expressions currently
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Kotlin file '{}': {}",
@@ -314,6 +342,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::Java(analysis_result.definitions),
                         Some(ImportedSymbols::Java(analysis_result.imports)),
+                        None, // Java doesn't extract expressions currently
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Java file '{}': {}",
@@ -328,6 +357,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::CSharp(analysis_result.definitions),
                         Some(ImportedSymbols::CSharp(analysis_result.imports)),
+                        None, // CSharp doesn't extract references currently
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze CSharp file '{}': {}",
@@ -342,6 +372,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::TypeScript(analysis_result.definitions),
                         Some(ImportedSymbols::TypeScript(analysis_result.imports)),
+                        None, // TypeScript doesn't extract expressions currently
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze TypeScript file '{}': {}",
@@ -356,6 +387,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::Rust(analysis_result.definitions),
                         Some(ImportedSymbols::Rust(analysis_result.imports)),
+                        None, // Rust doesn't extract references currently
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Rust file '{}': {}",
@@ -490,6 +522,7 @@ pub enum ImportedSymbols {
     Kotlin(Vec<KotlinImportedSymbolInfo>),
     Python(Vec<PythonImportedSymbolInfo>),
     CSharp(Vec<CSharpImportedSymbolInfo>),
+    Ruby(Vec<RubyImportedSymbolInfo>),
     TypeScript(Vec<TypeScriptImportedSymbolInfo>),
     Rust(Vec<RustImportedSymbolInfo>),
 }
@@ -502,6 +535,7 @@ impl ImportedSymbols {
             ImportedSymbols::Kotlin(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::Python(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::CSharp(imported_symbols) => imported_symbols.len(),
+            ImportedSymbols::Ruby(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::TypeScript(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::Rust(imported_symbols) => imported_symbols.len(),
         }
@@ -549,6 +583,13 @@ impl ImportedSymbols {
         }
     }
 
+    pub fn iter_ruby(&self) -> Option<impl Iterator<Item = &RubyImportedSymbolInfo>> {
+        match self {
+            ImportedSymbols::Ruby(imported_symbols) => Some(imported_symbols.iter()),
+            _ => None,
+        }
+    }
+
     pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptImportedSymbolInfo>> {
         match self {
             ImportedSymbols::TypeScript(imported_symbols) => Some(imported_symbols.iter()),
@@ -560,6 +601,39 @@ impl ImportedSymbols {
         match self {
             ImportedSymbols::Rust(imported_symbols) => Some(imported_symbols.iter()),
             _ => None,
+        }
+    }
+}
+
+/// Type alias for Ruby references
+pub type RubyReference = ReferenceInfo<
+    RubyTargetResolution,
+    RubyReferenceType,
+    RubyExpressionMetadata,
+    parser_core::ruby::types::RubyFqn,
+>;
+
+#[derive(Debug, Clone)]
+pub enum References {
+    Ruby(Vec<RubyReference>),
+}
+
+impl References {
+    /// Get the count of references regardless of type
+    pub fn count(&self) -> usize {
+        match self {
+            References::Ruby(references) => references.len(),
+        }
+    }
+
+    /// Check if there are any references
+    pub fn is_empty(&self) -> bool {
+        self.count() == 0
+    }
+
+    pub fn iter_ruby(&self) -> Option<impl Iterator<Item = &RubyReference>> {
+        match self {
+            References::Ruby(references) => Some(references.iter()),
         }
     }
 }
@@ -579,6 +653,8 @@ pub struct FileProcessingResult {
     pub definitions: Definitions,
     /// Extracted imported symbols
     pub imported_symbols: Option<ImportedSymbols>,
+    /// Extracted references for Ruby (used for reference resolution)
+    pub references: Option<References>,
     /// Processing statistics
     pub stats: ProcessingStats,
     /// Whether this language is supported for analysis
