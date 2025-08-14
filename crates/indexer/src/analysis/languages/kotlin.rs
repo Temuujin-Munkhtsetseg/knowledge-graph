@@ -4,7 +4,8 @@ use parser_core::kotlin::{
     ast::kotlin_fqn_to_string,
     types::{
         KotlinDefinitionInfo, KotlinDefinitionType, KotlinFqn, KotlinFqnPartType,
-        KotlinImportedSymbolInfo,
+        KotlinImportedSymbolInfo, KotlinReferenceTarget, KotlinReferenceType,
+        KotlinTargetResolution,
     },
 };
 
@@ -14,7 +15,7 @@ use crate::{
         FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
         ImportType, ImportedSymbolLocation, ImportedSymbolNode,
     },
-    parsing::processor::FileProcessingResult,
+    parsing::processor::{FileProcessingResult, References},
 };
 use database::graph::RelationshipType;
 
@@ -101,6 +102,96 @@ impl KotlinAnalyzer {
                     import_location: location.clone(),
                     relationship_type: RelationshipType::FileImports,
                 });
+            }
+        }
+    }
+
+    pub fn process_references(
+        &self,
+        file_references: &Option<References>,
+        relative_file_path: &str,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+    ) {
+        let file_path = relative_file_path.to_string();
+        if let Some(references) = file_references
+            && let Some(references) = references.iter_kotlin()
+        {
+            for reference in references {
+                let source_definition_fqn = reference.scope.as_ref().map(kotlin_fqn_to_string);
+                if source_definition_fqn.is_none() {
+                    continue;
+                }
+
+                let source_definition =
+                    definition_map.get(&(source_definition_fqn.unwrap(), file_path.clone()));
+                if source_definition.is_none() {
+                    continue;
+                }
+
+                let source_definition = source_definition.unwrap();
+                match &reference.target {
+                    KotlinReferenceTarget::Resolved(KotlinTargetResolution::Definition(
+                        target_definition_info,
+                    )) => {
+                        let target_definition = definition_map.get(&(
+                            kotlin_fqn_to_string(&target_definition_info.fqn),
+                            relative_file_path.to_string(),
+                        ));
+                        if target_definition.is_none() {
+                            continue;
+                        }
+
+                        let relationship = self.create_definition_relationship(
+                            &source_definition.0,
+                            &target_definition.unwrap().0,
+                            match reference.reference_type {
+                                KotlinReferenceType::MethodCall => RelationshipType::Calls,
+                                KotlinReferenceType::PropertyReference => {
+                                    RelationshipType::PropertyReference
+                                }
+                            },
+                        );
+
+                        definition_relationships.push(relationship);
+                    }
+                    KotlinReferenceTarget::Resolved(KotlinTargetResolution::PartialResolution(
+                        expression,
+                    )) => {
+                        for part in &expression.parts {
+                            match &part.target {
+                                Some(KotlinReferenceTarget::Resolved(
+                                    KotlinTargetResolution::Definition(target_definition_info),
+                                )) => {
+                                    let target_definition = definition_map.get(&(
+                                        kotlin_fqn_to_string(&target_definition_info.fqn),
+                                        relative_file_path.to_string(),
+                                    ));
+                                    if target_definition.is_none() {
+                                        continue;
+                                    }
+
+                                    let relationship = self.create_definition_relationship(
+                                        &source_definition.0,
+                                        &target_definition.unwrap().0,
+                                        match reference.reference_type {
+                                            KotlinReferenceType::MethodCall => {
+                                                RelationshipType::Calls
+                                            }
+                                            KotlinReferenceType::PropertyReference => {
+                                                RelationshipType::PropertyReference
+                                            }
+                                        },
+                                    );
+
+                                    definition_relationships.push(relationship);
+                                }
+                                _ => break,
+                            }
+                        }
+                    }
+                    _ => continue,
+                }
             }
         }
     }
@@ -257,6 +348,23 @@ impl KotlinAnalyzer {
             DefinitionType::Kotlin(Property) => Some(DefinitionType::Kotlin(Property)),
             DefinitionType::Kotlin(Lambda) => Some(DefinitionType::Kotlin(Lambda)),
             _ => None,
+        }
+    }
+
+    fn create_definition_relationship(
+        &self,
+        from_definition: &DefinitionNode,
+        to_definition: &DefinitionNode,
+        relationship_type: RelationshipType,
+    ) -> DefinitionRelationship {
+        DefinitionRelationship {
+            from_file_path: from_definition.location.file_path.clone(),
+            to_file_path: to_definition.location.file_path.clone(),
+            from_definition_fqn: from_definition.fqn.clone(),
+            to_definition_fqn: to_definition.fqn.clone(),
+            from_location: from_definition.location.clone(),
+            to_location: to_definition.location.clone(),
+            relationship_type,
         }
     }
 

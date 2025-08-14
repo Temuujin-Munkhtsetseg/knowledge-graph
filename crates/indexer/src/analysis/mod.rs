@@ -266,6 +266,12 @@ impl AnalysisService {
                     imported_symbol_map,
                     file_imported_symbol_relationships,
                 );
+                self.kotlin_analyzer.process_references(
+                    &file_result.references,
+                    &relative_path,
+                    definition_map,
+                    definition_relationships,
+                );
             }
             SupportedLanguage::Java => {
                 self.java_analyzer.process_definitions(

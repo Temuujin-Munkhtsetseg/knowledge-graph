@@ -25,3 +25,6 @@ lib/
 
 # IDEs
 .idea/
+
+# Kuzu
+db.kuzu
