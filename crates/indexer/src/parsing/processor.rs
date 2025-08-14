@@ -11,7 +11,7 @@ use parser_core::{
     },
     kotlin::{
         analyzer::KotlinAnalyzer,
-        types::{KotlinDefinitionInfo, KotlinImportedSymbolInfo},
+        types::{KotlinDefinitionInfo, KotlinImportedSymbolInfo, KotlinReferenceInfo},
     },
     parser::{
         GenericParser, LanguageParser, ParseResult, SupportedLanguage,
@@ -341,7 +341,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::Kotlin(analysis_result.definitions),
                         Some(ImportedSymbols::Kotlin(analysis_result.imports)),
-                        None, // Kotlin doesn't extract expressions currently
+                        Some(References::Kotlin(analysis_result.references)),
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Kotlin file '{}': {}",
@@ -630,6 +630,7 @@ pub type RubyReference = ReferenceInfo<
 #[derive(Debug, Clone)]
 pub enum References {
     Ruby(Vec<RubyReference>),
+    Kotlin(Vec<KotlinReferenceInfo>),
     TypeScript(Vec<TypeScriptReferenceInfo>),
 }
 
@@ -638,6 +639,7 @@ impl References {
     pub fn count(&self) -> usize {
         match self {
             References::Ruby(references) => references.len(),
+            References::Kotlin(references) => references.len(),
             References::TypeScript(references) => references.len(),
         }
     }
@@ -650,6 +652,13 @@ impl References {
     pub fn iter_ruby(&self) -> Option<impl Iterator<Item = &RubyReference>> {
         match self {
             References::Ruby(references) => Some(references.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_kotlin(&self) -> Option<impl Iterator<Item = &KotlinReferenceInfo>> {
+        match self {
+            References::Kotlin(references) => Some(references.iter()),
             _ => None,
         }
     }
