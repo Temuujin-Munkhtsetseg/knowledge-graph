@@ -9,14 +9,14 @@
 //! ├── gkg_workspace_folders/
 //! │   ├── workspace_folder_1_hash/
 //! │   │   ├── project_1_hash/
-//! │   │   │   ├── db.kuzu
+//! │   │   │   ├── database.kz
 //! │   │   │   ├── parquet_files/
 //! │   │   ├── project_2_hash/
-//! │   │   │   ├── db.kuzu
+//! │   │   │   ├── database.kz
 //! │   │   │   ├── parquet_files/
 //! │   ├── workspace_folder_2_hash/
 //! │   │   ├── project_1_hash/
-//! │   │   │   ├── db.kuzu
+//! │   │   │   ├── database.kz
 //! │   │   │   ├── parquet_files/
 //! ├── gkg_manifest.json
 //! ```
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 const GKG_DATA_DIR_NAME: &str = ".gkg";
 const GKG_WORKSPACE_FOLDERS_NAME: &str = "gkg_workspace_folders";
 const GKG_MANIFEST_FILE_NAME: &str = "gkg_manifest.json";
-const GKG_KUZU_DB_NAME: &str = "db.kuzu";
+const GKG_KUZU_DB_NAME: &str = "database.kz";
 const GKG_PARQUET_FILES_NAME: &str = "parquet_files";
 
 /// Manages the centralized data directory for the Knowledge Graph framework

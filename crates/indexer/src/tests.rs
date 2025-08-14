@@ -210,7 +210,7 @@ async fn setup_reindexing_pipeline(
     let output_path = output_dir.to_str().unwrap();
     let database_path: String = local_repo
         .workspace_path
-        .join("db.kuzu")
+        .join("database.kz")
         .to_str()
         .unwrap()
         .to_string();
@@ -509,7 +509,7 @@ async fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDataba
     // Run full processing pipeline
     let output_dir = temp_repo.workspace_path.join("output");
     let output_path = output_dir.to_str().unwrap();
-    let database_path = temp_repo.workspace_path.join("db.kuzu");
+    let database_path = temp_repo.workspace_path.join("database.kz");
     let database_path_str = database_path.to_str().unwrap();
 
     // Create database as done in the working example
@@ -548,7 +548,7 @@ async fn test_new_indexer_with_gitalisk_file_source() {
 
     let temp_output_dir = temp_repo.workspace_path.join("output");
     let output_path = temp_output_dir.to_str().unwrap();
-    let temp_db_path = temp_repo.workspace_path.join("db.kuzu");
+    let temp_db_path = temp_repo.workspace_path.join("database.kz");
     let db_path = temp_db_path.to_str().unwrap();
     let database = Arc::new(KuzuDatabase::new());
 
@@ -591,7 +591,7 @@ async fn test_new_indexer_with_path_file_source() {
 
     let temp_output_dir = temp_repo.workspace_path.join("output");
     let output_path = temp_output_dir.to_str().unwrap();
-    let temp_db_path = temp_repo.workspace_path.join("db.kuzu");
+    let temp_db_path = temp_repo.workspace_path.join("database.kz");
     let db_path = temp_db_path.to_str().unwrap();
     let database = Arc::new(KuzuDatabase::new());
 
@@ -633,7 +633,7 @@ async fn test_full_indexing_pipeline() {
     // Create output directory for this test
     let output_dir = temp_repo.workspace_path.join("output");
     let output_path = output_dir.to_str().unwrap();
-    let database_path = temp_repo.workspace_path.join("db.kuzu");
+    let database_path = temp_repo.workspace_path.join("database.kz");
     let database_path_str = database_path.to_str().unwrap();
 
     // Run the full processing pipeline
@@ -779,7 +779,7 @@ async fn test_inheritance_relationships() {
     // Run full processing
     let output_dir = temp_repo.workspace_path.join("output");
     let output_path = output_dir.to_str().unwrap();
-    let database_path = temp_repo.workspace_path.join("db.kuzu");
+    let database_path = temp_repo.workspace_path.join("database.kz");
     let database_path_str = database_path.to_str().unwrap();
 
     let database = Arc::new(KuzuDatabase::new());
@@ -859,7 +859,7 @@ async fn test_simple_end_to_end_kuzu() {
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
     let database = setup_end_to_end_kuzu(&temp_repo).await;
 
-    let db_dir = temp_repo.workspace_path.join("db.kuzu");
+    let db_dir = temp_repo.workspace_path.join("database.kz");
     let database_instance = database
         .get_or_create_database(&db_dir.to_string_lossy(), None)
         .expect("Failed to create database");
@@ -1100,7 +1100,7 @@ async fn test_detailed_data_inspection() {
     // Run full processing pipeline
     let output_dir = temp_repo.workspace_path.join("output");
     let output_path = output_dir.to_str().unwrap();
-    let database_path = temp_repo.workspace_path.join("db.kuzu");
+    let database_path = temp_repo.workspace_path.join("database.kz");
     let database_path_str = database_path.to_str().unwrap();
 
     let database = Arc::new(KuzuDatabase::new());
@@ -1244,7 +1244,7 @@ async fn test_server_side_repository_processing() {
 
     // Create a new temp direcory and specify database file path within it
     let database_temp_path = tempfile::tempdir().expect("Failed to create temp directory");
-    let database_path = database_temp_path.path().join("db.kuzu");
+    let database_path = database_temp_path.path().join("database.kz");
 
     let parquet_temp_path = tempfile::tempdir().expect("Failed to create temp directory");
     let parquet_path = parquet_temp_path.path().to_path_buf();
@@ -1292,7 +1292,7 @@ async fn test_parquet_file_structure() {
     let output_dir = temp_repo.workspace_path.join("parquet_test_output");
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
     let output_path = output_dir.to_str().unwrap();
-    let database_path = temp_repo.workspace_path.join("db.kuzu");
+    let database_path = temp_repo.workspace_path.join("database.kz");
     let database_path_str = database_path.to_str().unwrap();
 
     // Run full processing pipeline
