@@ -17,7 +17,8 @@ Additionally, a server started with `gkg server start` writes all logs to stderr
 
 ### Data reset
 
-A data reset may be required after installing a different version of `gkg`. Remove the `.gkg` folder and let Knowledge Graph rebuild its index. For platform-specific location see [Storage](#storage).
+A data reset may be required after installing a different version of `gkg`. You can remove indexed data using
+[gkg clean](/cli/clean) command.
 
 ## Common problems
 
