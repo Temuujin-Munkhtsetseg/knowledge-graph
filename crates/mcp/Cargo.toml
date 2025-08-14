@@ -12,6 +12,10 @@ database = { path = "../database" }
 workspace-manager = { path = "../workspace-manager" }
 axum = { workspace = true }
 tokio-util = { workspace = true }
+indexer = { path = "../indexer" }
+event-bus = { path = "../event-bus" }
+num_cpus = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

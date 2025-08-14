@@ -106,18 +106,24 @@ pub async fn run(
     let state = AppState {
         database: Arc::clone(&database),
         workspace_manager: workspace_manager.clone(),
-        event_bus,
+        event_bus: Arc::clone(&event_bus),
         job_dispatcher,
     };
 
     let serve_assets = ServeEmbed::<Assets>::new();
 
-    let mcp_http_router =
-        mcp_http_service(Arc::clone(&query_service), Arc::clone(&workspace_manager));
+    let mcp_http_router = mcp_http_service(
+        Arc::clone(&query_service),
+        Arc::clone(&workspace_manager),
+        Arc::clone(&database),
+        Arc::clone(&event_bus),
+    );
     let (mcp_sse_router, mcp_sse_cancellation_token) = mcp_sse_router(
         addr,
         Arc::clone(&query_service),
         Arc::clone(&workspace_manager),
+        Arc::clone(&database),
+        Arc::clone(&event_bus),
     );
 
     let api_router = Router::new()

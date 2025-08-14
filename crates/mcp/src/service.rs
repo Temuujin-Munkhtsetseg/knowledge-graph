@@ -1,5 +1,7 @@
 use crate::tools::AvailableToolsService;
+use database::kuzu::database::KuzuDatabase;
 use database::querying::types::QueryingService;
+use event_bus::EventBus;
 use rmcp::model::{
     Implementation, InitializeRequestParam, InitializeResult, ServerCapabilities, ToolsCapability,
 };
@@ -16,9 +18,16 @@ impl DefaultMcpService {
     pub fn new(
         query_service: Arc<dyn QueryingService>,
         workspace_manager: Arc<WorkspaceManager>,
+        database: Arc<KuzuDatabase>,
+        event_bus: Arc<EventBus>,
     ) -> Self {
         Self {
-            available_tools_service: AvailableToolsService::new(query_service, workspace_manager),
+            available_tools_service: AvailableToolsService::new(
+                query_service,
+                workspace_manager,
+                database,
+                event_bus,
+            ),
         }
     }
 }
