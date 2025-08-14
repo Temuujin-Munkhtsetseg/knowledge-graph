@@ -102,6 +102,9 @@ pub enum RelationshipType {
     InterfaceToProperty,
     #[strum(serialize = "INTERFACE_TO_LAMBDA")]
     InterfaceToLambda,
+    // REFERENCES
+    #[strum(serialize = "CALLS")]
+    Calls,
 }
 
 impl RelationshipType {

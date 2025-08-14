@@ -8,6 +8,9 @@ use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
 use parser_core::typescript::{
     ast::typescript_fqn_to_string,
+    references::types::{
+        TypeScriptReferenceInfo, TypeScriptReferenceTarget, TypeScriptTargetResolution,
+    },
     types::{
         TypeScriptDefinitionInfo, TypeScriptDefinitionType, TypeScriptFqn,
         TypeScriptImportedSymbolInfo,
@@ -67,7 +70,7 @@ impl TypeScriptAnalyzer {
 
                     definition_map.insert(
                         (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node, FqnType::TypeScript(fqn.clone())),
+                        (definition_node.clone(), FqnType::TypeScript(fqn.clone())),
                     );
                 }
             }
@@ -117,6 +120,69 @@ impl TypeScriptAnalyzer {
                     import_location: location.clone(),
                     relationship_type: RelationshipType::FileImports,
                 });
+            }
+        }
+    }
+
+    pub fn process_references(
+        &self,
+        file_result: &FileProcessingResult,
+        relative_file_path: &str,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+    ) {
+        if let Some(analyzer_references) = &file_result.references {
+            let iter_refs = analyzer_references.iter_typescript();
+            if let Some(iter_refs) = iter_refs {
+                for reference in iter_refs {
+                    let target_defn = match &reference.target {
+                        TypeScriptReferenceTarget::Resolved(target) => target,
+                        _ => continue,
+                    };
+                    let target_defn = match &target_defn {
+                        TypeScriptTargetResolution::Definition(definition) => definition,
+                        _ => continue,
+                    };
+
+                    let from_definition_fqn = reference
+                        .scope
+                        .as_ref()
+                        .map(typescript_fqn_to_string)
+                        .unwrap_or_default();
+
+                    let from_location = DefinitionLocation {
+                        file_path: relative_file_path.to_string(),
+                        start_byte: target_defn.range.byte_offset.0 as i64,
+                        end_byte: target_defn.range.byte_offset.1 as i64,
+                        start_line: target_defn.range.start.line as i32,
+                        end_line: target_defn.range.end.line as i32,
+                        start_col: target_defn.range.start.column as i32,
+                        end_col: target_defn.range.end.column as i32,
+                    };
+
+                    let Some(to_location) = self
+                        .create_definition_location_from_reference(reference, relative_file_path)
+                    else {
+                        file_definition_relationships.push(FileDefinitionRelationship {
+                            file_path: relative_file_path.to_string(),
+                            definition_fqn: from_definition_fqn.clone(),
+                            relationship_type: RelationshipType::Calls,
+                            definition_location: from_location.clone(),
+                        });
+                        continue;
+                    };
+
+                    let rel = DefinitionRelationship {
+                        from_file_path: relative_file_path.to_string(),
+                        to_file_path: relative_file_path.to_string(),
+                        from_definition_fqn,
+                        to_definition_fqn: typescript_fqn_to_string(&target_defn.fqn),
+                        from_location: from_location.clone(),
+                        to_location: to_location.clone(),
+                        relationship_type: RelationshipType::Calls,
+                    };
+                    definition_relationships.push(rel);
+                }
             }
         }
     }
@@ -203,6 +269,27 @@ impl TypeScriptAnalyzer {
             start_col: imported_symbol.range.start.column as i32,
             end_col: imported_symbol.range.end.column as i32,
         }
+    }
+
+    fn create_definition_location_from_reference(
+        &self,
+        reference: &TypeScriptReferenceInfo,
+        file_path: &str,
+    ) -> Option<DefinitionLocation> {
+        let Some(scope) = &reference.scope else {
+            return None;
+        };
+        let scope_range = scope.last().map(|part| part.range)?;
+
+        Some(DefinitionLocation {
+            file_path: file_path.to_string(),
+            start_byte: scope_range.byte_offset.0 as i64,
+            end_byte: scope_range.byte_offset.1 as i64,
+            start_line: scope_range.start.line as i32,
+            end_line: scope_range.end.line as i32,
+            start_col: scope_range.start.column as i32,
+            end_col: scope_range.end.column as i32,
+        })
     }
 
     fn create_imported_symbol_identifier(

@@ -222,6 +222,7 @@ impl<'a> GraphMapper<'a> {
         let mut file_not_found = 0;
         let mut def_not_found = 0;
         let mut import_not_found = 0;
+        let mut calls_count = 0;
         let mut missing_source_fqns = HashSet::new();
         let mut missing_target_fqns = HashSet::new();
 
@@ -277,6 +278,10 @@ impl<'a> GraphMapper<'a> {
 
         // Process file-to-definition relationships
         for file_rel in &graph_data.file_definition_relationships {
+            if file_rel.relationship_type == RelationshipType::Calls {
+                calls_count += 1;
+            }
+
             let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
                 warn!(
@@ -341,6 +346,10 @@ impl<'a> GraphMapper<'a> {
 
         // Process definition-to-definition relationships
         for def_rel in &graph_data.definition_relationships {
+            if def_rel.relationship_type == RelationshipType::Calls {
+                calls_count += 1;
+            }
+
             let Some(source_id) = id_generator
                 .get_definition_id(&def_rel.from_file_path, &def_rel.from_location.to_range())
             else {
@@ -423,6 +432,7 @@ impl<'a> GraphMapper<'a> {
             "Consolidated relationships: dir_not_found: {}, file_not_found: {}, def_not_found: {}, import_not_found: {}",
             dir_not_found, file_not_found, def_not_found, import_not_found
         );
+        info!("Consolidated calls count: {}", calls_count);
 
         // Show summary of missing definitions instead of individual warnings
         if !missing_source_fqns.is_empty() {
