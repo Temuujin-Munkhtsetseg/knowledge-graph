@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod utils;
 
-use crate::commands::{index, server};
+use crate::commands::{clean, index, server};
 use cli::{Commands, GkgCli, ServerCommands};
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
@@ -20,6 +20,7 @@ async fn main() -> anyhow::Result<()> {
     let verbose = match cli.command {
         Commands::Index { verbose, .. } => verbose,
         Commands::Server { .. } => false,
+        Commands::Clean => false,
     };
 
     let mode = match cli.command {
@@ -34,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
             }
             ServerCommands::Stop => LogMode::ServerForeground,
         },
+        Commands::Clean => LogMode::Cli,
     };
 
     let _guard = logging::init(mode, verbose)?;
@@ -74,5 +76,6 @@ async fn main() -> anyhow::Result<()> {
             }
             ServerCommands::Stop => server::stop().await,
         },
+        Commands::Clean => clean::run(Arc::clone(&workspace_manager)),
     }
 }
