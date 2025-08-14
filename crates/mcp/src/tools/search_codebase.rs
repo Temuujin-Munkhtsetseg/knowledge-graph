@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use crate::tools::types::KnowledgeGraphTool;
 use workspace_manager::WorkspaceManager;
 
-const SEARCH_CODEBASE_TOOL_NAME: &str = "search_codebase";
+pub const SEARCH_CODEBASE_TOOL_NAME: &str = "search_codebase";
 const SEARCH_CODEBASE_TOOL_DESCRIPTION: &str = "Searches for specific text, functions, variables, or code across all files in the codebase. \
 Use this to locate specific implementations, track dependencies, find usage examples, or identify all occurrences of a particular element.";
 
