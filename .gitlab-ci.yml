@@ -196,9 +196,10 @@ go-tests:
   needs:
     - build-bindings
   script:
-    - gunzip lib/linux_amd64/libindexer_c_bindings.a.gz
+    - mkdir /tmp/libindexer
+    - tar xzf lib/linux_amd64/libindexer_c_bindings.tar.gz -C /tmp/libindexer
     - cd bindings/go/
-    - CGO_LDFLAGS="-L../../lib/linux_amd64/" go test ./...
+    - CGO_LDFLAGS="-L/tmp/libindexer/lib" CGO_CFLAGS="-I/tmp/libindexer/include" go test ./...
   extends: .go-job-template
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
@@ -456,8 +457,6 @@ release:
     - build:windows-x86_64
     - cargo-update
   before_script:
-    # Install git-lfs to handle large library files
-    - apt update && apt install -y git-lfs
     # Use the new Cargo.lock from cargo-update step
     - tar -xzf cargo-files.tar.gz
     # Validate that the repository contains a package.json and extract a few values from it.
@@ -480,6 +479,6 @@ release:
     - npm ci
     # Generate SHA256 checksums for all binaries
     - for file in *.tar.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
-    - for file in lib/*/libindexer_c_bindings.a.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
+    - for file in lib/*/libindexer_c_bindings.tar.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
     - npm run semantic-release
   allow_failure: false
