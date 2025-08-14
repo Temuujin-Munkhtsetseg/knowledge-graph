@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::tools::analyze_code_file::AnalyzeCodeFileTool;
+use crate::tools::ANALYZE_CODE_FILES_TOOL_NAME;
+use crate::tools::analyze_code_files::AnalyzeCodeFilesTool;
 use crate::tools::search_codebase::SearchCodebaseTool;
 use crate::tools::types::KnowledgeGraphTool;
 use crate::tools::workspace_tools::get_list_projects_tool;
@@ -38,8 +39,8 @@ impl AvailableToolsService {
         );
 
         tools.insert(
-            "analyze_code_file".to_string(),
-            Box::new(AnalyzeCodeFileTool::new(
+            ANALYZE_CODE_FILES_TOOL_NAME.to_string(),
+            Box::new(AnalyzeCodeFilesTool::new(
                 query_service.clone(),
                 workspace_manager.clone(),
             )),

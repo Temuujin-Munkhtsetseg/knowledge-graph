@@ -8,17 +8,17 @@ use workspace_manager::WorkspaceManager;
 
 use crate::tools::types::KnowledgeGraphTool;
 
-pub const ANALYZE_CODE_FILE_TOOL_NAME: &str = "analyze_code_file";
-const ANALYZE_CODE_FILE_TOOL_DESCRIPTION: &str = "Analyzes the structure and dependencies of code files. \
+pub const ANALYZE_CODE_FILES_TOOL_NAME: &str = "analyze_code_files";
+const ANALYZE_CODE_FILES_TOOL_DESCRIPTION: &str = "Analyzes the structure and dependencies of one or more code files. \
 Lists all class/function definitions, imports, exports, and key components. \
 Essential for understanding file organization, dependencies, and codebase architecture before making modifications or providing guidance.";
 
-pub struct AnalyzeCodeFileTool {
+pub struct AnalyzeCodeFilesTool {
     pub query_service: Arc<dyn QueryingService>,
     pub workspace_manager: Arc<WorkspaceManager>,
 }
 
-impl AnalyzeCodeFileTool {
+impl AnalyzeCodeFilesTool {
     pub fn new(
         query_service: Arc<dyn QueryingService>,
         workspace_manager: Arc<WorkspaceManager>,
@@ -171,9 +171,9 @@ impl AnalyzeCodeFileTool {
     }
 }
 
-impl KnowledgeGraphTool for AnalyzeCodeFileTool {
+impl KnowledgeGraphTool for AnalyzeCodeFilesTool {
     fn name(&self) -> &str {
-        ANALYZE_CODE_FILE_TOOL_NAME
+        ANALYZE_CODE_FILES_TOOL_NAME
     }
 
     fn to_mcp_tool(&self) -> Tool {
@@ -213,8 +213,8 @@ impl KnowledgeGraphTool for AnalyzeCodeFileTool {
         );
 
         Tool {
-            name: Cow::Borrowed(ANALYZE_CODE_FILE_TOOL_NAME),
-            description: Some(Cow::Borrowed(ANALYZE_CODE_FILE_TOOL_DESCRIPTION)),
+            name: Cow::Borrowed(ANALYZE_CODE_FILES_TOOL_NAME),
+            description: Some(Cow::Borrowed(ANALYZE_CODE_FILES_TOOL_DESCRIPTION)),
             input_schema: Arc::new(input_schema),
             output_schema: None,
             annotations: None,
@@ -354,7 +354,7 @@ mod tests {
             );
 
         let (workspace_manager, project_path) = create_test_workspace_manager();
-        let tool = AnalyzeCodeFileTool::new(Arc::new(mock_query_service), workspace_manager);
+        let tool = AnalyzeCodeFilesTool::new(Arc::new(mock_query_service), workspace_manager);
 
         let mut params = JsonObject::new();
         params.insert(
