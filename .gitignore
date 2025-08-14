@@ -5,7 +5,7 @@ report.xml
 
 # Output
 output
-db.kuzu
+database.kz
 kuzu_db
 
 # TypeScript test files
