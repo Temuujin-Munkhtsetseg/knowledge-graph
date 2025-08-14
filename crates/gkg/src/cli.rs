@@ -46,6 +46,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: ServerCommands,
     },
+    /// Remove all indexed data
+    Clean,
 }
 
 #[derive(Subcommand, Debug)]

@@ -6,6 +6,7 @@ use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
 use gitalisk_core::workspace_folder::gitalisk_workspace::CoreGitaliskWorkspaceFolder;
 use log::info;
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -631,6 +632,31 @@ impl WorkspaceManager {
         }
 
         self.register_workspace_folder(workspace_folder_path)
+    }
+
+    pub fn clean(&self) -> Result<()> {
+        let workspace_folders_dir = &self.data_directory.workspace_folders_dir;
+        if workspace_folders_dir.exists() {
+            fs::remove_dir_all(workspace_folders_dir)?;
+            info!(
+                "Removed workspace folders directory: {}",
+                workspace_folders_dir.display()
+            );
+        }
+
+        let manifest_path = self.state_service.manifest_path().to_path_buf();
+        if manifest_path.exists() {
+            fs::remove_file(&manifest_path)?;
+            info!("Removed manifest file: {}", manifest_path.display());
+        }
+
+        // Clear the workspaces in case the function is called in stateful context (server)
+        {
+            let mut workspaces = self.gitalisk_workspaces.write().unwrap();
+            workspaces.clear();
+        }
+
+        Ok(())
     }
 }
 
