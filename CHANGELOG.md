@@ -1,3 +1,53 @@
+## [0.10.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.9.0...v0.10.0) (2025-08-14)
+
+### :sparkles: Features
+
+* **cli:** daemon mode for unix systems ([91ed1d4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/91ed1d402b2011d286818aa7ef64028756efdfad)) by Bohdan Parkhomchuk
+* display import in playground ([4758f64](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4758f6423b21f2289323577d0fe34008af84ed1a)) by Jean-Gabriel Doyon
+* **gkg:** support server start and stop commands ([b7fa400](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b7fa4009c6b7f6b450392d218a4d4f927dc08f4a)) by Bohdan Parkhomchuk
+* include libindexer header file in release ([16832bf](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/16832bf1eff12f2b21d8f0e9bb8a2d26c45e59c3)) by Jan Provaznik
+* **java:** index Java imports ([7bb5261](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7bb526179a300c77e1ad8d8417c9ce734a14f7ae)) by Jean-Gabriel Doyon
+* **kotlin:** index Kotlin imports ([07bc2f6](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/07bc2f68c5c71d2cf005a346ac9df3bb9ccfb8bf)) by Jean-Gabriel Doyon
+* **mcp:** add analyze code file and search tools ([6e8d406](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6e8d406f2a83f79959a86a73096316486b5fb69a)) by Jean-Gabriel Doyon
+* **mcp:** add MCP documentation ([f19329b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/f19329ba3d2d450f73acb57812c5abd2b325cc94)) by Jean-Gabriel Doyon
+* **perf:** enable mimalloc ([ff13947](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ff13947e6e7d38755929523d4ff04eb488bb7afb)) by Michael Usachenko
+
+### :bug: Fixes
+
+* fix download path ([e2fa21e](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e2fa21e90c8c44be807b5e95d969e183a04dacf0)) by Jan Provaznik
+* **gkg:** lock file race condition ([c39cd69](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c39cd695e10bd052da5c375b41f28669a0694899)) by Michael Angelo Rivera
+* **indexer:** properly cleanup db file ([864dace](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/864dacecd1198b51fc2d894bf8efeac43d0b9d13)) by Michael Angelo Rivera
+* make stderr logs async and lossy ([6b79ef6](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6b79ef64d0d4f863aa9bd823c01e43e9274555af)) by Bohdan Parkhomchuk
+* **panel:** show total nodes in panel graph preview ([ba24e66](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ba24e6675eb80c45a10764cc30b7baa64e3228c9)) by michaelangeloio
+* properly output gkg version in cli ([30c5c2a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/30c5c2a6d50e6b8f78a58be3c321a68eb7db52a9)) by Bohdan Parkhomchuk
+* stop spamming stderr for server foreground logs ([18a380e](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/18a380e033013345c2c250e66ecd4427d5841bd7)) by Jean-Gabriel Doyon
+
+### :memo: Documentation
+
+* add bug template ([2df3259](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/2df3259f77b99944c0a8a3e270b7c096a08b16d8)) by Bohdan Parkhomchuk
+* add gitlab pages link to readme ([9ac20a7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9ac20a73b3c8e81eaca0e5537b116dc78d3a2135)) by Bohdan Parkhomchuk
+* add lang support page, ide integration, extend troubleshoot ([a287982](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a287982ab70cea831c1ed5148bb2567d44e00b19)) by Bohdan Parkhomchuk
+* update server start/stop commands, describe detached mode ([e52163d](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e52163d522c26ae9dc1b4bc25b9492055238dadd)) by Bohdan Parkhomchuk
+
+### :zap: Refactor
+
+* **indexer:** support mandatory FQN in parser-core definitions ([a075bac](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a075baca7a436238f236faefa167e17b9af66686)) by Vitali Tatarintev
+* **server:** enhance server logs and modularize tracing functions ([bf64e3f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/bf64e3f192f2d40b5f9176b0a00a687830c6bc27)) by Fern
+
+### :fast_forward: Performance
+
+* **indexer:** pipelined async I/O with bounded CPU parsing, async executors, consolidate file I/O ([4d17208](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4d172080dbeca26f965fe1678ab78cc677c9420c)) by Michael Angelo Rivera
+
+### :repeat: Chore
+
+* **build:** require frontend assets to build ([f7a89c6](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/f7a89c6f345f1b4941c332b40e1d7a94376b283b)) by Bohdan Parkhomchuk
+* **cli:** split main file ([c2d16ce](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c2d16ce209892f189c3f1ded7764ee1c2bc3a014)) by Bohdan Parkhomchuk
+* **db:** move database service to database crate ([b68fc22](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b68fc2225e349db7a04d28696e20586c82117d84)) by Michael Usachenko
+* **deps:** upgrade rmcp and deps ([ddd7ad1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ddd7ad16c83fae6e904a07153df141f5c75fd72d)) by Michael Angelo Rivera
+* **deps:** upgrade rust to 1.89.0 ([328ce89](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/328ce893621e5b11d48400e3000d4f5a4a6a4024)) by michaelangeloio
+* **indexer:** support ts ast-grep removal in indexer ([5a84a1f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5a84a1fbf39a1b3c347bb9ba9713a4e87fbb4a16)) by Michael Usachenko
+* **logging:** replace std print lines with tracing logging ([3d67ee6](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3d67ee654287b8626a878ab30014068e09be2dfd)) by Bohdan Parkhomchuk
+
 ## [0.9.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.8.0...v0.9.0) (2025-08-04)
 
 ### :sparkles: Features
