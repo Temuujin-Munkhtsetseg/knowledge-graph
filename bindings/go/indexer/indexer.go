@@ -2,7 +2,7 @@ package indexer
 
 /*
 #include <stdlib.h>
-#include "../include/c_bindings.h"
+#include "c_bindings.h"
 */
 import "C"
 import (
