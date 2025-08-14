@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use tracing::{info, warn};
+use std::collections::{HashMap, HashSet};
+use tracing::{debug, info, warn};
 
 use crate::analysis::types::{GraphData, ImportedSymbolLocation};
 use crate::mutation::types::{ConsolidatedRelationship, ConsolidatedRelationships};
@@ -222,6 +222,8 @@ impl<'a> GraphMapper<'a> {
         let mut file_not_found = 0;
         let mut def_not_found = 0;
         let mut import_not_found = 0;
+        let mut missing_source_fqns = HashSet::new();
+        let mut missing_target_fqns = HashSet::new();
 
         // Process directory-to-directory and directory-to-file relationships
         for dir_rel in &graph_data.directory_relationships {
@@ -343,7 +345,11 @@ impl<'a> GraphMapper<'a> {
                 .get_definition_id(&def_rel.from_file_path, &def_rel.from_location.to_range())
             else {
                 def_not_found += 1;
-                warn!(
+                missing_source_fqns.insert((
+                    def_rel.from_definition_fqn.clone(),
+                    def_rel.from_file_path.clone(),
+                ));
+                debug!(
                     "(DEFINITION_RELATIONSHIPS) Source definition ID not found: {} {}",
                     def_rel.from_definition_fqn, def_rel.from_file_path,
                 );
@@ -354,7 +360,11 @@ impl<'a> GraphMapper<'a> {
                 .get_definition_id(&def_rel.to_file_path, &def_rel.to_location.to_range())
             else {
                 def_not_found += 1;
-                warn!(
+                missing_target_fqns.insert((
+                    def_rel.to_definition_fqn.clone(),
+                    def_rel.to_file_path.clone(),
+                ));
+                debug!(
                     "(DEFINITION_RELATIONSHIPS) Target definition ID not found: {} {}",
                     def_rel.to_definition_fqn, def_rel.to_file_path,
                 );
@@ -378,7 +388,9 @@ impl<'a> GraphMapper<'a> {
                 .get_definition_id(&def_rel.file_path, &def_rel.definition_location.to_range())
             else {
                 def_not_found += 1;
-                warn!(
+                missing_source_fqns
+                    .insert((def_rel.definition_fqn.clone(), def_rel.file_path.clone()));
+                debug!(
                     "(DEFINES_IMPORTED_SYMBOL) Source definition ID not found: {} {}",
                     def_rel.definition_fqn, def_rel.file_path,
                 );
@@ -411,6 +423,33 @@ impl<'a> GraphMapper<'a> {
             "Consolidated relationships: dir_not_found: {}, file_not_found: {}, def_not_found: {}, import_not_found: {}",
             dir_not_found, file_not_found, def_not_found, import_not_found
         );
+
+        // Show summary of missing definitions instead of individual warnings
+        if !missing_source_fqns.is_empty() {
+            warn!(
+                "Missing source definitions: {} unique FQNs",
+                missing_source_fqns.len()
+            );
+            for (fqn, _file) in missing_source_fqns.iter().take(5) {
+                debug!("  Missing source: {}", fqn);
+            }
+            if missing_source_fqns.len() > 5 {
+                debug!("  ... and {} more", missing_source_fqns.len() - 5);
+            }
+        }
+
+        if !missing_target_fqns.is_empty() {
+            warn!(
+                "Missing target definitions: {} unique FQNs",
+                missing_target_fqns.len()
+            );
+            for (fqn, _file) in missing_target_fqns.iter().take(5) {
+                debug!("  Missing target: {}", fqn);
+            }
+            if missing_target_fqns.len() > 5 {
+                debug!("  ... and {} more", missing_target_fqns.len() - 5);
+            }
+        }
 
         Ok(relationships)
     }
