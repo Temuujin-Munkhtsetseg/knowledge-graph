@@ -87,6 +87,10 @@ run = "npm run lint --workspace=@gitlab-org/gkg-frontend"
 [tasks.docs-dev]
 run = "npm run dev --workspace=docs"
 
+# formats docs to fix lints
+[tasks.docs-fix-all]
+run = "npm run lint --workspace=docs -- --write"
+
 # runs gitlab-xtasks to check for newlines
 [tasks.newlines-fix]
 run = "gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs --directory . --fix"

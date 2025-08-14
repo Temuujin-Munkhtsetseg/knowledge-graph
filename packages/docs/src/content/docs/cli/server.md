@@ -1,6 +1,8 @@
 ---
 title: gkg server
 description: Manage the GitLab Knowledge Graph HTTP server with web interface and API
+sidebar:
+  order: 2
 ---
 
 Manage the GitLab Knowledge Graph HTTP server, providing a web interface, HTTP API, and optional file watching for automatic re-indexing.

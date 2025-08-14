@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-### analyze_code_file
+### analyze_code_files
 
 List the imports and definitions for a one or multiple code files.
 
@@ -27,3 +27,16 @@ Input:
 - `limit` (int, optional) (default: 50): The maximum amount of results to include in the response.
 
 Output: An array containing the code entries matching any of the search terms.
+
+### index_project
+
+Creates new or rebuilds the Knowledge Graph index for a project to reflect recent changes.
+
+Input:
+
+- `project_absolute_path` (string): The absolute path to the current project directory to index synchronously.
+
+Output: An object containing:
+
+- `status` (string): "ok" when indexing completes successfully
+- `stats` (object): Project indexing statistics including total files processed and project path
