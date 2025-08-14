@@ -12,20 +12,20 @@ use workspace_manager::WorkspaceManager;
 
 use crate::tools::types::KnowledgeGraphTool;
 
-pub const REINDEX_PROJECT_TOOL_NAME: &str = "reindex_project";
-const REINDEX_PROJECT_TOOL_DESCRIPTION: &str = "Rebuilds the Knowledge Graph index for a project to reflect recent changes. Use this tool when: \
+pub const INDEX_PROJECT_TOOL_NAME: &str = "index_project";
+const INDEX_PROJECT_TOOL_DESCRIPTION: &str = "Rebuilds the Knowledge Graph index for a project to reflect recent changes. Use this tool when: \
 - You have made substantial modifications to project files, structure, or content \
 - The Knowledge Graph seems outdated or missing recent changes \
 - Search results are not reflecting recent updates to the project \
 - After bulk operations like file imports, deletions, or major refactoring";
 
-pub struct ReindexProjectTool {
+pub struct IndexProjectTool {
     database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
 }
 
-impl ReindexProjectTool {
+impl IndexProjectTool {
     pub fn new(
         database: Arc<KuzuDatabase>,
         workspace_manager: Arc<WorkspaceManager>,
@@ -39,9 +39,9 @@ impl ReindexProjectTool {
     }
 }
 
-impl KnowledgeGraphTool for ReindexProjectTool {
+impl KnowledgeGraphTool for IndexProjectTool {
     fn name(&self) -> &str {
-        "reindex_project"
+        INDEX_PROJECT_TOOL_NAME
     }
 
     fn to_mcp_tool(&self) -> Tool {
@@ -70,8 +70,8 @@ impl KnowledgeGraphTool for ReindexProjectTool {
         );
 
         Tool {
-            name: Cow::Borrowed(REINDEX_PROJECT_TOOL_NAME),
-            description: Some(Cow::Borrowed(REINDEX_PROJECT_TOOL_DESCRIPTION)),
+            name: Cow::Borrowed(INDEX_PROJECT_TOOL_NAME),
+            description: Some(Cow::Borrowed(INDEX_PROJECT_TOOL_DESCRIPTION)),
             input_schema: Arc::new(input_schema),
             output_schema: None,
             annotations: None,
@@ -195,13 +195,13 @@ mod tests {
     }
 
     #[test]
-    fn test_reindex_project_returns_stats() {
+    fn test_index_project_returns_stats() {
         let (_workspace_dir, _data_dir, workspace_manager, project_path) =
             create_workspace_with_project();
         let database = Arc::new(KuzuDatabase::new());
         let event_bus = Arc::new(EventBus::new());
 
-        let tool = ReindexProjectTool::new(
+        let tool = IndexProjectTool::new(
             Arc::clone(&database),
             Arc::clone(&workspace_manager),
             Arc::clone(&event_bus),
