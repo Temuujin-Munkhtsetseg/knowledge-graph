@@ -16,6 +16,7 @@ const emit = defineEmits<{
   (e: 'toggle-fullscreen'): void;
   (e: 'refresh'): void;
   (e: 'toggle-search'): void;
+  (e: 'reindex'): void;
 }>();
 </script>
 
@@ -42,5 +43,6 @@ const emit = defineEmits<{
       <Loader2 v-if="isLoading" class="h-3 w-3 animate-spin mr-1" />
       Refresh
     </Button>
+    <Button variant="outline" size="sm" @click="emit('reindex')"> Re-index </Button>
   </div>
 </template>

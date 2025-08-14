@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { AlertCircle } from 'lucide-vue-next';
-import type { TSProjectInfo } from '@gitlab-org/gkg';
+import { AlertCircle, RotateCcw } from 'lucide-vue-next';
+import type { TSProjectInfo, WorkspaceIndexBodyRequest } from '@gitlab-org/gkg';
 import WorkspaceListItemHeader from './WorkspaceListItemHeader.vue';
+import { Button } from '@/components/ui/button';
+import { apiClient } from '@/api/client';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
   project: TSProjectInfo;
@@ -13,6 +16,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   openProject: [projectPath: string];
+  refresh: [];
 }>();
 
 const formatPath = (path: string) => {
@@ -28,14 +32,47 @@ const handleProjectClick = () => {
     emit('openProject', props.project.project_path);
   }
 };
+
+const handleReindexClick = async () => {
+  if (!isIndexed.value || !props.workspacePath) return;
+  const payload: WorkspaceIndexBodyRequest = {
+    workspace_folder_path: props.workspacePath,
+  };
+  try {
+    await apiClient.triggerWorkspaceIndex(payload);
+    emit('refresh');
+  } catch (_error) {
+    // no-op
+  }
+};
 </script>
 
 <template>
   <div
-    class="border border-border bg-card hover:bg-muted/30 transition-colors rounded-sm"
+    class="group/project relative border border-border bg-card hover:bg-muted/30 transition-colors rounded-sm"
     :class="{ 'cursor-pointer': isIndexed }"
     @click="handleProjectClick"
   >
+    <div
+      v-if="isIndexed"
+      class="absolute top-1 right-1 opacity-0 group-hover/project:opacity-100 transition-opacity"
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        class="h-5 w-5 p-0 hover:bg-muted/60"
+        :aria-label="`Re-index ${formatPath(project?.project_path || 'project')}`"
+        @click.stop="handleReindexClick"
+      >
+        <Tooltip>
+          <TooltipTrigger class="cursor-pointer">
+            <RotateCcw class="h-3 w-3" />
+          </TooltipTrigger>
+          <TooltipContent>Re-index</TooltipContent>
+        </Tooltip>
+      </Button>
+    </div>
+
     <div class="flex flex-col space-y-2 p-2">
       <WorkspaceListItemHeader
         :name="formatPath(project?.project_path || 'Unknown project')"
