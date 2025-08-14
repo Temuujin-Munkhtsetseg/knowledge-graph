@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { Network } from 'lucide-vue-next';
-import type { TypedGraphNode, GraphRelationship } from '@gitlab-org/gkg';
+import type { TypedGraphNode, GraphRelationship, WorkspaceIndexBodyRequest } from '@gitlab-org/gkg';
 import StyledPath from '../common/StyledPath.vue';
 import GraphControls from './GraphControls.vue';
 import GraphLegend from './GraphLegend.vue';
@@ -224,6 +224,18 @@ const handleNodeSelected = async (node: TypedGraphNode) => {
   }
 };
 
+const handleReindex = async () => {
+  if (!props.workspaceFolderPath) return;
+  const payload: WorkspaceIndexBodyRequest = {
+    workspace_folder_path: props.workspaceFolderPath,
+  };
+  try {
+    await apiClient.triggerWorkspaceIndex(payload);
+  } catch (_error) {
+    // no-op
+  }
+};
+
 watch(
   () => props.projectPath,
   () => {
@@ -294,6 +306,7 @@ onUnmounted(() => {
           @toggle-fullscreen="toggleFullscreen"
           @toggle-search="toggleSearch"
           @refresh="refetch"
+          @reindex="handleReindex"
         />
       </div>
     </CardHeader>

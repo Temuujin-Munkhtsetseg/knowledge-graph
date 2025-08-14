@@ -203,6 +203,10 @@ export class ApiClient extends HttpClient {
     await this.post(endpointPaths.index, data);
   }
 
+  async triggerWorkspaceIndex(data: WorkspaceIndexBodyRequest): Promise<void> {
+    await this.post(endpointPaths.index, data);
+  }
+
   async subscribeToEventBus(callbacks: EventBusCallbacks = {}): Promise<() => void> {
     this.#sseConnection = new SSEConnection();
     await this.#sseConnection.connect(endpointPaths.events, {
