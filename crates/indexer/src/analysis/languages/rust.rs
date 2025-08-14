@@ -1,11 +1,14 @@
 use crate::analysis::types::{
-    DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-    FileDefinitionRelationship, FqnType,
+    DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
+    DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
+    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
+    ImportedSymbolNode,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
 use parser_core::rust::{
     fqn::rust_fqn_to_string,
+    imports::RustImportedSymbolInfo,
     types::{RustDefinitionInfo, RustDefinitionType, RustFqn},
 };
 use smallvec::SmallVec;
@@ -58,17 +61,53 @@ impl RustAnalyzer {
                         continue;
                     }
 
-                    definition_map
-                        .insert(key, (definition_node.clone(), FqnType::Rust(fqn.clone())));
+                    definition_map.insert(key, (definition_node.clone(), FqnType::Rust(fqn)));
 
-                    if self.is_top_level_definition(&fqn) {
-                        file_definition_relationships.push(FileDefinitionRelationship {
-                            file_path: relative_file_path.to_string(),
-                            definition_fqn: definition_node.fqn.clone(),
-                            relationship_type: RelationshipType::FileDefines,
-                            definition_location: location.clone(),
-                        });
-                    }
+                    file_definition_relationships.push(FileDefinitionRelationship {
+                        file_path: relative_file_path.to_string(),
+                        definition_fqn: definition_node.fqn.clone(),
+                        relationship_type: RelationshipType::FileDefines,
+                        definition_location: location.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    /// Process imports from a file result and update the imports map
+    pub fn process_imports(
+        &self,
+        file_result: &FileProcessingResult,
+        relative_file_path: &str,
+        imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
+    ) {
+        if let Some(imports) = file_result.imported_symbols.as_ref()
+            && let Some(rust_imports) = imports.iter_rust()
+        {
+            for import in rust_imports {
+                if let Ok(Some((location, import_fqn))) =
+                    self.create_import_location(import, relative_file_path)
+                {
+                    let import_fqn_string = rust_fqn_to_string(&import_fqn);
+                    let imported_symbol_node = ImportedSymbolNode::new(
+                        ImportType::Rust(import.import_type),
+                        import.import_path.clone(),
+                        Some(self.create_import_identifier(import)),
+                        location.clone(),
+                    );
+
+                    let key = (import_fqn_string, relative_file_path.to_string());
+                    imported_symbol_map
+                        .entry(key)
+                        .or_default()
+                        .push(imported_symbol_node.clone());
+
+                    file_imported_symbol_relationships.push(FileImportedSymbolRelationship {
+                        file_path: relative_file_path.to_string(),
+                        import_location: location.clone(),
+                        relationship_type: RelationshipType::FileImports,
+                    });
                 }
             }
         }
@@ -78,9 +117,19 @@ impl RustAnalyzer {
     pub fn add_definition_relationships(
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
+        // Handle definition-to-definition relationships
         self.add_rust_definition_relationships(definition_map, definition_relationships);
+
+        // Handle definition-to-imported-symbol relationships (scoped imports)
+        self.add_rust_definition_import_relationships(
+            definition_map,
+            imported_symbol_map,
+            definition_imported_symbol_relationships,
+        );
     }
 
     /// Create definition location from Rust definition info
@@ -100,6 +149,76 @@ impl RustAnalyzer {
         };
 
         Ok(Some((location, definition.fqn.clone())))
+    }
+
+    /// Create import location from Rust import info
+    fn create_import_location(
+        &self,
+        import: &RustImportedSymbolInfo,
+        file_path: &str,
+    ) -> Result<Option<(ImportedSymbolLocation, RustFqn)>, String> {
+        let location = ImportedSymbolLocation {
+            file_path: file_path.to_string(),
+            start_line: import.range.start.line as i32,
+            start_col: import.range.start.column as i32,
+            end_line: import.range.end.line as i32,
+            end_col: import.range.end.column as i32,
+            start_byte: import.range.byte_offset.0 as i64,
+            end_byte: import.range.byte_offset.1 as i64,
+        };
+
+        // For Rust imports, we need to construct an FQN from the import information
+        let import_fqn = if let Some(scope) = &import.scope {
+            scope.clone()
+        } else {
+            // Create a simple FQN from the import path
+            RustFqn::new(SmallVec::new())
+        };
+
+        Ok(Some((location, import_fqn)))
+    }
+
+    /// Create import identifier from Rust import info
+    fn create_import_identifier(&self, import: &RustImportedSymbolInfo) -> ImportIdentifier {
+        if let Some(identifier) = &import.identifier {
+            ImportIdentifier {
+                name: identifier.name.clone(),
+                alias: identifier.alias.clone(),
+            }
+        } else {
+            ImportIdentifier {
+                name: import.import_path.clone(),
+                alias: None,
+            }
+        }
+    }
+
+    /// Add Rust-specific definition-to-imported-symbol relationships (scoped imports)
+    fn add_rust_definition_import_relationships(
+        &self,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+    ) {
+        // Iterate through all definitions to find imports scoped within them
+        for ((definition_fqn_string, file_path), (definition_node, _)) in definition_map {
+            // Look for imports that have this definition's FQN as their scope
+            if let Some(imported_symbol_nodes) =
+                imported_symbol_map.get(&(definition_fqn_string.clone(), file_path.clone()))
+            {
+                for imported_symbol in imported_symbol_nodes {
+                    definition_imported_symbol_relationships.push(
+                        DefinitionImportedSymbolRelationship {
+                            file_path: file_path.clone(),
+                            definition_fqn: definition_fqn_string.clone(),
+                            imported_symbol_location: imported_symbol.location.clone(),
+                            relationship_type: RelationshipType::DefinesImportedSymbol,
+                            definition_location: definition_node.location.clone(),
+                        },
+                    );
+                }
+            }
+        }
     }
 
     /// Add Rust-specific definition relationships
@@ -223,9 +342,5 @@ impl RustAnalyzer {
             }
             _ => None,
         }
-    }
-
-    fn is_top_level_definition(&self, fqn: &RustFqn) -> bool {
-        fqn.len() == 1
     }
 }

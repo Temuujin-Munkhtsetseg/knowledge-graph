@@ -322,6 +322,12 @@ impl AnalysisService {
                     definition_map,
                     file_definition_relationships,
                 );
+                self.rust_analyzer.process_imports(
+                    file_result,
+                    &relative_path,
+                    imported_symbol_map,
+                    file_imported_symbol_relationships,
+                );
             }
         }
     }
@@ -392,8 +398,12 @@ impl AnalysisService {
                 );
             }
             SupportedLanguage::Rust => {
-                self.rust_analyzer
-                    .add_definition_relationships(&definition_map, definition_relationships);
+                self.rust_analyzer.add_definition_relationships(
+                    &definition_map,
+                    &imported_symbol_map,
+                    definition_relationships,
+                    definition_imported_symbol_relationships,
+                );
             }
         }
     }
