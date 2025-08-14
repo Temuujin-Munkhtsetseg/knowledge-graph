@@ -32,6 +32,7 @@ use parser_core::{
     rust::{analyzer::RustAnalyzer, imports::RustImportedSymbolInfo, types::RustDefinitionInfo},
     typescript::{
         analyzer::TypeScriptAnalyzer,
+        references::types::TypeScriptReferenceInfo,
         types::{TypeScriptDefinitionInfo, TypeScriptImportedSymbolInfo},
     },
 };
@@ -207,6 +208,19 @@ impl<'a> FileProcessor<'a> {
             });
         }
 
+        // Check if file is excluded
+        if language
+            .exclude_extensions()
+            .iter()
+            .any(|suffix| self.path.ends_with(suffix))
+        {
+            return ProcessingResult::Skipped(SkippedFile {
+                file_path: self.path.clone(),
+                reason: format!("File is excluded due to exclude_extensions match: {language:?}"),
+                file_size: Some(self.size()),
+            });
+        }
+
         // Use unified pipeline for all languages (GenericParser + rules + analyzer)
         {
             // 2. Parse the file
@@ -372,7 +386,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::TypeScript(analysis_result.definitions),
                         Some(ImportedSymbols::TypeScript(analysis_result.imports)),
-                        None, // TypeScript doesn't extract expressions currently
+                        Some(References::TypeScript(analysis_result.references)),
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze TypeScript file '{}': {}",
@@ -616,6 +630,7 @@ pub type RubyReference = ReferenceInfo<
 #[derive(Debug, Clone)]
 pub enum References {
     Ruby(Vec<RubyReference>),
+    TypeScript(Vec<TypeScriptReferenceInfo>),
 }
 
 impl References {
@@ -623,6 +638,7 @@ impl References {
     pub fn count(&self) -> usize {
         match self {
             References::Ruby(references) => references.len(),
+            References::TypeScript(references) => references.len(),
         }
     }
 
@@ -634,6 +650,14 @@ impl References {
     pub fn iter_ruby(&self) -> Option<impl Iterator<Item = &RubyReference>> {
         match self {
             References::Ruby(references) => Some(references.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptReferenceInfo>> {
+        match self {
+            References::TypeScript(references) => Some(references.iter()),
+            _ => None,
         }
     }
 }

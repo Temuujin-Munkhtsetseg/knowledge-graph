@@ -114,6 +114,7 @@ impl AnalysisService {
                     file_result,
                     &mut definition_map,
                     &mut imported_symbol_map,
+                    &mut definition_relationships,
                     &mut file_definition_relationships,
                     &mut file_imported_symbol_relationships,
                 );
@@ -222,6 +223,7 @@ impl AnalysisService {
         file_result: &FileProcessingResult,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
         file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
     ) {
@@ -305,6 +307,12 @@ impl AnalysisService {
                     &relative_path,
                     imported_symbol_map,
                     file_imported_symbol_relationships,
+                );
+                self.typescript_analyzer.process_references(
+                    file_result,
+                    &relative_path,
+                    definition_relationships,
+                    file_definition_relationships,
                 );
             }
             SupportedLanguage::Rust => {
