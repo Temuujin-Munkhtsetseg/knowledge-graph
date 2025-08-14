@@ -1,5 +1,6 @@
 use database::graph::RelationshipType;
 use parser_core::{
+    csharp::types::{CSharpDefinitionType, CSharpFqn, CSharpImportType},
     definitions::DefinitionTypeInfo,
     imports::ImportTypeInfo,
     java::types::{JavaDefinitionType, JavaFqn, JavaImportType},
@@ -101,6 +102,7 @@ pub enum DefinitionType {
     Python(PythonDefinitionType),
     Kotlin(KotlinDefinitionType),
     Java(JavaDefinitionType),
+    CSharp(CSharpDefinitionType),
     TypeScript(TypeScriptDefinitionType),
     Unsupported(),
 }
@@ -112,6 +114,7 @@ impl DefinitionType {
             DefinitionType::Python(python_type) => python_type.as_str(),
             DefinitionType::Kotlin(kotlin_type) => kotlin_type.as_str(),
             DefinitionType::Java(java_type) => java_type.as_str(),
+            DefinitionType::CSharp(csharp_type) => csharp_type.as_str(),
             DefinitionType::TypeScript(typescript_type) => typescript_type.as_str(),
             DefinitionType::Unsupported() => "unsupported",
         }
@@ -125,6 +128,7 @@ pub enum FqnType {
     Python(PythonFqn),
     Kotlin(KotlinFqn),
     Java(JavaFqn),
+    CSharp(CSharpFqn),
     TypeScript(TypeScriptFqn),
 }
 
@@ -183,6 +187,7 @@ pub enum ImportType {
     Java(JavaImportType),
     Kotlin(KotlinImportType),
     Python(PythonImportType),
+    CSharp(CSharpImportType),
     TypeScript(TypeScriptImportType),
 }
 
@@ -192,6 +197,7 @@ impl ImportType {
             ImportType::Java(java_type) => java_type.as_str(),
             ImportType::Kotlin(kotlin_type) => kotlin_type.as_str(),
             ImportType::Python(python_type) => python_type.as_str(),
+            ImportType::CSharp(csharp_type) => csharp_type.as_str(),
             ImportType::TypeScript(typescript_type) => typescript_type.as_str(),
         }
     }

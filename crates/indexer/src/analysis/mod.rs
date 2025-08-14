@@ -17,6 +17,7 @@ use std::{
 
 // Re-export the sub-module functionality
 pub use files::FileSystemAnalyzer;
+pub use languages::csharp::CSharpAnalyzer;
 pub use languages::java::JavaAnalyzer;
 pub use languages::kotlin::KotlinAnalyzer;
 pub use languages::python::PythonAnalyzer;
@@ -32,6 +33,7 @@ pub struct AnalysisService {
     python_analyzer: PythonAnalyzer,
     kotlin_analyzer: KotlinAnalyzer,
     java_analyzer: JavaAnalyzer,
+    csharp_analyzer: CSharpAnalyzer,
     typescript_analyzer: TypeScriptAnalyzer,
 }
 
@@ -44,6 +46,7 @@ impl AnalysisService {
         let python_analyzer = PythonAnalyzer::new();
         let kotlin_analyzer = KotlinAnalyzer::new();
         let java_analyzer = JavaAnalyzer::new();
+        let csharp_analyzer = CSharpAnalyzer::new();
         let typescript_analyzer = TypeScriptAnalyzer::new();
 
         Self {
@@ -54,6 +57,7 @@ impl AnalysisService {
             python_analyzer,
             kotlin_analyzer,
             java_analyzer,
+            csharp_analyzer,
             typescript_analyzer,
         }
     }
@@ -271,6 +275,20 @@ impl AnalysisService {
                     file_imported_symbol_relationships,
                 );
             }
+            SupportedLanguage::CSharp => {
+                self.csharp_analyzer.process_definitions(
+                    file_result,
+                    &relative_path,
+                    definition_map,
+                    file_definition_relationships,
+                );
+                self.csharp_analyzer.process_imports(
+                    file_result,
+                    &relative_path,
+                    imported_symbol_map,
+                    file_imported_symbol_relationships,
+                );
+            }
             SupportedLanguage::TypeScript => {
                 self.typescript_analyzer.process_definitions(
                     file_result,
@@ -340,6 +358,10 @@ impl AnalysisService {
             }
             SupportedLanguage::Java => {
                 self.java_analyzer
+                    .add_definition_relationships(&definition_map, definition_relationships);
+            }
+            SupportedLanguage::CSharp => {
+                self.csharp_analyzer
                     .add_definition_relationships(&definition_map, definition_relationships);
             }
             SupportedLanguage::TypeScript => {
