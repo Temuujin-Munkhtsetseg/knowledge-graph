@@ -1,5 +1,9 @@
 use crate::project::file_info::FileInfo;
 use parser_core::{
+    csharp::{
+        analyzer::CSharpAnalyzer,
+        types::{CSharpDefinitionInfo, CSharpImportedSymbolInfo},
+    },
     definitions::DefinitionTypeInfo,
     java::{
         analyzer::JavaAnalyzer,
@@ -184,6 +188,7 @@ impl<'a> FileProcessor<'a> {
                 | SupportedLanguage::Python
                 | SupportedLanguage::Kotlin
                 | SupportedLanguage::Java
+                | SupportedLanguage::CSharp
                 | SupportedLanguage::TypeScript
         );
         if !is_supported {
@@ -315,6 +320,20 @@ impl<'a> FileProcessor<'a> {
                     )),
                 }
             }
+            SupportedLanguage::CSharp => {
+                let analyzer = CSharpAnalyzer::new();
+                match analyzer.analyze(parse_result) {
+                    Ok(analysis_result) => Ok((
+                        Definitions::CSharp(analysis_result.definitions),
+                        Some(ImportedSymbols::CSharp(analysis_result.imports)),
+                    )),
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Failed to analyze CSharp file '{}': {}",
+                        self.path,
+                        e
+                    )),
+                }
+            }
             SupportedLanguage::TypeScript => {
                 let analyzer = TypeScriptAnalyzer::new();
                 match analyzer.analyze(parse_result) {
@@ -342,6 +361,7 @@ pub enum Definitions {
     Python(Vec<PythonDefinitionInfo>),
     Kotlin(Vec<KotlinDefinitionInfo>),
     Java(Vec<JavaDefinitionInfo>),
+    CSharp(Vec<CSharpDefinitionInfo>),
     TypeScript(Vec<TypeScriptDefinitionInfo>),
 }
 
@@ -353,6 +373,7 @@ impl Definitions {
             Definitions::Python(defs) => defs.len(),
             Definitions::Kotlin(defs) => defs.len(),
             Definitions::Java(defs) => defs.len(),
+            Definitions::CSharp(defs) => defs.len(),
             Definitions::TypeScript(defs) => defs.len(),
         }
     }
@@ -378,6 +399,10 @@ impl Definitions {
                     .map(|def| def.definition_type.as_str().to_string()),
             ),
             Definitions::Java(defs) => Box::new(
+                defs.iter()
+                    .map(|def| def.definition_type.as_str().to_string()),
+            ),
+            Definitions::CSharp(defs) => Box::new(
                 defs.iter()
                     .map(|def| def.definition_type.as_str().to_string()),
             ),
@@ -416,6 +441,13 @@ impl Definitions {
         }
     }
 
+    pub fn iter_csharp(&self) -> Option<impl Iterator<Item = &CSharpDefinitionInfo>> {
+        match self {
+            Definitions::CSharp(defs) => Some(defs.iter()),
+            _ => None,
+        }
+    }
+
     pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptDefinitionInfo>> {
         match self {
             Definitions::TypeScript(defs) => Some(defs.iter()),
@@ -430,6 +462,7 @@ pub enum ImportedSymbols {
     Java(Vec<JavaImportedSymbolInfo>),
     Kotlin(Vec<KotlinImportedSymbolInfo>),
     Python(Vec<PythonImportedSymbolInfo>),
+    CSharp(Vec<CSharpImportedSymbolInfo>),
     TypeScript(Vec<TypeScriptImportedSymbolInfo>),
 }
 
@@ -440,6 +473,7 @@ impl ImportedSymbols {
             ImportedSymbols::Java(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::Kotlin(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::Python(imported_symbols) => imported_symbols.len(),
+            ImportedSymbols::CSharp(imported_symbols) => imported_symbols.len(),
             ImportedSymbols::TypeScript(imported_symbols) => imported_symbols.len(),
         }
     }
@@ -459,6 +493,22 @@ impl ImportedSymbols {
     pub fn iter_java(&self) -> Option<impl Iterator<Item = &JavaImportedSymbolInfo>> {
         match self {
             ImportedSymbols::Java(imported_symbols) => Some(imported_symbols.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_csharp(
+        &self,
+    ) -> Option<
+        impl Iterator<
+            Item = &parser_core::imports::ImportedSymbolInfo<
+                parser_core::csharp::types::CSharpImportType,
+                parser_core::csharp::types::CSharpFqn,
+            >,
+        >,
+    > {
+        match self {
+            ImportedSymbols::CSharp(imported_symbols) => Some(imported_symbols.iter()),
             _ => None,
         }
     }
