@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { Network, Search, Filter, Settings } from 'lucide-vue-next';
+import { Network, Search } from 'lucide-vue-next';
 import { GraphVisualization } from '@/components/graph';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useWorkspaces } from '@/hooks/api';
 
 interface Props {
@@ -15,6 +16,8 @@ const props = defineProps<Props>();
 
 const searchQuery = ref('');
 const selectedProject = ref<string | null>(null);
+const isSearchOpen = ref(false);
+const selectedIndex = ref(-1);
 
 const { data: workspacesData } = useWorkspaces();
 
@@ -34,6 +37,18 @@ const availableProjects = computed(() => {
         })) || [],
     )
     .filter((item) => item.isIndexed);
+});
+
+const filteredProjects = computed(() => {
+  if (!searchQuery.value.trim()) return availableProjects.value;
+
+  const query = searchQuery.value.toLowerCase();
+
+  return availableProjects.value.filter(
+    (project) =>
+      project.displayName.toLowerCase().includes(query) ||
+      project.workspacePath.toLowerCase().includes(query),
+  );
 });
 
 const defaultProject = computed(() => {
@@ -56,7 +71,49 @@ const formatProjectName = (path: string) => {
 
 const selectProject = (projectPath: string) => {
   selectedProject.value = projectPath;
+  searchQuery.value = '';
+  isSearchOpen.value = false;
+  selectedIndex.value = -1;
 };
+
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (!isSearchOpen.value || filteredProjects.value.length === 0) return;
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault();
+      selectedIndex.value = Math.min(selectedIndex.value + 1, filteredProjects.value.length - 1);
+      break;
+    case 'ArrowUp':
+      event.preventDefault();
+      selectedIndex.value = Math.max(selectedIndex.value - 1, 0);
+      break;
+    case 'Enter':
+      event.preventDefault();
+      if (selectedIndex.value >= 0) {
+        selectProject(filteredProjects.value[selectedIndex.value].projectPath);
+      }
+      break;
+    default:
+      break;
+  }
+};
+
+// Reset selection when filtering changes
+watch(filteredProjects, () => {
+  if (searchQuery.value.length > 0 && filteredProjects.value.length > 0) {
+    selectedIndex.value = 0;
+  } else {
+    selectedIndex.value = -1;
+  }
+});
+
+// Ensure the search is open when the user starts typing
+watch(searchQuery, () => {
+  if (searchQuery.value.length > 0) {
+    isSearchOpen.value = true;
+  }
+});
 
 // Watch for external project selection
 watch(
@@ -81,21 +138,59 @@ watch(
 
       <div class="flex items-center gap-2">
         <div class="relative">
-          <Search
-            class="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground"
-          />
-          <Input
-            v-model="searchQuery"
-            placeholder="Search projects..."
-            class="pl-7 h-8 w-64 text-xs"
-          />
+          <Popover :open="isSearchOpen" @update:open="(v) => (isSearchOpen = v)">
+            <PopoverTrigger as-child>
+              <div>
+                <Search
+                  class="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground z-10"
+                />
+
+                <Input
+                  v-model="searchQuery"
+                  placeholder="Search projects..."
+                  class="pl-7 h-8 w-64 text-xs cursor-text"
+                  role="combobox"
+                  :aria-expanded="isSearchOpen"
+                  aria-haspopup="listbox"
+                  @keydown="handleKeyDown"
+                />
+              </div>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              class="mt-1 w-64 p-0 max-h-60 overflow-y-auto"
+              role="listbox"
+            >
+              <div
+                v-if="filteredProjects.length === 0"
+                class="px-2 py-1.5 text-sm text-muted-foreground"
+              >
+                No projects found
+              </div>
+              <div
+                v-for="(project, index) in filteredProjects"
+                :key="project.projectPath"
+                :class="[
+                  'px-2 py-1.5 cursor-pointer outline-none hover:bg-accent hover:text-accent-foreground',
+                  { 'bg-accent text-accent-foreground': selectedIndex === index },
+                ]"
+                role="option"
+                :aria-selected="selectedIndex === index"
+                @mousedown.prevent
+                @click="selectProject(project.projectPath)"
+              >
+                <div class="flex flex-col items-start w-full">
+                  <div class="font-medium text-sm">
+                    {{ formatProjectName(project.projectPath) }}
+                  </div>
+                  <div class="text-xs text-muted-foreground truncate w-full">
+                    {{ project.projectPath }}
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-        <Button variant="ghost" size="sm" class="h-8 w-8 p-0">
-          <Filter class="h-3 w-3" />
-        </Button>
-        <Button variant="ghost" size="sm" class="h-8 w-8 p-0">
-          <Settings class="h-3 w-3" />
-        </Button>
       </div>
     </div>
 
