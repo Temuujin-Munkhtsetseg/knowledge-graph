@@ -1,6 +1,8 @@
 use crate::service::DefaultMcpService;
 use axum::Router;
+use database::kuzu::database::KuzuDatabase;
 use database::querying::types::QueryingService;
+use event_bus::EventBus;
 use rmcp::transport::sse_server::{SseServer, SseServerConfig};
 use std::{net::SocketAddr, sync::Arc};
 use tokio_util::sync::CancellationToken;
@@ -10,6 +12,8 @@ pub fn mcp_sse_router(
     bind: SocketAddr,
     query_service: Arc<dyn QueryingService>,
     workspace_manager: Arc<WorkspaceManager>,
+    database: Arc<KuzuDatabase>,
+    event_bus: Arc<EventBus>,
 ) -> (Router, CancellationToken) {
     let (sse_server, router) = SseServer::new(SseServerConfig {
         bind,
@@ -22,7 +26,12 @@ pub fn mcp_sse_router(
     let cancellation_token = sse_server.config.ct.child_token();
 
     sse_server.with_service(move || {
-        DefaultMcpService::new(Arc::clone(&query_service), Arc::clone(&workspace_manager))
+        DefaultMcpService::new(
+            Arc::clone(&query_service),
+            Arc::clone(&workspace_manager),
+            Arc::clone(&database),
+            Arc::clone(&event_bus),
+        )
     });
 
     (router, cancellation_token)
