@@ -39,7 +39,7 @@ pub enum Commands {
 
         /// Output statistics. Optionally specify a file path to save to.
         #[arg(long, value_name = "FILE", num_args = 0..=1, require_equals = true)]
-        stats_output: Option<Option<PathBuf>>,
+        stats: Option<Option<PathBuf>>,
     },
     /// Manage the gkg server
     Server {
