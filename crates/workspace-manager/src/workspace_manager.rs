@@ -375,6 +375,29 @@ impl WorkspaceManager {
         }
     }
 
+    pub fn get_project_for_file(&self, file_path: &str) -> Option<ProjectInfo> {
+        if file_path.is_empty() {
+            return None;
+        }
+
+        let mut matches = Vec::new();
+        self.state_service.with_manifest(|manifest| {
+            for (_, project_path, _project_metadata) in manifest.get_all_projects() {
+                if file_path.contains(project_path) {
+                    matches.push(project_path.to_string());
+                }
+            }
+        });
+
+        if matches.is_empty() {
+            return None;
+        }
+
+        // Get the project with the most specific match
+        let project_path = matches.iter().max_by(|a, b| a.len().cmp(&b.len())).unwrap();
+        self.get_project_for_path(project_path)
+    }
+
     pub fn list_workspace_folders(&self) -> Vec<WorkspaceFolderInfo> {
         self.state_service.with_manifest(|manifest| {
             manifest
@@ -1103,5 +1126,98 @@ mod tests {
             .unwrap();
         assert_eq!(project2.status, Status::Indexed);
         assert!(project2.last_indexed_at.is_some());
+    }
+
+    #[test]
+    fn test_get_project_for_file_single_project() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let workspace_folder_path = temp_dir.path().join("test_workspace");
+        fs::create_dir_all(&workspace_folder_path).unwrap();
+
+        let repo_path = workspace_folder_path.join("test_repo");
+        create_test_git_repo(&repo_path);
+
+        let data_dir = TempDir::new().unwrap();
+        let manager = WorkspaceManager::new_with_directory(data_dir.path().to_path_buf()).unwrap();
+
+        let result = manager
+            .register_workspace_folder(&workspace_folder_path)
+            .unwrap();
+
+        let file_path = format!("{}/test_repo/src/main.rs", result.workspace_folder_path);
+
+        let project_info = manager.get_project_for_file(&file_path);
+        assert!(project_info.is_some());
+
+        let project_info = project_info.unwrap();
+        assert_eq!(
+            project_info.project_path,
+            format!("{}/test_repo", result.workspace_folder_path)
+        );
+        assert_eq!(
+            project_info.workspace_folder_path,
+            result.workspace_folder_path
+        );
+    }
+
+    #[test]
+    fn test_get_project_for_file_multiple_projects_most_specific_match() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_folder_path = temp_dir.path().join("test_workspace");
+        fs::create_dir_all(&workspace_folder_path).unwrap();
+
+        // Create two projects with nested paths
+        let parent_repo_path = workspace_folder_path.join("parent_repo");
+        let child_repo_path = workspace_folder_path.join("parent_repo").join("child_repo");
+
+        create_test_git_repo(&parent_repo_path);
+        create_test_git_repo(&child_repo_path);
+
+        let data_dir = TempDir::new().unwrap();
+        let manager = WorkspaceManager::new_with_directory(data_dir.path().to_path_buf()).unwrap();
+
+        let result = manager
+            .register_workspace_folder(&workspace_folder_path)
+            .unwrap();
+
+        // Test with a file path that could match both projects
+        // The function should return the most specific (longest) match
+        let file_path = format!(
+            "{}/parent_repo/child_repo/src/main.rs",
+            result.workspace_folder_path
+        );
+        let project_info = manager.get_project_for_file(&file_path);
+
+        assert!(project_info.is_some());
+        let project_info = project_info.unwrap();
+        // Should match the child_repo (more specific/longer path)
+        assert_eq!(
+            project_info.project_path,
+            format!("{}/parent_repo/child_repo", result.workspace_folder_path)
+        );
+    }
+
+    #[test]
+    fn test_get_project_for_file_no_match() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_folder_path = temp_dir.path().join("test_workspace");
+        fs::create_dir_all(&workspace_folder_path).unwrap();
+
+        let repo_path = workspace_folder_path.join("test_repo");
+        create_test_git_repo(&repo_path);
+
+        let data_dir = TempDir::new().unwrap();
+        let manager = WorkspaceManager::new_with_directory(data_dir.path().to_path_buf()).unwrap();
+
+        let _result = manager
+            .register_workspace_folder(&workspace_folder_path)
+            .unwrap();
+
+        // Test with a file path that doesn't match any project
+        let file_path = "/some/unrelated/path/src/main.rs";
+        let project_info = manager.get_project_for_file(file_path);
+
+        assert!(project_info.is_none());
     }
 }

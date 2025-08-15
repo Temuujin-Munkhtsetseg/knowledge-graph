@@ -40,3 +40,32 @@ Output: An object containing:
 
 - `status` (string): "ok" when indexing completes successfully
 - `stats` (object): Project indexing statistics including total files processed and project path
+
+### get_symbol_references
+
+Finds all locations where a symbol is referenced throughout the codebase to assess change impact. This tool is helpful for:
+
+- Planning to modify, rename, or delete a function, class, variable, or other symbol
+- Need to understand the blast radius of a potential change before implementing it
+- Investigating which parts of the codebase depend on a specific symbol
+- Performing impact analysis for refactoring or deprecation decisions
+- Tracing usage patterns to understand how a symbol is being used across the project
+
+Input:
+
+- `absolute_file_path` (string): The absolute path to the file containing the symbol
+- `symbol_name` (string): The name of the symbol to find references for
+- `depth` (integer, optional) (default: 1, maximum: 3): Maximum depth to traverse for finding references
+- `limit` (integer, optional) (default: 50, maximum: 100): The maximum number of results to return
+
+Output: An object containing:
+
+- `references` (array): Array of symbol references, each containing:
+  - `name` (string): The name of the symbol
+  - `location` (string): File path and line number where the symbol is defined (format: "file:line")
+  - `fqn` (string): Fully qualified name of the symbol
+  - `referenced_by` (array): Array of references that call this symbol, each containing:
+    - `name` (string): Name of the calling symbol
+    - `location` (string): File path and line number where the call occurs
+    - `fqn` (string): Fully qualified name of the calling symbol
+    - `referenced_by` (array): Recursive references (up to the specified depth)

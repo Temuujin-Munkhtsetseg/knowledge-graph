@@ -917,4 +917,52 @@ impl QueryLibrary {
             ]),
         }
     }
+
+    pub fn get_definitions_by_fqn_or_name_query() -> Query {
+        Query {
+            query: r#"
+                MATCH (d:DefinitionNode) 
+                WHERE 
+                    d.primary_file_path = $file_path 
+                    AND (
+                        toLower(d.name) CONTAINS toLower($name_or_fqn) 
+                        OR toLower(d.fqn) CONTAINS toLower($name_or_fqn)
+                    ) 
+                RETURN 
+                    d.id as id,
+                    d.name as name,
+                    d.fqn as fqn,
+                    d.primary_file_path as file_path,
+                    d.start_line as line_number
+            "#
+            .to_string(),
+            parameters: HashMap::from([
+                (
+                    "file_path",
+                    QueryParameter {
+                        name: "file_path",
+                        description: "The path of the file to get the node for.",
+                        required: true,
+                        definition: QueryParameterDefinition::String(None),
+                    },
+                ),
+                (
+                    "name_or_fqn",
+                    QueryParameter {
+                        name: "name_or_fqn",
+                        description: "The name or FQN of the node to get.",
+                        required: true,
+                        definition: QueryParameterDefinition::String(None),
+                    },
+                ),
+            ]),
+            result: HashMap::from([
+                ("id", STRING_MAPPER),
+                ("name", STRING_MAPPER),
+                ("fqn", STRING_MAPPER),
+                ("line_number", INT_MAPPER),
+                ("file_path", STRING_MAPPER),
+            ]),
+        }
+    }
 }
