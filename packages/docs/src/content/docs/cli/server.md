@@ -53,6 +53,8 @@ Enable automatic file watching and re-indexing.
 
 When enabled, the server monitors registered workspaces for file changes and automatically queues re-indexing jobs. This keeps the knowledge graph up-to-date as you develop.
 
+> Currently, reindexing is in active development and does not support Ruby, as it involves resolving cross-file references, and will result in undefined behavior. All other languages supported by `gkg` will work, but until GA (General Availability) of `gkg` is reached, **use at your own risk**.
+
 **Example:**
 
 ```bash
