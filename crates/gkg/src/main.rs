@@ -49,12 +49,12 @@ async fn main() -> anyhow::Result<()> {
             workspace_path,
             threads,
             verbose: _,
-            stats_output,
+            stats,
         } => {
             index::run(
                 workspace_path,
                 threads,
-                stats_output,
+                stats,
                 Arc::clone(&workspace_manager),
                 Arc::clone(&event_bus),
                 Arc::clone(&database),

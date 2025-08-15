@@ -13,6 +13,12 @@ Index repositories in a workspace to create a structured, queryable knowledge gr
 gkg index [WORKSPACE_PATH] [OPTIONS]
 ```
 
+To show statistics output and optionally save to a file, use the `--stats` option.
+
+```bash
+gkg index --stats=gkg-stats.json
+```
+
 ## Description
 
 TODO
