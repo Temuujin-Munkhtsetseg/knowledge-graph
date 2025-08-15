@@ -148,8 +148,8 @@ export default defineConfig({
           autogenerate: { directory: "server-side-indexing" },
         },
         {
-          label: "Internal",
-          autogenerate: { directory: "internal" },
+          label: "Contribute",
+          autogenerate: { directory: "contribute" },
         },
       ],
       editLink: {

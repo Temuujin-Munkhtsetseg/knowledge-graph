@@ -1,6 +1,8 @@
 ---
 title: Release Process
 description: Documentation for the gkg release process.
+sidebar:
+  order: 4
 ---
 
 # Release process
