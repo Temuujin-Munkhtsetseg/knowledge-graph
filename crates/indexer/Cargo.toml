@@ -27,6 +27,8 @@ database = { path = "../database" }
 tempfile = { workspace = true }
 ignore = { workspace = true }
 serde_json = { workspace = true }
+rayon = { workspace = true }
+rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
@@ -39,4 +41,5 @@ watchexec-events = { workspace = true }
 watchexec-filterer-ignore = { workspace = true }
 watchexec-signals = { workspace = true }
 criterion = { workspace = true }
+tracing-test = { workspace = true }
 

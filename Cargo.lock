@@ -1699,7 +1699,6 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.5.1"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.5.1#abb696198f2be5bd1f4894b1af2fa057dccef543"
 dependencies = [
  "ignore",
  "serde",
@@ -2459,6 +2458,8 @@ dependencies = [
  "num_cpus",
  "parquet",
  "parser-core",
+ "rayon",
+ "rustc-hash 2.1.1",
  "serde",
  "serde_json",
  "smallvec",
@@ -2466,6 +2467,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-test",
  "walkdir",
  "watchexec",
  "watchexec-events",
@@ -4962,6 +4964,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-test"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "557b891436fe0d5e0e363427fc7f217abf9ccd510d5136549847bdcbcd011d68"
+dependencies = [
+ "tracing-core",
+ "tracing-subscriber",
+ "tracing-test-macro",
+]
+
+[[package]]
+name = "tracing-test-macro"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04659ddb06c87d233c566112c1c9c5b9e98256d9af50ec3bc9c8327f873a7568"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "tree-sitter"
 version = "0.25.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6150,3 +6173,7 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "parser-core"
+version = "0.14.1"

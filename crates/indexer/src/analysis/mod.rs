@@ -68,7 +68,7 @@ impl AnalysisService {
 
     /// Analyze file processing results and transform them into graph data
     pub fn analyze_results(
-        &self,
+        &mut self,
         file_results: &Vec<FileProcessingResult>,
     ) -> Result<GraphData, String> {
         let start_time = Instant::now();
@@ -88,6 +88,7 @@ impl AnalysisService {
         let mut file_imported_symbol_relationships: Vec<FileImportedSymbolRelationship> =
             Vec::new();
         let mut definition_relationships: Vec<DefinitionRelationship> = Vec::new();
+
         let mut definition_imported_symbol_relationships: Vec<
             DefinitionImportedSymbolRelationship,
         > = Vec::new();
@@ -101,7 +102,15 @@ impl AnalysisService {
             let mut definition_map = HashMap::new(); // (fqn_str, file_path) -> (node, fqn)
             let mut imported_symbol_map = HashMap::new(); // (fqn_str, file_path) -> [node, ...]
 
-            for file_result in results {
+            // Initialize Ruby resolver with capacity estimates for this language
+            if language == SupportedLanguage::Ruby && !results.is_empty() {
+                let estimated_definitions = results.len() * 5; // Estimate 5 definitions per file
+                let estimated_scopes = results.len() * 10; // Estimate 10 scopes per file
+                self.ruby_analyzer
+                    .initialize_resolver(estimated_definitions, estimated_scopes);
+            }
+
+            for file_result in &results {
                 self.extract_file_system_entities(
                     file_result,
                     &mut file_nodes,
@@ -126,6 +135,22 @@ impl AnalysisService {
                 &mut definition_nodes,
                 &mut imported_symbol_nodes,
             );
+            // Process references for Ruby using the new expression resolver
+            if language == SupportedLanguage::Ruby {
+                for file_result in &results {
+                    if let Some(references) = &file_result.references {
+                        let relative_path = self
+                            .filesystem_analyzer
+                            .get_relative_path(&file_result.file_path);
+                        self.ruby_analyzer.process_references(
+                            references,
+                            &relative_path,
+                            &mut definition_relationships,
+                        );
+                    }
+                }
+            }
+
             self.add_relationships(
                 language,
                 definition_map,
@@ -219,7 +244,7 @@ impl AnalysisService {
     }
 
     fn extract_language_entities(
-        &self,
+        &mut self,
         file_result: &FileProcessingResult,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,

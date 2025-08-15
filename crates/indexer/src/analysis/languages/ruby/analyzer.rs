@@ -1,18 +1,44 @@
+//! Main Ruby analyzer orchestrating the semantic analysis process.
+//!
+//! This module implements the central [`RubyAnalyzer`] that coordinates the two-phase
+//! Ruby code analysis process, transforming parsed structural data into a semantic
+//! Knowledge Graph with accurate cross-references.
+
 use crate::analysis::types::{
     DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
     FileDefinitionRelationship, FqnType,
 };
-use crate::parsing::processor::FileProcessingResult;
+use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
-use parser_core::ruby::{
-    definitions::RubyDefinitionInfo,
-    fqn::ruby_fqn_to_string,
-    types::{RubyDefinitionType, RubyFqn},
+use parser_core::{
+    references::ReferenceInfo,
+    ruby::{
+        definitions::RubyDefinitionInfo,
+        fqn::ruby_fqn_to_string,
+        references::types::{RubyExpressionMetadata, RubyReferenceType, RubyTargetResolution},
+        types::{RubyDefinitionType, RubyFqn},
+    },
 };
+
 use std::collections::HashMap;
 
-/// Handles Ruby-specific analysis operations
-pub struct RubyAnalyzer;
+// Import the new Ruby-specific analyzers
+use super::ExpressionResolver;
+
+pub type RubyReference =
+    ReferenceInfo<RubyTargetResolution, RubyReferenceType, RubyExpressionMetadata, RubyFqn>;
+
+pub struct RubyAnalyzer {
+    expression_resolver: Option<ExpressionResolver>,
+    stats: AnalyzerStats,
+}
+
+#[derive(Debug, Default)]
+pub struct AnalyzerStats {
+    pub definitions_processed: usize,
+    pub references_processed: usize,
+    pub relationships_created: usize,
+}
 
 impl Default for RubyAnalyzer {
     fn default() -> Self {
@@ -21,14 +47,26 @@ impl Default for RubyAnalyzer {
 }
 
 impl RubyAnalyzer {
-    /// Create a new Ruby analyzer
     pub fn new() -> Self {
-        Self
+        Self {
+            expression_resolver: None,
+            stats: AnalyzerStats::default(),
+        }
     }
 
-    /// Process definitions from a file result and update the definitions map
+    pub fn initialize_resolver(&mut self, estimated_definitions: usize, estimated_scopes: usize) {
+        self.expression_resolver = Some(ExpressionResolver::new(
+            estimated_definitions,
+            estimated_scopes,
+        ));
+    }
+
+    pub fn get_stats(&self) -> &AnalyzerStats {
+        &self.stats
+    }
+
     pub fn process_definitions(
-        &self,
+        &mut self,
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
@@ -36,11 +74,8 @@ impl RubyAnalyzer {
     ) -> Result<(), String> {
         if let Some(defs) = file_result.definitions.iter_ruby() {
             for definition in defs {
-                if definition.definition_type == RubyDefinitionType::Module {
-                    // Modules are not strictly valid definitions per phase 1, so we skip them for now.
-                    // TODO: However, we should handle module call definitions eventually.
-                    continue;
-                }
+                // Process all definition types including modules for better scope resolution
+                // Modules provide namespace context that's important for method resolution
 
                 if let Some((location, ruby_fqn)) =
                     self.create_definition_location(definition, relative_file_path)?
@@ -50,22 +85,31 @@ impl RubyAnalyzer {
                     // Create new definition
                     let definition_node = DefinitionNode::new(
                         fqn_string.clone(),
-                        definition.name.clone(),
+                        definition.name.to_string(),
                         DefinitionType::Ruby(definition.definition_type),
                         location.clone(),
                     );
+
+                    let fqn_type = FqnType::Ruby(ruby_fqn.clone());
                     definition_map.insert(
                         (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node, FqnType::Ruby(ruby_fqn)),
+                        (definition_node.clone(), fqn_type.clone()),
                     );
 
                     // Always create file-definition relationship for this specific location
                     file_definition_relationships.push(FileDefinitionRelationship {
                         file_path: relative_file_path.to_string(),
-                        definition_fqn: fqn_string,
+                        definition_fqn: fqn_string.clone(),
                         relationship_type: RelationshipType::FileDefines,
                         definition_location: location.clone(),
                     });
+
+                    // Add definition to expression resolver if available
+                    if let Some(ref mut resolver) = self.expression_resolver {
+                        resolver.add_definition(fqn_string.clone(), definition_node, &fqn_type);
+                    }
+
+                    self.stats.definitions_processed += 1;
                 }
             }
         }
@@ -123,6 +167,25 @@ impl RubyAnalyzer {
         }
     }
 
+    /// Processes Ruby references and creates call relationships in the Knowledge Graph.
+    pub fn process_references(
+        &mut self,
+        references: &References,
+        file_path: &str,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+    ) {
+        if let Some(ref mut resolver) = self.expression_resolver {
+            let initial_count = definition_relationships.len();
+
+            resolver.process_references(references, file_path, definition_relationships);
+
+            let new_relationships = definition_relationships.len() - initial_count;
+
+            self.stats.references_processed += new_relationships;
+            self.stats.relationships_created += new_relationships;
+        }
+    }
+
     /// Extract parent FQN from a RubyFqn by working with parts directly (more efficient)
     fn get_parent_fqn_from_parts(&self, fqn: &FqnType) -> Option<String> {
         match fqn {
@@ -135,7 +198,7 @@ impl RubyAnalyzer {
                 // Take all parts except the last one to create parent FQN
                 let parent_parts: Vec<String> = ruby_fqn.parts[..ruby_fqn.parts.len() - 1]
                     .iter()
-                    .map(|part| part.node_name.clone())
+                    .map(|part| part.node_name.to_string())
                     .collect();
 
                 if parent_parts.is_empty() {
@@ -157,6 +220,7 @@ impl RubyAnalyzer {
         use RubyDefinitionType::*;
 
         match (parent_type, child_type) {
+            // Class relationships
             (DefinitionType::Ruby(Class), DefinitionType::Ruby(Method)) => {
                 Some(RelationshipType::ClassToMethod)
             }
@@ -171,6 +235,19 @@ impl RubyAnalyzer {
             }
             (DefinitionType::Ruby(Class), DefinitionType::Ruby(Proc)) => {
                 Some(RelationshipType::ClassToProc)
+            }
+            // Module relationships
+            (DefinitionType::Ruby(Module), DefinitionType::Ruby(Method)) => {
+                Some(RelationshipType::ModuleToMethod)
+            }
+            (DefinitionType::Ruby(Module), DefinitionType::Ruby(SingletonMethod)) => {
+                Some(RelationshipType::ModuleToSingletonMethod)
+            }
+            (DefinitionType::Ruby(Module), DefinitionType::Ruby(Class)) => {
+                Some(RelationshipType::ModuleToClass)
+            }
+            (DefinitionType::Ruby(Module), DefinitionType::Ruby(Module)) => {
+                Some(RelationshipType::ModuleToModule)
             }
             _ => None, // Unknown or unsupported relationship
         }

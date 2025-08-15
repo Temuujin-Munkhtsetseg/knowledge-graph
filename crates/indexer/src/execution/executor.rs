@@ -1139,7 +1139,7 @@ mod tests {
             .unwrap()
             .database_path
             .clone();
-        check_db_def_count(&database_path, 90);
+        check_db_def_count(&database_path, 96);
 
         // Clear any events from initial indexing and set up fresh event receiver
         let mut event_receiver = event_bus.subscribe();
@@ -1172,7 +1172,7 @@ mod tests {
 
         assert!(result.await.is_ok(), "Workspace reindexing should succeed");
 
-        check_db_def_count(&database_path, 90);
+        check_db_def_count(&database_path, 96);
 
         // Collect all events
         let mut events = Vec::new();
