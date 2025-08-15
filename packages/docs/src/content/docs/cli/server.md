@@ -18,11 +18,11 @@ gkg server start [OPTIONS]
 The `gkg server` command starts a long-running HTTP server that provides:
 
 - **Web Interface**: Browser-based UI for exploring the knowledge graph
-- **HTTP API**: RESTful endpoints for programmatic access
-- **Real-time Events**: WebSocket-based progress updates
+- **[HTTP API](/api/server)**: RESTful endpoints for programmatic access to workspace and graph data
+- **[Real-time Events](/api/server#server-sent-events-sse)**: Server-Sent Events (SSE) for live progress updates during indexing
 - **File Watching**: Automatic re-indexing when files change (optional)
 - **Background Jobs**: Queue-based processing for concurrent operations
-- **MCP Integration**: Model Context Protocol support for AI tools
+- **[MCP Integration](/mcp/endpoints)**: Model Context Protocol support for AI tools with [dedicated tools](/mcp/tools) for code analysis
 
 The server is designed for ongoing development workflows, providing continuous access to the knowledge graph and automatic updates as your code changes.
 

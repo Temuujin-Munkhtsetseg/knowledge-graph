@@ -1,31 +1,48 @@
 ---
 title: HTTP Server API
-description: REST API endpoints and WebSocket events for GitLab Knowledge Graph server
+description: REST API endpoints and Server-Sent Events for GitLab Knowledge Graph server
 ---
 
 # HTTP Server API
 
-The GitLab Knowledge Graph server provides a comprehensive HTTP API for programmatic access to your knowledge graphs, along with real-time WebSocket events for monitoring progress.
+The GitLab Knowledge Graph server provides an HTTP API for programmatic access to the Knowledge Graph, along with real-time SSE events for monitoring progress.
 
 ## Base URL
 
-When running locally:
+When running locally (default port):
 
 ```
-http://localhost:3000
+http://localhost:27495
 ```
+
+The server automatically selects port `27495` (0x6b67 - "knowledge graph") when available, or finds an unused port if it's busy.
 
 ## Authentication
 
-Currently, the server runs without authentication for local development. Production deployments should implement proper authentication layers.
+Currently, the server runs without authentication for local development. The server does check against CORS headers.
 
 ## REST API Endpoints
 
-### Workspaces
+### Server Information
 
-#### `GET /api/workspaces`
+#### `GET /api/info`
 
-List all indexed workspaces.
+Get basic server information including version and port.
+
+**Response:**
+
+```json
+{
+  "port": 27495,
+  "version": "0.10.0"
+}
+```
+
+### Workspace Management
+
+#### `GET /api/workspace/list`
+
+List all indexed workspace folders and their projects.
 
 **Response:**
 
@@ -33,116 +50,109 @@ List all indexed workspaces.
 {
   "workspaces": [
     {
-      "id": "workspace_hash",
-      "path": "/path/to/workspace",
-      "created_at": "2024-01-01T00:00:00Z",
-      "project_count": 5
+      "workspace_info": {
+        "workspace_folder_path": "/path/to/workspace",
+        "data_directory_name": "workspace_hash",
+        "status": "indexed",
+        "last_indexed_at": "2024-01-01T00:00:00Z",
+        "project_count": 2
+      },
+      "projects": [
+        {
+          "project_path": "/path/to/workspace/project1",
+          "project_hash": "project_hash_1",
+          "workspace_folder_path": "/path/to/workspace",
+          "status": "indexed",
+          "database_path": "/data/workspace_hash/project_hash_1/kuzu_db",
+          "parquet_directory": "/data/workspace_hash/project_hash_1/parquet_files"
+        }
+      ]
     }
   ]
 }
 ```
 
-#### `POST /api/workspaces`
+#### `POST /api/workspace/index`
 
-Index a new workspace.
-
-**Request Body:**
-
-```json
-{
-  "path": "/path/to/workspace",
-  "options": {
-    "watch": true,
-    "languages": ["rust", "typescript", "python"]
-  }
-}
-```
-
-### Projects
-
-#### `GET /api/workspaces/{workspace_id}/projects`
-
-List projects within a workspace.
-
-#### `GET /api/projects/{project_id}/graph`
-
-Get the knowledge graph for a specific project.
-
-**Query Parameters:**
-
-- `format`: Response format (`json` | `cypher` | `graphml`)
-- `include_git`: Include git commit information
-- `depth`: Maximum relationship depth to traverse
-
-### Query Interface
-
-#### `POST /api/query`
-
-Execute Cypher queries against the knowledge graph.
+Index a new workspace folder or re-index an existing one.
 
 **Request Body:**
 
 ```json
 {
-  "query": "MATCH (f:File)-[:CONTAINS]->(fn:Function) RETURN f.name, fn.name LIMIT 10",
-  "workspace_id": "workspace_hash",
-  "project_id": "project_hash"
+  "workspace_folder_path": "/path/to/workspace"
 }
 ```
 
-**Response:**
+**Response (Success):**
 
 ```json
 {
-  "results": [
-    {
-      "f.name": "src/main.rs",
-      "fn.name": "main"
-    }
-  ],
-  "execution_time_ms": 45
+  "workspace_folder_path": "/path/to/workspace",
+  "data_directory_name": "workspace_hash",
+  "status": "indexing",
+  "last_indexed_at": null,
+  "project_count": 2
 }
 ```
 
-## WebSocket Events
+**Error Responses:**
 
-Connect to `/ws` for real-time updates during indexing operations.
+- `400 Bad Request`: Invalid workspace path or no projects found
+- `500 Internal Server Error`: Failed to register workspace or dispatch indexing job
 
-### Event Types
+#### `DELETE /api/workspace/delete`
 
-#### `indexing_started`
+Delete a workspace and all its associated data.
 
-```json
-{
-  "type": "indexing_started",
-  "workspace_id": "workspace_hash",
-  "total_repositories": 5
-}
+### Graph Queries
+
+#### `GET /api/graph/initial`
+
+Get initial graph data for visualization.
+
+#### `GET /api/graph/neighbors`
+
+Get neighboring nodes for graph exploration.
+
+#### `GET /api/graph/search`
+
+Search the knowledge graph for specific patterns.
+
+#### `GET /api/graph/stats`
+
+Get statistics about the knowledge graph.
+
+## Server-Sent Events (SSE)
+
+#### `GET /api/events`
+
+Connect to the events endpoint for real-time Server-Sent Events during indexing operations.
+
+**Headers:**
+
+- `Content-Type: text/event-stream`
+- `Cache-Control: no-cache`
+
+**Connection Event:**
+
+When you first connect, you'll receive a connection confirmation:
+
+```
+event: gkg-connection
+data: {"type":"connection-established","timestamp":"2024-01-01T00:00:00Z","message":"SSE connection established"}
 ```
 
-#### `repository_progress`
+**System Events:**
 
-```json
-{
-  "type": "repository_progress",
-  "repository_name": "my-project",
-  "files_processed": 150,
-  "total_files": 200,
-  "percentage": 75
-}
+All system events are sent with the `gkg-event` event type:
+
+```
+event: gkg-event
+data: {"WorkspaceIndexing":{"Started":{"workspace_folder_info":{...},"projects_to_process":[...],"started_at":"2024-01-01T00:00:00Z"}}}
 ```
 
-#### `indexing_complete`
-
-```json
-{
-  "type": "indexing_complete",
-  "workspace_id": "workspace_hash",
-  "duration_ms": 45000,
-  "entities_created": 5000,
-  "relationships_created": 12000
-}
-```
+Events include workspace indexing progress, project processing updates, and completion notifications. The event data follows the internal event bus schema for real-time system monitoring.
 
 ## Error Handling
 
@@ -163,39 +173,60 @@ Error responses include details:
 }
 ```
 
-## Rate Limiting
+## CORS Configuration
 
-The server implements basic rate limiting:
-
-- API endpoints: 100 requests/minute per IP
-- WebSocket connections: 5 concurrent connections per IP
+The server is configured to accept requests from localhost origins for local development. CORS is handled automatically for cross-origin requests from localhost.
 
 ## Example Usage
 
-### Index and Query a Workspace
+### Index a Workspace
 
 ```bash
-# Start indexing
-curl -X POST http://localhost:3000/api/workspaces \
+# Start indexing a workspace
+curl -X POST http://localhost:27495/api/workspace/index \
   -H "Content-Type: application/json" \
-  -d '{"path": "/path/to/my/workspace"}'
-
-# Query the results
-curl -X POST http://localhost:3000/api/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "MATCH (f:File) RETURN f.name, f.language LIMIT 5",
-    "workspace_id": "your_workspace_hash"
-  }'
+  -d '{"workspace_folder_path": "/path/to/my/workspace"}'
 ```
 
-### WebSocket Connection
+### List Workspaces and Projects
+
+```bash
+# Get all workspaces and their projects
+curl http://localhost:27495/api/workspace/list
+```
+
+### Server Information
+
+```bash
+# Get server info
+curl http://localhost:27495/api/info
+```
+
+### Real-time Events with SSE
 
 ```javascript
-const ws = new WebSocket("ws://localhost:3000/ws");
+// Connect to Server-Sent Events
+const eventSource = new EventSource("http://localhost:27495/api/events");
 
-ws.onmessage = (event) => {
+eventSource.onopen = () => {
+  console.log("Connected to SSE stream");
+};
+
+eventSource.addEventListener("gkg-connection", (event) => {
   const data = JSON.parse(event.data);
-  console.log("Progress update:", data);
+  console.log("Connection established:", data);
+});
+
+eventSource.addEventListener("gkg-event", (event) => {
+  const data = JSON.parse(event.data);
+  console.log("System event:", data);
+});
+
+eventSource.onerror = (error) => {
+  console.error("SSE connection error:", error);
 };
 ```
+
+### MCP Integration
+
+The server also provides [Model Context Protocol endpoints](/mcp/endpoints) at `/mcp` and `/mcp/sse` for AI tool integration.
