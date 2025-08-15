@@ -14,12 +14,12 @@ This document covers what Ruby code gets indexed into the Knowledge Graph and wh
 This table represents what Definitions and their FQNs (Fully Qualified Names) are captured into the Graph.
 
 | Definition Type      | Example                         | FQN Example                        |
-| :------------------- | :------------------------------ | :--------------------------------- | --------- | -------------------- |
+| :------------------- | :------------------------------ | :--------------------------------- |
 | **Class**            | `class User`                    | `User`                             |
 | **Module**           | `module Authentication`         | `Authentication`                   |
 | **Method**           | `def save`                      | `User#save`                        |
 | **Singleton Method** | `def self.find_by_email(email)` | `User::find_by_email`              |
-| **Lambda**           | `lambda {                       | x                                  | x \* 2 }` | `User#validate_data` |
+| **Lambda**           | `lambda { \|x\| x \* 2 }`       | `User#validate_data`               |
 | **Proc**             | `proc { puts "Hello" }`         | `NotificationService::log_message` |
 
 ### Limitations
@@ -69,7 +69,7 @@ Ruby reference resolution provides cross-file analysis with type inference:
 ### Currently Resolved
 
 | Reference Type               | Resolution Level        | Example                                |
-| :--------------------------- | :---------------------- | :------------------------------------- | --- | -------------- |
+| :--------------------------- | :---------------------- | :------------------------------------- |
 | **Direct Method Calls**      | Full resolution         | `User.find_by_email("test@test.com")`  |
 | **Instance Method Chains**   | Full resolution         | `user.profile.update(name: "new")`     |
 | **Variable Assignments**     | Type tracking           | `user = User.new; user.save`           |
@@ -79,7 +79,7 @@ Ruby reference resolution provides cross-file analysis with type inference:
 | **Constant Resolution**      | Full resolution         | `User::ADMIN_ROLE`                     |
 | **Instance Variable Access** | Heuristic inference     | `@user.profile` (infers User type)     |
 | **Singleton Method Calls**   | Full resolution         | `NotificationService.notify`           |
-| **Block Method Calls**       | Within-block resolution | `users.each {                          | u   | u.activate! }` |
+| **Block Method Calls**       | Within-block resolution | `users.each { \|u\| u.activate! }`     |
 
 ### Limitations
 
