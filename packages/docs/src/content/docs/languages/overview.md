@@ -9,14 +9,14 @@ sidebar:
 
 Currently, the Knowledge Graph indexes the following languages:
 
-| Language                      | Definitions & imports | Intra-file references | Cross-file references |
-| ----------------------------- | --------------------- | --------------------- | --------------------- |
-| [Ruby](./ruby.md)             | ✅                    | ✅                    | ✅                    |
-| Python                        | ✅                    | ✅                    | 🚧                    |
-| [TypeScript](./typescript.md) | ✅                    | ✅                    | 🚧                    |
-| [JavaScript](./typescript.md) | ✅                    | ✅                    | 🚧                    |
-| [Kotlin](kotlin.md)           | ✅                    | ✅                    | 🚧                    |
-| [Java](./java.md)             | ✅                    | 🚧                    | 🚧                    |
+| Language                    | Definitions & imports | Intra-file references | Cross-file references |
+| --------------------------- | --------------------- | --------------------- | --------------------- |
+| [Ruby](../ruby)             | ✅                    | ✅                    | ✅                    |
+| Python                      | ✅                    | ✅                    | 🚧                    |
+| [TypeScript](../typescript) | ✅                    | ✅                    | 🚧                    |
+| [JavaScript](../typescript) | ✅                    | ✅                    | 🚧                    |
+| [Kotlin](../kotlin)         | ✅                    | ✅                    | 🚧                    |
+| [Java](../java)             | ✅                    | 🚧                    | 🚧                    |
 
 Click on the above language links to see more details about what is supported and what isn't.
 
