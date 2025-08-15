@@ -461,6 +461,33 @@ impl<'a> GraphMapper<'a> {
             }
         }
 
+        // Show summary of missing definitions instead of individual warnings
+        if !missing_source_fqns.is_empty() {
+            warn!(
+                "Missing source definitions: {} unique FQNs",
+                missing_source_fqns.len()
+            );
+            for (fqn, _file) in missing_source_fqns.iter().take(5) {
+                debug!("  Missing source: {}", fqn);
+            }
+            if missing_source_fqns.len() > 5 {
+                debug!("  ... and {} more", missing_source_fqns.len() - 5);
+            }
+        }
+
+        if !missing_target_fqns.is_empty() {
+            warn!(
+                "Missing target definitions: {} unique FQNs",
+                missing_target_fqns.len()
+            );
+            for (fqn, _file) in missing_target_fqns.iter().take(5) {
+                debug!("  Missing target: {}", fqn);
+            }
+            if missing_target_fqns.len() > 5 {
+                debug!("  ... and {} more", missing_target_fqns.len() - 5);
+            }
+        }
+
         Ok(relationships)
     }
 }

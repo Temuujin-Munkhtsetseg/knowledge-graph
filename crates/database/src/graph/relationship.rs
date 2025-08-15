@@ -28,9 +28,15 @@ pub enum RelationshipType {
     // Definition-imported-symbol relationships
     #[strum(serialize = "DEFINES_IMPORTED_SYMBOL")]
     DefinesImportedSymbol,
-    // Definition relationships - Module (TODO: add these back in for ruby edge cases)
-    #[strum(serialize = "MODULE_TO_MODULE")]
+    // Definition relationships - Module
+    #[strum(serialize = "MODULE_TO_METHOD")]
+    ModuleToMethod,
+    #[strum(serialize = "MODULE_TO_SINGLETON_METHOD")]
     ModuleToSingletonMethod,
+    #[strum(serialize = "MODULE_TO_CLASS")]
+    ModuleToClass,
+    #[strum(serialize = "MODULE_TO_MODULE")]
+    ModuleToModule,
     // Definition relationships - Class
     #[strum(serialize = "CLASS_TO_METHOD")]
     ClassToMethod,

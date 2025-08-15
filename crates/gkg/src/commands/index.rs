@@ -32,20 +32,26 @@ fn handle_statistics_output(
         // Display summary and top breakdowns when user requested stats
         info!("Indexing Summary:");
         info!("  - Total Projects: {}", workspace_stats.total_projects);
+        info!("  - Total Files: {}", workspace_stats.total_files);
         info!(
             "  - Total Definitions: {}",
             workspace_stats.total_definitions
+        );
+        info!(
+            "  - Total Definition Relationships: {}",
+            workspace_stats.total_definition_relationships
         );
 
         if !workspace_stats.projects.is_empty() {
             info!("Project Timing:");
             for project in &workspace_stats.projects {
                 info!(
-                    "  - {}: {:.2}s ({} files, {} definitions)",
+                    "  - {}: {:.2}s ({} files, {} definitions, {} def relationships)",
                     project.project_name,
                     project.indexing_duration_seconds,
                     project.total_files,
-                    project.total_definitions
+                    project.total_definitions,
+                    project.total_definition_relationships
                 );
             }
         }

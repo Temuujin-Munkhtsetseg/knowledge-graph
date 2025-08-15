@@ -397,7 +397,7 @@ impl RepositoryIndexer {
         );
         let start_time = Instant::now();
 
-        let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
+        let mut analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
         let graph_data = analysis_service
             .analyze_results(file_results)
@@ -517,7 +517,7 @@ impl RepositoryIndexer {
         let (file_results, skipped_files, errored_files, errors) =
             self.parse_files(files, config).await?;
 
-        let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
+        let mut analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
         let graph_data = analysis_service
             .analyze_results(&file_results)

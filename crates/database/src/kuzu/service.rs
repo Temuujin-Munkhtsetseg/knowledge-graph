@@ -281,4 +281,136 @@ impl<'a> NodeDatabaseService<'a> {
             Err(_) => 0,
         }
     }
+
+    /// Find call relationships from a source method to a target method
+    pub fn find_call_relationships(
+        &self,
+        source_fqn: &str,
+        target_fqn: &str,
+    ) -> Result<Vec<(String, String, u8)>, DatabaseError> {
+        let query =
+            format!(
+            "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
+             WHERE source.fqn = '{}' AND target.fqn = '{}' AND r.type = {} 
+             RETURN source.fqn, target.fqn, r.type",
+            source_fqn, target_fqn, self.get_calls_relationship_type_id()
+        );
+
+        let conn = self.get_connection();
+        let result = conn.query(&query)?;
+
+        let mut relationships = Vec::new();
+        for row in result {
+            if let (
+                Some(kuzu::Value::String(source)),
+                Some(kuzu::Value::String(target)),
+                Some(kuzu::Value::UInt8(rel_type)),
+            ) = (row.first(), row.get(1), row.get(2))
+            {
+                relationships.push((source.to_string(), target.to_string(), *rel_type));
+            }
+        }
+
+        Ok(relationships)
+    }
+
+    /// Find all method calls made by a specific method
+    pub fn find_calls_from_method(&self, source_fqn: &str) -> Result<Vec<String>, DatabaseError> {
+        let query = format!(
+            "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
+             WHERE source.fqn = '{}' AND r.type = {} 
+             RETURN target.fqn",
+            source_fqn,
+            self.get_calls_relationship_type_id()
+        );
+
+        let conn = self.get_connection();
+        let result = conn.query(&query)?;
+
+        let mut target_fqns = Vec::new();
+        for row in result {
+            if let Some(kuzu::Value::String(target_fqn)) = row.first() {
+                target_fqns.push(target_fqn.to_string());
+            }
+        }
+
+        Ok(target_fqns)
+    }
+
+    /// Find all methods that call a specific target method
+    pub fn find_calls_to_method(&self, target_fqn: &str) -> Result<Vec<String>, DatabaseError> {
+        let query = format!(
+            "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
+             WHERE target.fqn = '{}' AND r.type = {} 
+             RETURN source.fqn",
+            target_fqn,
+            self.get_calls_relationship_type_id()
+        );
+
+        let conn = self.get_connection();
+        let result = conn.query(&query)?;
+
+        let mut source_fqns = Vec::new();
+        for row in result {
+            if let Some(kuzu::Value::String(source_fqn)) = row.first() {
+                source_fqns.push(source_fqn.to_string());
+            }
+        }
+
+        Ok(source_fqns)
+    }
+
+    /// Count total call relationships
+    pub fn count_call_relationships(&self) -> i64 {
+        let query = format!(
+            "MATCH ()-[r:DEFINITION_RELATIONSHIPS]->() WHERE r.type = {} RETURN count(r)",
+            self.get_calls_relationship_type_id()
+        );
+
+        let conn = self.get_connection();
+        match conn.query(&query) {
+            Ok(result) => self.get_scalar_query_result(result).unwrap_or(0) as i64,
+            Err(_) => 0,
+        }
+    }
+
+    /// Get all call relationships for debugging
+    pub fn get_all_call_relationships(&self) -> Result<Vec<(String, String, u8)>, DatabaseError> {
+        let query = format!(
+            "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
+             WHERE r.type = {} 
+             RETURN source.fqn, target.fqn, r.type 
+             LIMIT 50",
+            self.get_calls_relationship_type_id()
+        );
+
+        let conn = self.get_connection();
+        let result = conn.query(&query)?;
+
+        let mut call_relationships = Vec::new();
+        for row in result {
+            if let (
+                Some(kuzu::Value::String(source_fqn)),
+                Some(kuzu::Value::String(target_fqn)),
+                Some(kuzu::Value::Int64(rel_type)),
+            ) = (row.first(), row.get(1), row.get(2))
+            {
+                call_relationships.push((
+                    source_fqn.to_string(),
+                    target_fqn.to_string(),
+                    *rel_type as u8,
+                ));
+            }
+        }
+
+        Ok(call_relationships)
+    }
+
+    /// Helper method to get the relationship type ID for Calls
+    fn get_calls_relationship_type_id(&self) -> u8 {
+        use crate::graph::{RelationshipType, RelationshipTypeMapping};
+
+        let mapping = RelationshipTypeMapping::new();
+        mapping.get_type_id(RelationshipType::Calls)
+    }
 }
