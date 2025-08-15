@@ -61,37 +61,7 @@ irm https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.ps1 -O
 
 ## Build from Source
 
-> **Note**: You can skip the npm installation and front-end build steps for a `gkg` without a web UI. Just use the `--features 
-no-frontend` feature flag for the final build step.
-
-If pre-built binaries are not available for your platform, you can build from the source:
-
-1. Install any [prerequisites](https://docs.kuzudb.com/developer-guide/) for your platform to build the Kuzu database.
-1. Install [Mise](https://mise.jdx.dev/getting-started.html).
-1. Clone the repository:
-   ```bash
-   git clone https://gitlab.com/gitlab-org/rust/knowledge-graph.git
-   cd knowledge-graph
-   ```
-1. Trust project and install Rust + Node toolchains:
-   ```bash
-   mise trust && mise install
-   ```
-1. Verify `npm` and `rust` tools are available:
-   ```bash
-   mise ls
-   ```
-1. Build front-end assets:
-   ```bash
-   npm ci
-   npm run build --workspace=@gitlab-org/gkg-frontend
-   npm run build --workspace=@gitlab-org/gkg
-   ```
-1. Build the `gkg`:
-   ```bash
-   cargo build --release --bin gkg
-   # Binary will be at target/release/gkg
-   ```
+If pre-built binaries are not available for your platform, you can [build from the source](/contribute/build).
 
 ## Next Steps
 
