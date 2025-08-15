@@ -1,3 +1,47 @@
+## [0.11.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.10.0...v0.11.0) (2025-08-15)
+
+### :sparkles: Features
+
+* **cli:** implement clean command ([40157c4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/40157c4a3ad65ef60e109dc45816590ad752344d)) by Bohdan Parkhomchuk
+* **csharp:** add definitions and imports indexing ([6b46f6a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6b46f6a274f75b52f3795f387b340af06012133d)) by Bohdan Parkhomchuk
+* **indexer:** add rust definitions ([7789601](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/77896016c4b0112f85293a748833a1a75af693d8)) by michaelangeloio
+* **indexer:** add rust imports ([c7c7cef](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c7c7cef65e7dd624aee1fbe6ba50766094c1b0dc)) by Michael Angelo Rivera
+* **kotlin:** index intra-file references ([e2730c8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e2730c8fd48576b96e18be0a013030245d13bddc)) by Jean-Gabriel Doyon
+* **mcp:** add a synchronous re-index tool ([52db203](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/52db2034fe004b8bf7911a6d4e52d4637f49fb24)) by Jean-Gabriel Doyon
+* **mcp:** add get symbol references tool ([65cc1a4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/65cc1a4874c251d77bc551fe4c4682a8dc849679)) by Jean-Gabriel Doyon
+* **playground:** make project search work ([41a89b1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/41a89b191b3fd6d3aa229c9435bb1f96184d85e9)) by Jean-Gabriel Doyon
+* **ruby:** index ruby references ([1ce3c98](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1ce3c986b21f2281baa11cd1e45bf682185cf429)) by Michael Angelo Rivera
+* **ts:** integrate ts intra-file references into the indexer ([07fe67f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/07fe67fafe3e765fbc4aec39ca89aa4d6cba1ceb)) by Michael Usachenko
+* **ui:** add re-index button in the playground project view ([c6db22f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c6db22fa1aa22ccaefe17df7090ae1c21d4d2ecf)) by Jean-Gabriel Doyon
+
+### :bug: Fixes
+
+* **ci:** add libclang-dev to build release ([26bf324](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/26bf324d9e513d04e19e5af6766b162afe77ce38)) by Michael Angelo Rivera
+* update bindings include path ([84821c8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/84821c89adcce9a6d12bb7bfd8306cc7aae821fc)) by Jan Provaznik
+
+### :memo: Documentation
+
+* add clean command and missing reindex mcp tool ([b0ecb6f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b0ecb6f7e8ccecc7070e6b91af2b810688028be3)) by Bohdan Parkhomchuk
+* add contribute section with dev setup ([8ffe08b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8ffe08b9668e0f7caee08fc406353a2d39abb91d)) by Bohdan Parkhomchuk
+* clarify role of gitlab-code-parser ([2cf27f8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/2cf27f891ff0be60bd226fb73db47b60a4c1aa5b)) by michaelangeloio
+* update server endpoint docs ([44ad0e0](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/44ad0e0c118b955171d346177e510b4ea3e6a052)) by Michael Angelo Rivera
+
+### :repeat: Chore
+
+* **deps:** bump code parser to v0.15.1 ([64c5968](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/64c596888424939d81df14abd2f98a2f0076674d)) by Michael Usachenko
+* **deps:** update all deps to latest ([f9a7e64](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/f9a7e64f3cc3a9da73e8cf9a7a3d9d167816cf76)) by michaelangeloio
+* **deps:** upgrade gitlab-code-parser to 0.15.0 ([9061647](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9061647dff35ab231193a64865df45e6a800f5bb)) by michaelangeloio
+* **docs:** add Java coverage documentation ([c745d1f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c745d1ff14324b4e860a75821f76f0d12cb20204)) by Jean-Gabriel Doyon
+* **docs:** add Kotlin docs ([3594cd0](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3594cd0df77cc8928bc1399b30695641886063c5)) by Jean-Gabriel Doyon
+* **docs:** ts/js docs and reindexing disclaimer ([fc539ce](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/fc539ce09fa7e80fcff54cfa2980c7284a8cac31)) by Michael Usachenko
+* **gkg:** rename stats output ([1e6d118](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1e6d118eb0071a12732c61562f50c5f5b9005a82)) by michaelangeloio
+* **indexer:** show summary for missing definitions ([a8a1471](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a8a14716973a7fe209595e700a5108f038f11afb)) by michaelangeloio
+* **mcp:** rename analyze code file MCP tool to be plural ([5c91c6c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5c91c6c515c0546744fd82f73087bee2b12f43db)) by Jean-Gabriel Doyon
+* **mcp:** rename reindex tool to index tool ([019589f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/019589fcbd193b1ed16dd24edbeda8fbd9c692df)) by Bohdan Parkhomchuk
+* rename kuzu database file ([dbb48e8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/dbb48e8afb143cd678f82b95ee8b338ce2f09f20)) by michaelangeloio
+* switch windows release off temp ([9aa836b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9aa836b5bd0fca42d1503d2a6eaf83dce5a44a29)) by Bohdan Parkhomchuk
+* update LICENSE ([55da5c2](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/55da5c24be50957b95d1df51d77a5509fe06deb5)) by michaelangeloio
+
 ## [0.10.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.9.0...v0.10.0) (2025-08-14)
 
 ### :sparkles: Features
