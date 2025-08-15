@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::tools::ANALYZE_CODE_FILES_TOOL_NAME;
+use crate::tools::GET_SYMBOL_REFERENCES_TOOL_NAME;
 use crate::tools::INDEX_PROJECT_TOOL_NAME;
 use crate::tools::SEARCH_CODEBASE_TOOL_NAME;
 use crate::tools::analyze_code_files::AnalyzeCodeFilesTool;
+use crate::tools::get_symbol_references::GetSymbolReferencesTool;
 use crate::tools::index_project::IndexProjectTool;
 use crate::tools::search_codebase::SearchCodebaseTool;
 use crate::tools::types::KnowledgeGraphTool;
@@ -59,6 +61,15 @@ impl AvailableToolsService {
                 database.clone(),
                 workspace_manager.clone(),
                 event_bus.clone(),
+            )),
+        );
+
+        tools.insert(
+            GET_SYMBOL_REFERENCES_TOOL_NAME.to_string(),
+            Box::new(GetSymbolReferencesTool::new(
+                database.clone(),
+                query_service.clone(),
+                workspace_manager.clone(),
             )),
         );
 
