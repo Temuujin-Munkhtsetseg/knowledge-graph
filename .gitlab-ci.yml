@@ -87,7 +87,7 @@ build-bindings:
   tags:
     - saas-linux-large-amd64
   script:
-    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
+    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3 libclang-dev
     - rustup target add ${ARCH}-unknown-linux-gnu
     - ./scripts/build.sh lib
   variables:
@@ -367,7 +367,7 @@ cargo-update:
   before_script:
     - tar -xzf cargo-files.tar.gz
   script:
-    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3
+    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3 libclang-dev
     - rustup target add ${ARCH}-unknown-linux-gnu
     - ./scripts/build.sh
   variables:

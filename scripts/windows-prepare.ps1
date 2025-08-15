@@ -27,6 +27,10 @@ Write-Host "Installing Rust toolchain..."
 & C:\install\rustup-init.exe -y --default-toolchain 1.88.0 --default-host x86_64-pc-windows-msvc | Write-Host
 $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
 
+Write-Host "Installing LLVM for ruby-prism build..."
+
+choco install llvm
+
 Write-Host "All installations complete."
 
 if ([string]::IsNullOrEmpty($KuzuVersion)) {
