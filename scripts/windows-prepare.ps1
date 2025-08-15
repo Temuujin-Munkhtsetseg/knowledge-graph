@@ -29,7 +29,7 @@ $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";"
 
 Write-Host "Installing LLVM for ruby-prism build..."
 
-choco install llvm
+choco install llvm -y
 
 Write-Host "All installations complete."
 
