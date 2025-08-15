@@ -65,4 +65,4 @@ If pre-built binaries are not available for your platform, you can [build from t
 
 ## Next Steps
 
-Once installed, continue to the [Quick Start](/getting-started/quick-start) guide to learn how to use GitLab Knowledge Graph.
+Once installed, continue to the [Usage](/getting-started/usage) guide to learn how to use GitLab Knowledge Graph.
