@@ -426,25 +426,25 @@ build:darwin-x86_64:
   variables:
     ARCH: x86_64
 
-build:windows-x86_64:
-  tags:
-    - saas-windows-medium-amd64
-  stage: build-release
-  needs:
-    - frontend-build
-    - cargo-update
-  before_script:
-    - '.\scripts\windows-prepare.ps1 ${KUZU_VERSION}'
-    - tar -xzf cargo-files.tar.gz
-  script:
-    - cargo build --release --bin gkg --locked
-    - Copy-Item -Path C:\install\libkuzu\*.dll -Destination target\release\
-    - tar -czvf gkg-windows-x86_64.tar.gz -C target/release gkg.exe *.dll
-  artifacts:
-    paths:
-      - ./gkg-windows-x86_64.tar.gz
-    expire_in: 7 days
-  timeout: 2h
+# build:windows-x86_64:
+#   tags:
+#     - saas-windows-medium-amd64
+#   stage: build-release
+#   needs:
+#     - frontend-build
+#     - cargo-update
+#   before_script:
+#     - '.\scripts\windows-prepare.ps1 ${KUZU_VERSION}'
+#     - tar -xzf cargo-files.tar.gz
+#   script:
+#     - cargo build --release --bin gkg --locked
+#     - Copy-Item -Path C:\install\libkuzu\*.dll -Destination target\release\
+#     - tar -czvf gkg-windows-x86_64.tar.gz -C target/release gkg.exe *.dll
+#   artifacts:
+#     paths:
+#       - ./gkg-windows-x86_64.tar.gz
+#     expire_in: 7 days
+#   timeout: 2h
 
 release:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
@@ -454,7 +454,7 @@ release:
     - build:linux-x86_64-gnu
     - build:darwin-aarch64
     - build:darwin-x86_64
-    - build:windows-x86_64
+    # - build:windows-x86_64
     - cargo-update
   before_script:
     # Use the new Cargo.lock from cargo-update step
