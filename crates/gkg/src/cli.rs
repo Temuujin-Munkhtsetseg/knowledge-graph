@@ -44,7 +44,7 @@ pub enum Commands {
     /// Manage the gkg server
     Server {
         #[command(subcommand)]
-        action: ServerCommands,
+        action: Option<ServerCommands>,
     },
     /// Remove all indexed data
     Clean,

@@ -8,6 +8,7 @@ use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::{fs, process};
+use tracing::info;
 
 #[cfg(unix)]
 use nix::sys::signal::{Signal::SIGTERM, kill};
@@ -180,6 +181,7 @@ pub async fn stop() -> Result<()> {
         }
 
         let _ = remove_lock_file();
+        info!("Server stopped");
         println!(
             "{}",
             serde_json::to_string(&ServerInfo { port: info.port })?
