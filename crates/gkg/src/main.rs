@@ -6,7 +6,7 @@ mod commands;
 mod utils;
 
 use crate::commands::{clean, index, server};
-use cli::{Commands, GkgCli, ServerCommands};
+use cli::{Commands, GkgCli, ServerCommands, ServerStartArgs};
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use logging::LogMode;
@@ -26,14 +26,15 @@ async fn main() -> anyhow::Result<()> {
     let mode = match cli.command {
         Commands::Index { .. } => LogMode::Cli,
         Commands::Server { ref action } => match action {
-            ServerCommands::Start(args) => {
+            Some(ServerCommands::Start(args)) => {
                 if args.detached {
                     LogMode::ServerBackground
                 } else {
                     LogMode::ServerForeground
                 }
             }
-            ServerCommands::Stop => LogMode::ServerForeground,
+            Some(ServerCommands::Stop) => LogMode::ServerForeground,
+            None => LogMode::ServerForeground, // Default to start command
         },
         Commands::Clean => LogMode::Cli,
     };
@@ -62,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
             .await
         }
         Commands::Server { action } => match action {
-            ServerCommands::Start(args) => {
+            Some(ServerCommands::Start(args)) => {
                 server::start(
                     args.register_mcp,
                     args.enable_reindexing,
@@ -74,7 +75,27 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await
             }
-            ServerCommands::Stop => server::stop().await,
+            Some(ServerCommands::Stop) => server::stop().await,
+            None => {
+                // Default behavior: start with default arguments
+                // FIXME: This is a temporary fix to allow the server to start with default arguments
+                let args = ServerStartArgs {
+                    register_mcp: None,
+                    enable_reindexing: false,
+                    detached: false,
+                    port: None,
+                };
+                server::start(
+                    args.register_mcp,
+                    args.enable_reindexing,
+                    args.detached,
+                    args.port,
+                    Arc::clone(&database),
+                    Arc::clone(&workspace_manager),
+                    Arc::clone(&event_bus),
+                )
+                .await
+            }
         },
         Commands::Clean => clean::run(Arc::clone(&workspace_manager)),
     }
