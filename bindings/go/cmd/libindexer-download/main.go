@@ -19,7 +19,7 @@ import (
 )
 
 // version is auto-updated by scripts/semantic-release-prepare.sh
-const Version = "0.11.0"
+const Version = "0.11.1"
 
 func main() {
 	// Initialize structured logger

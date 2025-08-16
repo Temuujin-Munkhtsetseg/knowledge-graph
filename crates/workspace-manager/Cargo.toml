@@ -1,6 +1,6 @@
 [package]
 name = "workspace-manager"
-version = "0.11.0"
+version = "0.11.1"
 license = "MIT"
 authors = ["GitLab Inc."]
 description = "Workspace management service for the GitLab Knowledge Graph framework"

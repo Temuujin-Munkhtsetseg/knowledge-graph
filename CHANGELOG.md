@@ -1,3 +1,21 @@
+## [0.11.1](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.11.0...v0.11.1) (2025-08-16)
+
+### :bug: Fixes
+
+* **cli:** make server start optional ([c3422a1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c3422a1fe05a92b735d4ef2672b83b9364f68d00)) by michaelangeloio
+* **docs:** fix ruby table ([ca3ff33](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ca3ff33a9dcdd404b42c87ba2778c6c55e353997)) by Jean-Gabriel Doyon
+
+### :memo: Documentation
+
+* add index-cmd docs ([5cec4f0](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5cec4f0e48be6f820568166207011ba5c6123752)) by Michael Angelo Rivera
+* add ruby docs ([3cea28b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3cea28b8d24801ba556335a72a84138be4fc091f)) by michaelangeloio
+* minor tweaks ([c0dc88c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c0dc88c7991e416cf54bd009a1de40c171b4060e)) by Michael Angelo Rivera
+
+### :repeat: Chore
+
+* **ci:** fix and readd windows release ([44b67ba](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/44b67ba4ce8313d1c7be63ff31ba909d23796f69)) by Bohdan Parkhomchuk
+* **docs:** fix docs landing page links ([ad9b44b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ad9b44b9a60a612e3f4113690a95e884de24aafc)) by Jean-Gabriel Doyon
+
 ## [0.11.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.10.0...v0.11.0) (2025-08-15)
 
 ### :sparkles: Features
