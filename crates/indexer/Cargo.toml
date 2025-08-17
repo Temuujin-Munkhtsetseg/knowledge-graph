@@ -20,6 +20,7 @@ kuzu = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+tokio-rayon = { workspace = true }
 futures = { workspace = true }
 event-bus = { path = "../event-bus" }
 chrono = { workspace = true }
