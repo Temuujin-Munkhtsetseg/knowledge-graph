@@ -20,7 +20,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
-use tokio::task;
 
 // Simplified imports - file processing is now handled by the File module
 use crate::analysis::{AnalysisService, types::GraphData};
@@ -280,29 +279,30 @@ impl RepositoryIndexer {
                         let _permit = cpu_sem.acquire_owned().await.expect("semaphore closed");
                         let file_path_for_error = file_info.path.to_string_lossy().to_string();
                         let fi_for_parse = file_info;
-                        let parse_res = task::spawn_blocking(move || {
+
+                        let parse_res = tokio_rayon::spawn(move || {
                             let processor = FileProcessor::from_file_info(fi_for_parse, &content);
                             processor.process()
                         })
                         .await;
 
                         match parse_res {
-                            Ok(proc_res) => match proc_res {
-                                crate::parsing::processor::ProcessingResult::Success(
-                                    file_result,
-                                ) => IndexingProcessingResult::Success(file_result),
-                                crate::parsing::processor::ProcessingResult::Skipped(skipped) => {
-                                    IndexingProcessingResult::Skipped(skipped)
-                                }
-                                crate::parsing::processor::ProcessingResult::Error(errored) => {
-                                    IndexingProcessingResult::Error(errored)
-                                }
-                            },
-                            Err(e) => IndexingProcessingResult::Error(ErroredFile {
-                                file_path: file_path_for_error,
-                                error_message: format!("Task execution failed: {e}"),
-                                error_stage: ProcessingStage::Unknown,
-                            }),
+                            crate::parsing::processor::ProcessingResult::Success(file_result) => {
+                                IndexingProcessingResult::Success(file_result)
+                            }
+                            crate::parsing::processor::ProcessingResult::Skipped(skipped) => {
+                                IndexingProcessingResult::Skipped(skipped)
+                            }
+                            crate::parsing::processor::ProcessingResult::Error(errored) => {
+                                IndexingProcessingResult::Error(ErroredFile {
+                                    file_path: file_path_for_error,
+                                    error_message: format!(
+                                        "Task execution failed: {:?}",
+                                        errored.error_message
+                                    ),
+                                    error_stage: ProcessingStage::Unknown,
+                                })
+                            }
                         }
                     }
                     Err(processing_error) => match processing_error {
