@@ -151,7 +151,7 @@ pub async fn run(
         .fallback_service(serve_assets)
         .layer(ServiceBuilder::new().layer(cors_layer));
 
-    info!("HTTP server listening on {}", addr);
+    info!("HTTP server listening on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     // Set up graceful shutdown
