@@ -154,7 +154,7 @@ export default defineConfig({
       ],
       editLink: {
         baseUrl:
-          "https://gitlab.com/gitlab-org/rust/knowledge-graph/-/edit/main/packages/docs/src/content",
+          "https://gitlab.com/gitlab-org/rust/knowledge-graph/-/edit/main/packages/docs",
       },
     }),
   ],
