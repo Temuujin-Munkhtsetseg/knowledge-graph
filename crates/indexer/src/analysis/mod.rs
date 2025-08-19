@@ -124,6 +124,7 @@ impl AnalysisService {
                     &mut definition_map,
                     &mut imported_symbol_map,
                     &mut definition_relationships,
+                    &mut definition_imported_symbol_relationships,
                     &mut file_definition_relationships,
                     &mut file_imported_symbol_relationships,
                 );
@@ -243,12 +244,14 @@ impl AnalysisService {
         file_nodes.push(file_node);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn extract_language_entities(
         &mut self,
         file_result: &FileProcessingResult,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
         file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
     ) {
@@ -275,6 +278,16 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     imported_symbol_map,
+                    file_imported_symbol_relationships,
+                );
+                self.python_analyzer.process_references(
+                    &file_result.references,
+                    &relative_path,
+                    definition_map,
+                    imported_symbol_map,
+                    definition_relationships,
+                    definition_imported_symbol_relationships,
+                    file_definition_relationships,
                     file_imported_symbol_relationships,
                 );
             }

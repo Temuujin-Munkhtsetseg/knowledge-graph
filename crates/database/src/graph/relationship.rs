@@ -111,6 +111,8 @@ pub enum RelationshipType {
     // Reference relationships
     #[strum(serialize = "CALLS")]
     Calls,
+    #[strum(serialize = "AMBIGUOUSLY_CALLS")]
+    AmbiguouslyCalls,
     #[strum(serialize = "PROPERTY_REFERENCE")]
     PropertyReference,
 }
