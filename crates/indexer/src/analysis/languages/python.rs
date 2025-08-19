@@ -4,12 +4,16 @@ use crate::analysis::types::{
     FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
     ImportedSymbolNode,
 };
-use crate::parsing::processor::FileProcessingResult;
+use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
 use parser_core::python::{
     fqn::python_fqn_to_string,
-    types::{PythonDefinitionInfo, PythonDefinitionType, PythonFqn, PythonImportedSymbolInfo},
+    types::{
+        PythonDefinitionInfo, PythonDefinitionType, PythonFqn, PythonImportedSymbolInfo,
+        PythonTargetResolution,
+    },
 };
+use parser_core::references::ReferenceTarget;
 use std::collections::HashMap;
 
 // Handles Python-specific analysis operations
@@ -113,6 +117,103 @@ impl PythonAnalyzer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn process_references(
+        &self,
+        file_references: &Option<References>,
+        relative_file_path: &str,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+    ) {
+        let file_path = relative_file_path.to_string();
+        if let Some(references) = file_references
+            && let Some(references) = references.iter_python()
+        {
+            for reference in references {
+                let source_definition = if let Some(scope) = reference.scope.as_ref() {
+                    let fqn_string = python_fqn_to_string(scope);
+                    definition_map
+                        .get(&(fqn_string, file_path.clone()))
+                        .map(|map_value| map_value.0.clone())
+                } else {
+                    None
+                };
+                match &reference.target {
+                    ReferenceTarget::Resolved(resolved_target) => {
+                        match resolved_target {
+                            PythonTargetResolution::Definition(target_def_info) => {
+                                self.add_definition_reference_relationship(
+                                    &file_path,
+                                    &source_definition,
+                                    target_def_info,
+                                    definition_map,
+                                    definition_relationships,
+                                    file_definition_relationships,
+                                    false,
+                                );
+                            }
+                            PythonTargetResolution::ImportedSymbol(target_import_info) => {
+                                self.add_imported_symbol_reference_relationship(
+                                    &file_path,
+                                    &source_definition,
+                                    target_import_info,
+                                    imported_symbol_map,
+                                    definition_imported_symbol_relationships,
+                                    file_import_relationships,
+                                    false,
+                                );
+                            }
+                            PythonTargetResolution::PartialResolution(_symbol_chain) => {
+                                // Ignoring until we do phase 3
+                                continue;
+                            }
+                        }
+                    }
+                    ReferenceTarget::Ambiguous(possible_targets) => {
+                        for possible_target in possible_targets {
+                            match possible_target {
+                                PythonTargetResolution::Definition(target_def_info) => {
+                                    self.add_definition_reference_relationship(
+                                        &file_path,
+                                        &source_definition,
+                                        target_def_info,
+                                        definition_map,
+                                        definition_relationships,
+                                        file_definition_relationships,
+                                        true,
+                                    );
+                                }
+                                PythonTargetResolution::ImportedSymbol(target_import_info) => {
+                                    self.add_imported_symbol_reference_relationship(
+                                        &file_path,
+                                        &source_definition,
+                                        target_import_info,
+                                        imported_symbol_map,
+                                        definition_imported_symbol_relationships,
+                                        file_import_relationships,
+                                        true,
+                                    );
+                                }
+                                PythonTargetResolution::PartialResolution(_symbol_chain) => {
+                                    // Ignoring until we do phase 3
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    ReferenceTarget::Unresolved() => {
+                        // Ignoring until we do phase 3
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
     /// Create definition-to-definition and definition-to-imported-symbol relationships using definitions map
     pub fn add_definition_relationships(
         &self,
@@ -158,6 +259,118 @@ impl PythonAnalyzer {
                     relationship_type,
                 });
             }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_definition_reference_relationship(
+        &self,
+        file_path: &str,
+        source_definition: &Option<DefinitionNode>,
+        target_definition_info: &PythonDefinitionInfo,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        is_ambiguous: bool,
+    ) {
+        let target_definition = definition_map.get(&(
+            python_fqn_to_string(&target_definition_info.fqn),
+            file_path.to_string(),
+        ));
+
+        if target_definition.is_none() {
+            return;
+        }
+
+        let target_definition = target_definition.unwrap();
+        if source_definition.is_none() {
+            let relationship = FileDefinitionRelationship {
+                file_path: file_path.to_string(),
+                definition_fqn: target_definition.0.fqn.clone(),
+                relationship_type: if is_ambiguous {
+                    RelationshipType::AmbiguouslyCalls
+                } else {
+                    RelationshipType::Calls
+                },
+                definition_location: target_definition.0.location.clone(),
+            };
+            file_definition_relationships.push(relationship);
+        } else {
+            let source_definition = source_definition.as_ref().unwrap();
+            let relationship = DefinitionRelationship {
+                from_file_path: source_definition.location.file_path.clone(),
+                to_file_path: target_definition.0.location.file_path.clone(),
+                from_definition_fqn: source_definition.fqn.clone(),
+                to_definition_fqn: target_definition.0.fqn.clone(),
+                from_location: source_definition.location.clone(),
+                to_location: target_definition.0.location.clone(),
+                relationship_type: if is_ambiguous {
+                    RelationshipType::AmbiguouslyCalls
+                } else {
+                    RelationshipType::Calls
+                },
+            };
+            definition_relationships.push(relationship);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_imported_symbol_reference_relationship(
+        &self,
+        file_path: &str,
+        source_definition: &Option<DefinitionNode>,
+        target_imported_symbol_info: &PythonImportedSymbolInfo,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        is_ambiguous: bool,
+    ) {
+        let scope_fqn_string = if let Some(ref scope) = target_imported_symbol_info.scope {
+            python_fqn_to_string(scope)
+        } else {
+            "".to_string()
+        };
+        let imported_symbols = imported_symbol_map.get(&(scope_fqn_string, file_path.to_string()));
+        if imported_symbols.is_none() {
+            return;
+        }
+
+        let target_location =
+            self.create_imported_symbol_location(target_imported_symbol_info, file_path);
+        let target_imported_symbol = imported_symbols
+            .unwrap()
+            .iter()
+            .find(|i| i.location == target_location);
+        if target_imported_symbol.is_none() {
+            return;
+        }
+        let target_imported_symbol = target_imported_symbol.unwrap();
+
+        if source_definition.is_none() {
+            let relationship = FileImportedSymbolRelationship {
+                file_path: file_path.to_string(),
+                import_location: target_imported_symbol.location.clone(),
+                relationship_type: if is_ambiguous {
+                    RelationshipType::AmbiguouslyCalls
+                } else {
+                    RelationshipType::Calls
+                },
+            };
+            file_import_relationships.push(relationship);
+        } else {
+            let source_definition = source_definition.as_ref().unwrap();
+            let relationship = DefinitionImportedSymbolRelationship {
+                file_path: file_path.to_string(),
+                definition_fqn: source_definition.fqn.clone(),
+                imported_symbol_location: target_imported_symbol.location.clone(),
+                relationship_type: if is_ambiguous {
+                    RelationshipType::AmbiguouslyCalls
+                } else {
+                    RelationshipType::Calls
+                },
+                definition_location: source_definition.location.clone(),
+            };
+            definition_imported_symbol_relationships.push(relationship);
         }
     }
 

@@ -19,7 +19,7 @@ use parser_core::{
     },
     python::{
         analyzer::PythonAnalyzer,
-        types::{PythonDefinitionInfo, PythonImportedSymbolInfo},
+        types::{PythonDefinitionInfo, PythonImportedSymbolInfo, PythonReferenceInfo},
     },
     references::ReferenceInfo,
     ruby::{
@@ -326,7 +326,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::Python(analysis_result.definitions),
                         Some(ImportedSymbols::Python(analysis_result.imports)),
-                        None, // Python doesn't extract expressions currently
+                        Some(References::Python(analysis_result.references)),
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Python file '{}': {}",
@@ -632,6 +632,7 @@ pub enum References {
     Ruby(Vec<RubyReference>),
     Kotlin(Vec<KotlinReferenceInfo>),
     TypeScript(Vec<TypeScriptReferenceInfo>),
+    Python(Vec<PythonReferenceInfo>),
 }
 
 impl References {
@@ -641,6 +642,7 @@ impl References {
             References::Ruby(references) => references.len(),
             References::Kotlin(references) => references.len(),
             References::TypeScript(references) => references.len(),
+            References::Python(references) => references.len(),
         }
     }
 
@@ -666,6 +668,13 @@ impl References {
     pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptReferenceInfo>> {
         match self {
             References::TypeScript(references) => Some(references.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_python(&self) -> Option<impl Iterator<Item = &PythonReferenceInfo>> {
+        match self {
+            References::Python(references) => Some(references.iter()),
             _ => None,
         }
     }

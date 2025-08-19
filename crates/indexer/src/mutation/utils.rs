@@ -278,14 +278,16 @@ impl<'a> GraphMapper<'a> {
 
         // Process file-to-definition relationships
         for file_rel in &graph_data.file_definition_relationships {
-            if file_rel.relationship_type == RelationshipType::Calls {
+            if file_rel.relationship_type == RelationshipType::Calls
+                || file_rel.relationship_type == RelationshipType::AmbiguouslyCalls
+            {
                 calls_count += 1;
             }
 
             let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
                 warn!(
-                    "(FILE_DEFINES) Source file ID not found: File({})",
+                    "(FILE_DEFINITION_RELATIONSHIPS) Source file ID not found: File({})",
                     file_rel.file_path
                 );
                 continue;
@@ -297,7 +299,7 @@ impl<'a> GraphMapper<'a> {
             ) else {
                 def_not_found += 1;
                 warn!(
-                    "(FILE_DEFINES) Target definition ID not found: FQN({}) File({})",
+                    "(FILE_DEFINITION_RELATIONSHIPS) Target definition ID not found: FQN({}) File({})",
                     file_rel.definition_fqn, file_rel.file_path,
                 );
                 continue;
@@ -315,10 +317,16 @@ impl<'a> GraphMapper<'a> {
 
         // Process file-to-imported-symbol relationships
         for file_rel in &graph_data.file_imported_symbol_relationships {
+            if file_rel.relationship_type == RelationshipType::Calls
+                || file_rel.relationship_type == RelationshipType::AmbiguouslyCalls
+            {
+                calls_count += 1;
+            }
+
             let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
                 warn!(
-                    "(FILE_IMPORTS) Source file ID not found: File({})",
+                    "(FILE_IMPORT_RELATIONSHIPS) Source file ID not found: File({})",
                     file_rel.file_path
                 );
                 continue;
@@ -328,7 +336,7 @@ impl<'a> GraphMapper<'a> {
             else {
                 import_not_found += 1;
                 warn!(
-                    "(FILE_IMPORTS) Target imported symbol ID not found: Location({:?}) File({})",
+                    "(FILE_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: Location({:?}) File({})",
                     file_rel.import_location, file_rel.file_path,
                 );
                 continue;
@@ -346,7 +354,9 @@ impl<'a> GraphMapper<'a> {
 
         // Process definition-to-definition relationships
         for def_rel in &graph_data.definition_relationships {
-            if def_rel.relationship_type == RelationshipType::Calls {
+            if def_rel.relationship_type == RelationshipType::Calls
+                || def_rel.relationship_type == RelationshipType::AmbiguouslyCalls
+            {
                 calls_count += 1;
             }
 
@@ -393,6 +403,12 @@ impl<'a> GraphMapper<'a> {
 
         // Process definition-to-imported-symbol relationships
         for def_rel in &graph_data.definition_imported_symbol_relationships {
+            if def_rel.relationship_type == RelationshipType::Calls
+                || def_rel.relationship_type == RelationshipType::AmbiguouslyCalls
+            {
+                calls_count += 1;
+            }
+
             let Some(source_id) = id_generator
                 .get_definition_id(&def_rel.file_path, &def_rel.definition_location.to_range())
             else {
@@ -400,7 +416,7 @@ impl<'a> GraphMapper<'a> {
                 missing_source_fqns
                     .insert((def_rel.definition_fqn.clone(), def_rel.file_path.clone()));
                 debug!(
-                    "(DEFINES_IMPORTED_SYMBOL) Source definition ID not found: {} {}",
+                    "(DEFINITION_IMPORT_RELATIONSHIPS) Source definition ID not found: {} {}",
                     def_rel.definition_fqn, def_rel.file_path,
                 );
                 continue;
@@ -411,7 +427,7 @@ impl<'a> GraphMapper<'a> {
             else {
                 import_not_found += 1;
                 warn!(
-                    "(DEFINITION_IMPORTED_SYMBOL_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
+                    "(DEFINITION_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
                     def_rel.imported_symbol_location,
                 );
                 continue;

@@ -167,7 +167,7 @@ impl DefinitionNode {
 }
 
 /// Represents a single location where an imported symbol is found
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ImportedSymbolLocation {
     /// File path where this symbol was imported
     pub file_path: String,
@@ -281,7 +281,7 @@ pub struct FileImportedSymbolRelationship {
     pub file_path: String,
     /// Imported symbol location (foreign key to ImportedSymbolNode.location)
     pub import_location: ImportedSymbolLocation,
-    /// Type of relationship (always "FILE_IMPORTS" for now)
+    /// Type of relationship (import, or a reference)
     pub relationship_type: RelationshipType,
 }
 
@@ -289,9 +289,9 @@ pub struct FileImportedSymbolRelationship {
 #[derive(Debug, Clone)]
 pub struct DefinitionRelationship {
     /// Parent definition file path (foreign key to FileNode.path)
-    pub from_file_path: String,
+    pub from_file_path: String, // TODO: Drop (we have from_location already)
     /// Child definition file path (foreign key to FileNode.path)
-    pub to_file_path: String,
+    pub to_file_path: String, // TODO: Drop (we have to_location already)
     /// Parent definition FQN (foreign key to DefinitionNode.fqn)
     pub from_definition_fqn: String,
     /// Child definition FQN (foreign key to DefinitionNode.fqn)
@@ -308,14 +308,14 @@ pub struct DefinitionRelationship {
 /// (i.e. when an import is contained in the body of a definition)
 #[derive(Debug, Clone)]
 pub struct DefinitionImportedSymbolRelationship {
-    /// File path that the definition and import are contained in
+    /// File path that the definition and import that's contained (or referenced) in it
     /// (foreign key to FileNode.path)
     pub file_path: String,
     /// Definition FQN (foreign key to DefinitionNode.fqn)
     pub definition_fqn: String,
     /// Imported symbol location (foreign key to ImportedSymbolNode.location)
     pub imported_symbol_location: ImportedSymbolLocation,
-    /// Type of relationship (always "DEFINES_IMPORTED_SYMBOL" for now)
+    /// Type of relationship (either "DEFINES_IMPORTED_SYMBOL" or "CALLS_IMPORTED_SYMBOL" for now)
     pub relationship_type: RelationshipType,
     /// Definition location (foreign key to DefinitionNode.location)
     pub definition_location: DefinitionLocation,
