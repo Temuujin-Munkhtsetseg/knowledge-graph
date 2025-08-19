@@ -30,10 +30,10 @@ downloading proper version of the library from release assets.
 Example of calling indexer from a Go app:
 
 ```go
-import "gitlab.com/gitlab-org/rust/knowledge-graph.git/bindings/go/indexer"
+import "gitlab.com/gitlab-org/rust/knowledge-graph/bindings/go/indexer"
 
 +// downloads pre-compiled static bindings lib into "libindexer/" directory
-+//go:generate go run gitlab.com/gitlab-org/rust/knowledge-graph.git/bindings/go/cmd/libindexer-download libindexer
++//go:generate go run gitlab.com/gitlab-org/rust/knowledge-graph/bindings/go/cmd/libindexer-download libindexer
 
 func main() {
     repoDir := "/tmp/gitlab"
