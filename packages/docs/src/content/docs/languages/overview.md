@@ -12,7 +12,7 @@ Currently, the Knowledge Graph indexes the following languages:
 | Language                    | Definitions & imports | Intra-file references | Cross-file references |
 | --------------------------- | --------------------- | --------------------- | --------------------- |
 | [Ruby](../ruby)             | ✅                    | ✅                    | ✅                    |
-| Python                      | ✅                    | ✅                    | 🚧                    |
+| [Python](../python)         | ✅                    | ✅                    | 🚧                    |
 | [TypeScript](../typescript) | ✅                    | ✅                    | 🚧                    |
 | [JavaScript](../typescript) | ✅                    | ✅                    | 🚧                    |
 | [Kotlin](../kotlin)         | ✅                    | ✅                    | 🚧                    |
