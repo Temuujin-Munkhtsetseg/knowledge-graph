@@ -107,10 +107,52 @@ export default defineConfig({
     starlight({
       title: "GitLab Knowledge Graph",
       logo: {
-        light: "./src/assets/gkg-logo.png",
-        dark: "./src/assets/gkg-logo.png",
+        light: "./src/assets/gkg-icon.svg",
+        dark: "./src/assets/gkg-icon.svg",
       },
       favicon: "favicon.ico",
+      head: [
+        {
+          tag: "link",
+          attrs: {
+            rel: "apple-touch-icon",
+            sizes: "180x180",
+            href: "/apple-touch-icon.png",
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "icon",
+            type: "image/png",
+            sizes: "32x32",
+            href: "/favicon-32x32.png",
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "icon",
+            type: "image/png",
+            sizes: "16x16",
+            href: "/favicon-16x16.png",
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "manifest",
+            href: "/site.webmanifest",
+          },
+        },
+        {
+          tag: "meta",
+          attrs: {
+            name: "theme-color",
+            content: "#FCA326",
+          },
+        },
+      ],
       components: {
         SiteTitle: "./src/components/SiteTitle.astro",
       },
