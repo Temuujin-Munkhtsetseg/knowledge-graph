@@ -7,11 +7,11 @@
 /* https://starlight.astro.build/guides/customization */
 
 @theme {
-  /* GitLab-inspired accent color palette using official GitLab Orange (#FC6D26) */
-  --color-accent-200: #fddbc7; /* Very light GitLab orange with transparency */
-  --color-accent-600: #fc6d26; /* Official GitLab Orange */
-  --color-accent-900: #b54a1a; /* Darker GitLab orange */
-  --color-accent-950: #8a3714; /* Darkest GitLab orange */
+  /* GitLab-inspired accent color palette using custom orange (#FCA326) */
+  --color-accent-200: #fde5cc; /* Very light orange with transparency */
+  --color-accent-600: #fca326; /* Custom orange */
+  --color-accent-900: #b87419; /* Darker orange */
+  --color-accent-950: #8a5613; /* Darkest orange */
 
   /* Refined gray color palette for better contrast */
   --color-gray-100: #f6f6f6;
@@ -69,22 +69,16 @@
     text-transform: none !important;
   }
 
-  /* GitLab text with official GitLab orange */
+  /* GitLab text with white color */
   .gitlab-text {
-    background: linear-gradient(135deg, #fc6d26 0%, #e24329 100%) !important;
-    background-clip: text !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    color: transparent !important;
+    color: white !important;
     position: relative !important;
     display: inline-block !important;
-    -moz-background-clip: text !important;
-    -moz-text-fill-color: transparent !important;
   }
 
-  /* Knowledge and Graph text with GitLab purple accent */
+  /* Knowledge and Graph text with orange gradient */
   .graph-text {
-    background: linear-gradient(135deg, #6b46c1 0%, #7c3aed 100%) !important;
+    background: linear-gradient(135deg, #fca326 50%, #f59e0b 100%) !important;
     background-clip: text !important;
     -webkit-background-clip: text !important;
     -webkit-text-fill-color: transparent !important;
@@ -120,24 +114,12 @@
 
   /* Dark mode adjustments for better visibility */
   [data-theme="dark"] .gitlab-text {
-    background: linear-gradient(
-      135deg,
-      #fca326 0%,
-      #fc6d26 50%,
-      #e24329 100%
-    ) !important;
-    background-clip: text !important;
-    -webkit-background-clip: text !important;
+    color: white !important;
   }
 
   [data-theme="dark"] .knowledge-text,
   [data-theme="dark"] .graph-text {
-    background: linear-gradient(
-      135deg,
-      #8b5cf6 0%,
-      #a78bfa 50%,
-      #c4b5fd 100%
-    ) !important;
+    background: linear-gradient(135deg, #fca326 50%, #f59e0b 100%) !important;
     background-clip: text !important;
     -webkit-background-clip: text !important;
   }
@@ -145,24 +127,12 @@
   /* Also handle prefers-color-scheme for system dark mode */
   @media (prefers-color-scheme: dark) {
     .gitlab-text {
-      background: linear-gradient(
-        135deg,
-        #fca326 0%,
-        #fc6d26 50%,
-        #e24329 100%
-      ) !important;
-      background-clip: text !important;
-      -webkit-background-clip: text !important;
+      color: white !important;
     }
 
     .knowledge-text,
     .graph-text {
-      background: linear-gradient(
-        135deg,
-        #8b5cf6 0%,
-        #a78bfa 50%,
-        #c4b5fd 100%
-      ) !important;
+      background: linear-gradient(135deg, #fca326 50%, #f59e0b 100%) !important;
       background-clip: text !important;
       -webkit-background-clip: text !important;
     }
@@ -179,22 +149,22 @@
   /* Fallback for browsers that don't support background-clip: text */
   @supports not (-webkit-background-clip: text) {
     .gitlab-text {
-      color: #fc6d26 !important;
+      color: white !important;
     }
     .knowledge-text {
-      color: #6b46c1 !important;
+      color: #f59e0b !important;
     }
     .graph-text {
-      color: #6b46c1 !important;
+      color: #f59e0b !important;
     }
 
     [data-theme="dark"] .gitlab-text {
-      color: #fca326 !important;
+      color: white !important;
     }
 
     [data-theme="dark"] .knowledge-text,
     [data-theme="dark"] .graph-text {
-      color: #a78bfa !important;
+      color: #f59e0b !important;
     }
   }
 
