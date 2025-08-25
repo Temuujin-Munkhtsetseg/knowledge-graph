@@ -16,7 +16,7 @@ Currently, the Knowledge Graph indexes the following languages:
 | [TypeScript](../typescript) | ✅                    | ✅                    | 🚧                    |
 | [JavaScript](../typescript) | ✅                    | ✅                    | 🚧                    |
 | [Kotlin](../kotlin)         | ✅                    | ✅                    | 🚧                    |
-| [Java](../java)             | ✅                    | 🚧                    | 🚧                    |
+| [Java](../java)             | ✅                    | ✅                    | ✅                    |
 
 Click on the above language links to see more details about what is supported and what isn't.
 
