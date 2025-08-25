@@ -9,24 +9,31 @@ use parser_core::java::{
 };
 
 use crate::{
-    analysis::types::{
-        DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-        FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-        ImportType, ImportedSymbolLocation, ImportedSymbolNode,
+    analysis::{
+        languages::java::expression_resolver::ExpressionResolver,
+        types::{
+            DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
+            FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
+            ImportType, ImportedSymbolLocation, ImportedSymbolNode,
+        },
     },
-    parsing::processor::FileProcessingResult,
+    parsing::processor::{FileProcessingResult, References},
 };
 
 #[derive(Default)]
-pub struct JavaAnalyzer;
+pub struct JavaAnalyzer {
+    expression_resolver: ExpressionResolver,
+}
 
 impl JavaAnalyzer {
     pub fn new() -> Self {
-        Self
+        Self {
+            expression_resolver: ExpressionResolver::new(),
+        }
     }
 
     pub fn process_definitions(
-        &self,
+        &mut self,
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
@@ -34,6 +41,12 @@ impl JavaAnalyzer {
     ) {
         if let Some(defs) = file_result.definitions.iter_java() {
             for definition in defs {
+                if matches!(definition.definition_type, JavaDefinitionType::Package) {
+                    self.expression_resolver
+                        .add_file(definition.name.clone(), relative_file_path.to_string());
+                    continue;
+                }
+
                 if let Ok(Some((location, fqn))) =
                     self.create_definition_location(definition, relative_file_path)
                 {
@@ -44,6 +57,20 @@ impl JavaAnalyzer {
                         DefinitionType::Java(definition.definition_type),
                         location.clone(),
                     );
+
+                    self.expression_resolver.add_definition(
+                        relative_file_path.to_string(),
+                        definition.clone(),
+                        definition_node.clone(),
+                    );
+
+                    // We don't want to index local variables, parameters, or fields
+                    if definition.definition_type == JavaDefinitionType::LocalVariable
+                        || definition.definition_type == JavaDefinitionType::Parameter
+                        || definition.definition_type == JavaDefinitionType::Field
+                    {
+                        continue;
+                    }
 
                     // Only add file definition relationship for top-level definitions
                     if self.is_top_level_definition(&fqn) {
@@ -66,7 +93,7 @@ impl JavaAnalyzer {
 
     /// Process imported symbols from a file result and update the import map
     pub fn process_imports(
-        &self,
+        &mut self,
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
@@ -100,8 +127,25 @@ impl JavaAnalyzer {
                     import_location: location.clone(),
                     relationship_type: RelationshipType::FileImports,
                 });
+
+                self.expression_resolver
+                    .add_import(relative_file_path.to_string(), imported_symbol);
             }
         }
+    }
+
+    /// Process Java references (calls and creations) and create definition relationships
+    pub fn process_references(
+        &mut self,
+        references: &References,
+        file_path: &str,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+    ) {
+        self.expression_resolver.resolve_references(
+            file_path,
+            references,
+            definition_relationships,
+        );
     }
 
     /// Create definition-to-definition relationships using definitions map
@@ -169,9 +213,6 @@ impl JavaAnalyzer {
             (DefinitionType::Java(Class), DefinitionType::Java(Class)) => {
                 Some(RelationshipType::ClassToClass)
             }
-            (DefinitionType::Java(Class), DefinitionType::Java(Constructor)) => {
-                Some(RelationshipType::ClassToConstructor)
-            }
             (DefinitionType::Java(Class), DefinitionType::Java(Interface)) => {
                 Some(RelationshipType::ClassToInterface)
             }
@@ -238,7 +279,7 @@ impl JavaAnalyzer {
             DefinitionType::Java(Interface) => Some(DefinitionType::Java(Interface)),
             DefinitionType::Java(EnumConstant) => Some(DefinitionType::Java(EnumConstant)),
             DefinitionType::Java(Method) => Some(DefinitionType::Java(Method)),
-            DefinitionType::Java(Constructor) => Some(DefinitionType::Java(Constructor)),
+            DefinitionType::Java(Constructor) => Some(DefinitionType::Java(Method)),
             DefinitionType::Java(Lambda) => Some(DefinitionType::Java(Lambda)),
             _ => None,
         }

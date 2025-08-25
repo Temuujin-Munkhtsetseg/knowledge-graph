@@ -136,14 +136,40 @@ impl AnalysisService {
                 &mut definition_nodes,
                 &mut imported_symbol_nodes,
             );
-            // Process references for Ruby using the new expression resolver
-            if language == SupportedLanguage::Ruby {
+
+            // Process references for Ruby and Java using the new expression resolver
+            if language == SupportedLanguage::Ruby || language == SupportedLanguage::Java {
                 for file_result in &results {
                     if let Some(references) = &file_result.references {
                         let relative_path = self
                             .filesystem_analyzer
                             .get_relative_path(&file_result.file_path);
-                        self.ruby_analyzer.process_references(
+
+                        if language == SupportedLanguage::Ruby {
+                            self.ruby_analyzer.process_references(
+                                references,
+                                &relative_path,
+                                &mut definition_relationships,
+                            );
+                        } else if language == SupportedLanguage::Java {
+                            self.java_analyzer.process_references(
+                                references,
+                                &relative_path,
+                                &mut definition_relationships,
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Process references for Java when available
+            if language == SupportedLanguage::Java {
+                for file_result in &results {
+                    if let Some(references) = &file_result.references {
+                        let relative_path = self
+                            .filesystem_analyzer
+                            .get_relative_path(&file_result.file_path);
+                        self.java_analyzer.process_references(
                             references,
                             &relative_path,
                             &mut definition_relationships,

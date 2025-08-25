@@ -7,7 +7,7 @@ use parser_core::{
     definitions::DefinitionTypeInfo,
     java::{
         analyzer::JavaAnalyzer,
-        types::{JavaDefinitionInfo, JavaImportedSymbolInfo},
+        types::{JavaDefinitionInfo, JavaImportedSymbolInfo, JavaReferenceInfo},
     },
     kotlin::{
         analyzer::KotlinAnalyzer,
@@ -356,7 +356,7 @@ impl<'a> FileProcessor<'a> {
                     Ok(analysis_result) => Ok((
                         Definitions::Java(analysis_result.definitions),
                         Some(ImportedSymbols::Java(analysis_result.imports)),
-                        None, // Java doesn't extract expressions currently
+                        Some(References::Java(analysis_result.references)),
                     )),
                     Err(e) => Err(anyhow::anyhow!(
                         "Failed to analyze Java file '{}': {}",
@@ -632,6 +632,7 @@ pub enum References {
     Ruby(Vec<RubyReference>),
     Kotlin(Vec<KotlinReferenceInfo>),
     TypeScript(Vec<TypeScriptReferenceInfo>),
+    Java(Vec<JavaReferenceInfo>),
     Python(Vec<PythonReferenceInfo>),
 }
 
@@ -642,6 +643,7 @@ impl References {
             References::Ruby(references) => references.len(),
             References::Kotlin(references) => references.len(),
             References::TypeScript(references) => references.len(),
+            References::Java(references) => references.len(),
             References::Python(references) => references.len(),
         }
     }
@@ -668,6 +670,13 @@ impl References {
     pub fn iter_typescript(&self) -> Option<impl Iterator<Item = &TypeScriptReferenceInfo>> {
         match self {
             References::TypeScript(references) => Some(references.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_java(&self) -> Option<impl Iterator<Item = &JavaReferenceInfo>> {
+        match self {
+            References::Java(references) => Some(references.iter()),
             _ => None,
         }
     }
