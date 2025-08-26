@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -28,8 +27,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
+	ctx := context.Background()
 
 	if err := run(ctx); err != nil {
 		slog.Error("Application failed", "error", err)
@@ -90,13 +88,6 @@ func downloadAndExtract(ctx context.Context, url string, root *os.Root) (retErr 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
-	}
-
-	if token := os.Getenv("GITLAB_TOKEN"); token != "" {
-		req.Header.Set("PRIVATE-TOKEN", token)
-		slog.Debug("Using GitLab token for authentication")
-	} else {
-		slog.Warn("No GITLAB_TOKEN found, proceeding without authentication")
 	}
 
 	slog.Info("Downloading file", "url", url)
