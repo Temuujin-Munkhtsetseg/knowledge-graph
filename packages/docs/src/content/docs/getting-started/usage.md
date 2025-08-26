@@ -9,7 +9,7 @@ This guide will help you get GitLab Knowledge Graph up and running on your first
 
 ## Prerequisites
 
-- GitLab Knowledge Graph [installed](../install)
+- GitLab Knowledge Graph [installed](/getting-started/install)
 - A workspace folder with an initialized Git repository
 
 ## Basic Indexing
@@ -81,4 +81,4 @@ For more information on the server, see the [gkg server](/cli/server) command.
 
 ## IDE integration
 
-GitLab Knowledge Graph integrates with your IDE. See [IDE Integration](../ide-integration) for details.
+GitLab Knowledge Graph integrates with your IDE. See [IDE Integration](/getting-started/ide-integration) for details.

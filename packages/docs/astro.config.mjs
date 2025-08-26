@@ -2,6 +2,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
+import { remarkBaseUrl } from "./remark-base-url.mjs";
 import {
   copyFileSync,
   mkdirSync,
@@ -200,6 +201,10 @@ export default defineConfig({
       },
     }),
   ],
+
+  markdown: {
+    remarkPlugins: [remarkBaseUrl],
+  },
 
   vite: {
     // @ts-ignore - Tailwind CSS v4 plugin compatibility issue with Vite types
