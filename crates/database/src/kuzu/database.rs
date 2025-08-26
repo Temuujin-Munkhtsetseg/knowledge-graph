@@ -2,7 +2,7 @@ use crate::kuzu::config::DatabaseConfig;
 use kuzu::{Database, SystemConfig};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tracing::info;
+use tracing::{error, info};
 
 pub struct KuzuQueryResult {
     pub column_names: Vec<String>,
@@ -64,7 +64,7 @@ impl KuzuDatabase {
         };
 
         if database.is_err() {
-            info!(
+            error!(
                 "KuzuDatabase::get_or_create_database - Failed to create database error: {:?}",
                 database.err()
             );
@@ -95,10 +95,9 @@ impl KuzuDatabase {
                     };
 
                     if let Err(e) = removal_result {
-                        tracing::error!(
+                        error!(
                             "KuzuDatabase::force_new_database - Failed to remove existing database path '{}': {}",
-                            database_path,
-                            e
+                            database_path, e
                         );
                         return None;
                     }
@@ -108,10 +107,9 @@ impl KuzuDatabase {
                     );
                 }
                 Err(e) => {
-                    tracing::error!(
+                    error!(
                         "KuzuDatabase::force_new_database - Failed to stat existing database path '{}': {}",
-                        database_path,
-                        e
+                        database_path, e
                     );
                     return None;
                 }

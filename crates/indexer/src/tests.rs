@@ -1365,11 +1365,11 @@ async fn test_parquet_file_structure() {
 
     // Check for consolidated relationship files (NEW STRUCTURE)
     let required_relationship_files = vec![
-        "directory_to_directory_relationships",
-        "directory_to_file_relationships",
-        "file_to_definition_relationships",
+        "directorynode_to_directorynode_relationships.parquet",
+        "directorynode_to_filenode_relationships.parquet",
+        "filenode_to_definitionnode_relationships.parquet",
         // "file_to_imported_symbol_relationships",
-        "definition_to_definition_relationships",
+        "definitionnode_to_definitionnode_relationships.parquet",
         // "definition_to_imported_symbol_relationships"
     ];
 
@@ -1411,8 +1411,8 @@ async fn test_parquet_file_structure() {
     let dir_rels_file = writer_result
         .files_written
         .iter()
-        .find(|f| f.file_type == "directory_to_directory_relationships")
-        .expect("Should have directory_to_directory_relationships file");
+        .find(|f| f.file_type == "directorynode_to_directorynode_relationships.parquet")
+        .expect("Should have directorynode_to_directorynode_relationships.parquet file");
 
     println!(
         "  📁 Directory relationships: {} records",
@@ -1427,8 +1427,8 @@ async fn test_parquet_file_structure() {
     let dir_file_rels_file = writer_result
         .files_written
         .iter()
-        .find(|f| f.file_type == "directory_to_file_relationships")
-        .expect("Should have directory_to_file_relationships file");
+        .find(|f| f.file_type == "directorynode_to_filenode_relationships.parquet")
+        .expect("Should have directorynode_to_filenode_relationships.parquet file");
 
     println!(
         "  📁 Directory to file relationships: {} records",
@@ -1443,8 +1443,8 @@ async fn test_parquet_file_structure() {
     let file_def_rels_file = writer_result
         .files_written
         .iter()
-        .find(|f| f.file_type == "file_to_definition_relationships")
-        .expect("Should have file_to_definition_relationships file");
+        .find(|f| f.file_type == "filenode_to_definitionnode_relationships.parquet")
+        .expect("Should have filenode_to_definitionnode_relationships.parquet file");
 
     println!(
         "  📄 File to definition relationships: {} records",
@@ -1467,8 +1467,8 @@ async fn test_parquet_file_structure() {
     let def_rels_file = writer_result
         .files_written
         .iter()
-        .find(|f| f.file_type == "definition_to_definition_relationships")
-        .expect("Should have definition_to_definition_relationships file");
+        .find(|f| f.file_type == "definitionnode_to_definitionnode_relationships.parquet")
+        .expect("Should have definitionnode_to_definitionnode_relationships.parquet file");
 
     println!(
         "  🔗 Definition to definition relationships: {} records",

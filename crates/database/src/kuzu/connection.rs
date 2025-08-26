@@ -145,8 +145,8 @@ impl<'a> KuzuConnection<'a> {
         &self,
         table_name: &str,
         file_path: &str,
-        from_table: Option<&str>,
-        to_table: Option<&str>,
+        from_table: &str,
+        to_table: &str,
     ) -> Result<(), DatabaseError> {
         let absolute_path = std::path::Path::new(file_path)
             .canonicalize()
@@ -157,13 +157,8 @@ impl<'a> KuzuConnection<'a> {
         // For Parquet files, only from/to options are needed for relationship tables
         // HEADER is not needed as schema is embedded in Parquet metadata
         let mut options = Vec::new();
-        if let Some(from) = from_table {
-            options.push(format!("from='{from}'"));
-        }
-
-        if let Some(to) = to_table {
-            options.push(format!("to='{to}'"));
-        }
+        options.push(format!("from='{from_table}'"));
+        options.push(format!("to='{to_table}'"));
 
         if !options.is_empty() {
             let options_str: Vec<&str> = options.iter().map(|s| s.as_str()).collect();

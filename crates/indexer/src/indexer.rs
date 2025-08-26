@@ -12,7 +12,7 @@
 // ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║
 //  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝
 use database::kuzu::database::KuzuDatabase;
-use database::kuzu::schema::SchemaManager;
+use database::schema::manager::SchemaManager;
 use futures::stream::{self, StreamExt};
 use gitalisk_core::repository::gitalisk_repository::FileInfo;
 use log::{info, warn};

@@ -5,11 +5,13 @@ use crate::mutation::types::ConsolidatedRelationship;
 use crate::mutation::utils::{GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Error, Result};
 use arrow::{
-    array::{Int32Array, Int64Array, StringArray, UInt8Array, UInt32Array},
+    array::{UInt8Array, UInt32Array},
     datatypes::{DataType, Field, Schema},
     record_batch::RecordBatch,
 };
 use database::graph::RelationshipTypeMapping;
+use database::schema::init::RELATIONSHIP_TABLES;
+use database::schema::types::{ArrowBatchConverter, ToArrowBatch};
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 use std::{
     fs::File,
@@ -82,6 +84,26 @@ impl WriterService {
         Ok(false)
     }
 
+    pub fn write_batch_to_parquet(
+        &self,
+        file_path: &Path,
+        schema: Arc<Schema>,
+        batch: &RecordBatch,
+    ) -> Result<()> {
+        // Write to parquet file
+        let file = File::create(file_path)
+            .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
+
+        let props = WriterProperties::builder()
+            .set_compression(Compression::SNAPPY)
+            .build();
+
+        let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
+        writer.write(batch)?;
+        writer.close()?;
+        Ok(())
+    }
+
     /// Write graph data to Parquet files with consolidated relationship schema
     pub fn write_graph_data(
         &self,
@@ -101,175 +123,133 @@ impl WriterService {
             GraphMapper::new(graph_data, node_id_generator, &mut relationship_mapping);
         let relationships = graph_mapper.map_graph_data()?;
 
-        // Write node tables with integer IDs
-        if !graph_data.directory_nodes.is_empty() {
-            let file_path = self.output_directory.join("directories.parquet");
-            let record_count = graph_data.directory_nodes.len();
-            self.write_directory_nodes_with_ids(
-                &file_path,
-                &graph_data.directory_nodes,
-                node_id_generator,
-            )?;
+        // WRITE ALL NODES to PARQUET
+        let batches = [
+            (
+                &database::schema::init::DIRECTORY_TABLE,
+                ArrowBatchConverter::to_record_batch(
+                    &graph_data.directory_nodes,
+                    &database::schema::init::DIRECTORY_TABLE,
+                    |n: &DirectoryNode| node_id_generator.get_directory_id(&n.path).unwrap_or(0),
+                ),
+            ),
+            (
+                &database::schema::init::FILE_TABLE,
+                ArrowBatchConverter::to_record_batch(
+                    &graph_data.file_nodes,
+                    &database::schema::init::FILE_TABLE,
+                    |n: &FileNode| node_id_generator.get_file_id(&n.path).unwrap_or(0),
+                ),
+            ),
+            (
+                &database::schema::init::DEFINITION_TABLE,
+                ArrowBatchConverter::to_record_batch(
+                    &graph_data.definition_nodes,
+                    &database::schema::init::DEFINITION_TABLE,
+                    |n: &DefinitionNode| {
+                        let range = n.location.to_range();
+                        node_id_generator
+                            .get_definition_id(&n.location.file_path, &range)
+                            .unwrap_or(0)
+                    },
+                ),
+            ),
+            (
+                &database::schema::init::IMPORTED_SYMBOL_TABLE,
+                ArrowBatchConverter::to_record_batch(
+                    &graph_data.imported_symbol_nodes,
+                    &database::schema::init::IMPORTED_SYMBOL_TABLE,
+                    |n: &ImportedSymbolNode| {
+                        node_id_generator
+                            .get_imported_symbol_id(&n.location)
+                            .unwrap_or(0)
+                    },
+                ),
+            ),
+        ];
 
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "directories".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
+        for (table, batch) in batches {
+            let file_path = self.output_directory.join(table.parquet_filename);
+            log::info!(
+                "Writing {} nodes to Parquet: {}",
+                table.name,
+                file_path.display()
+            );
+            match batch {
+                Ok(batch) => {
+                    if batch.num_rows() == 0 {
+                        log::warn!("No nodes to write for {}", table.name);
+                        continue;
+                    }
+                    self.write_batch_to_parquet(&file_path, table.to_arrow_schema(), &batch)?;
+                    log::info!(
+                        "✅ Successfully wrote {} {} nodes to Parquet",
+                        batch.num_rows(),
+                        table.name
+                    );
+                    let file_type =
+                        match table.parquet_filename.to_string().strip_suffix(".parquet") {
+                            Some(s) => s.to_string(),
+                            None => table.parquet_filename.to_string(),
+                        };
+                    files_written.push(WrittenFile {
+                        file_path: file_path.clone(),
+                        file_type,
+                        record_count: batch.num_rows(),
+                        file_size_bytes: self.get_file_size(&file_path)?,
+                    });
+                }
+                Err(e) => {
+                    log::error!(
+                        "Error converting {} nodes to Arrow batch: {}",
+                        table.name,
+                        e
+                    );
+                }
+            }
         }
 
-        if !graph_data.file_nodes.is_empty() {
-            let file_path = self.output_directory.join("files.parquet");
-            let record_count = graph_data.file_nodes.len();
-            self.write_file_nodes_with_ids(&file_path, &graph_data.file_nodes, node_id_generator)?;
+        // WRITE ALL RELATIONSHIPS to PARQUET
+        for table in RELATIONSHIP_TABLES.iter() {
+            for (from_to, filename) in table.get_parquet_filenames_from_pairs() {
+                let (from, to) = from_to;
+                let relationships = match (from.name, to.name) {
+                    // Write directory-to-directory relationships
+                    ("DirectoryNode", "DirectoryNode") => {
+                        (&relationships.directory_to_directory, &filename)
+                    }
+                    // Write directory-to-file relationships
+                    ("DirectoryNode", "FileNode") => (&relationships.directory_to_file, &filename),
+                    // Write file-to-definition relationships (FILE_DEFINES)
+                    ("FileNode", "DefinitionNode") => {
+                        (&relationships.file_to_definition, &filename)
+                    }
+                    // Write file-to-imported-symbol relationships (FILE_IMPORTS)
+                    ("FileNode", "ImportedSymbolNode") => {
+                        (&relationships.file_to_imported_symbol, &filename)
+                    }
+                    // Write definition-to-definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)
+                    ("DefinitionNode", "DefinitionNode") => {
+                        (&relationships.definition_to_definition, &filename)
+                    }
+                    // Write definition-to-imported-symbol relationships (all DEFINES_IMPORTED_SYMBOL)
+                    ("DefinitionNode", "ImportedSymbolNode") => {
+                        (&relationships.definition_to_imported_symbol, &filename)
+                    }
+                    _ => (&Vec::new(), &filename),
+                };
 
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "files".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        if !graph_data.definition_nodes.is_empty() {
-            let file_path = self.output_directory.join("definitions.parquet");
-            let record_count = self.write_definition_nodes_with_ids(
-                &file_path,
-                &graph_data.definition_nodes,
-                node_id_generator,
-            )?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "definitions".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        if !graph_data.imported_symbol_nodes.is_empty() {
-            let file_path = self.output_directory.join("imported_symbols.parquet");
-            let record_count = self.write_imported_symbol_nodes_with_ids(
-                &file_path,
-                &graph_data.imported_symbol_nodes,
-                node_id_generator,
-            )?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "imported_symbols".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        // Write directory-to-directory relationships
-        if !relationships.directory_to_directory.is_empty() {
-            let file_path = self
-                .output_directory
-                .join("directory_to_directory_relationships.parquet");
-            let record_count = relationships.directory_to_directory.len();
-            self.write_consolidated_relationships(
-                &file_path,
-                &relationships.directory_to_directory,
-            )?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "directory_to_directory_relationships".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        // Write directory-to-file relationships
-        if !relationships.directory_to_file.is_empty() {
-            let file_path = self
-                .output_directory
-                .join("directory_to_file_relationships.parquet");
-            let record_count = relationships.directory_to_file.len();
-            self.write_consolidated_relationships(&file_path, &relationships.directory_to_file)?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "directory_to_file_relationships".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        // Write file-to-definition relationships (FILE_DEFINES)
-        if !relationships.file_to_definition.is_empty() {
-            let file_path = self
-                .output_directory
-                .join("file_to_definition_relationships.parquet");
-            let record_count = relationships.file_to_definition.len();
-            self.write_consolidated_relationships(&file_path, &relationships.file_to_definition)?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "file_to_definition_relationships".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        // Write file-to-imported-symbol relationships (FILE_IMPORTS)
-        if !relationships.file_to_imported_symbol.is_empty() {
-            let file_path = self
-                .output_directory
-                .join("file_to_imported_symbol_relationships.parquet");
-            let record_count = relationships.file_to_imported_symbol.len();
-            self.write_consolidated_relationships(
-                &file_path,
-                &relationships.file_to_imported_symbol,
-            )?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "file_to_imported_symbol_relationships".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        // Write definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)
-        if !relationships.definition_to_definition.is_empty() {
-            let file_path = self
-                .output_directory
-                .join("definition_to_definition_relationships.parquet");
-            let record_count = relationships.definition_to_definition.len();
-            self.write_consolidated_relationships(
-                &file_path,
-                &relationships.definition_to_definition,
-            )?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "definition_to_definition_relationships".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
-        }
-
-        // Write definition-to-imported-symbol relationships (all DEFINES_IMPORTED_SYMBOL)
-        if !relationships.definition_to_imported_symbol.is_empty() {
-            let file_path = self
-                .output_directory
-                .join("definition_to_imported_symbol_relationships.parquet");
-            let record_count = relationships.definition_to_imported_symbol.len();
-            self.write_consolidated_relationships(
-                &file_path,
-                &relationships.definition_to_imported_symbol,
-            )?;
-
-            files_written.push(WrittenFile {
-                file_path: file_path.clone(),
-                file_type: "definition_to_imported_symbol_relationships".to_string(),
-                record_count,
-                file_size_bytes: self.get_file_size(&file_path)?,
-            });
+                if !relationships.0.is_empty() {
+                    let file_path = self.output_directory.join(filename.clone());
+                    self.write_consolidated_relationships(&file_path, relationships.0)?;
+                    files_written.push(WrittenFile {
+                        file_path: file_path.clone(),
+                        file_type: filename.clone(),
+                        record_count: relationships.0.len(),
+                        file_size_bytes: self.get_file_size(&file_path)?,
+                    });
+                }
+            }
         }
 
         let writing_duration = start_time.elapsed();
@@ -298,426 +278,6 @@ impl WriterService {
         })
     }
 
-    /// Write directory nodes with integer IDs
-    fn write_directory_nodes_with_ids(
-        &self,
-        file_path: &Path,
-        directory_nodes: &[DirectoryNode],
-        id_generator: &NodeIdGenerator,
-    ) -> Result<()> {
-        log::info!(
-            "Writing {} directory nodes with IDs to Parquet: {}",
-            directory_nodes.len(),
-            file_path.display()
-        );
-
-        // Define Arrow schema for DirectoryNode with ID
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::UInt32, false),
-            Field::new("path", DataType::Utf8, false),
-            Field::new("absolute_path", DataType::Utf8, false),
-            Field::new("repository_name", DataType::Utf8, false),
-            Field::new("name", DataType::Utf8, false),
-        ]));
-
-        // Convert data to Arrow arrays
-        let id_array = UInt32Array::from(
-            directory_nodes
-                .iter()
-                .map(|n| id_generator.get_directory_id(&n.path).unwrap())
-                .collect::<Vec<_>>(),
-        );
-        let path_array = StringArray::from(
-            directory_nodes
-                .iter()
-                .map(|n| n.path.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let absolute_path_array = StringArray::from(
-            directory_nodes
-                .iter()
-                .map(|n| n.absolute_path.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let repository_name_array = StringArray::from(
-            directory_nodes
-                .iter()
-                .map(|n| n.repository_name.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let name_array = StringArray::from(
-            directory_nodes
-                .iter()
-                .map(|n| n.name.as_str())
-                .collect::<Vec<_>>(),
-        );
-
-        // Create record batch
-        let batch = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(id_array),
-                Arc::new(path_array),
-                Arc::new(absolute_path_array),
-                Arc::new(repository_name_array),
-                Arc::new(name_array),
-            ],
-        )?;
-
-        // Write to parquet file
-        let file = File::create(file_path)
-            .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
-
-        let props = WriterProperties::builder()
-            .set_compression(Compression::SNAPPY)
-            .build();
-
-        let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
-        writer.write(&batch)?;
-        writer.close()?;
-
-        log::info!(
-            "✅ Successfully wrote {} directory nodes with IDs to Parquet",
-            directory_nodes.len()
-        );
-        Ok(())
-    }
-
-    /// Write file nodes with integer IDs
-    fn write_file_nodes_with_ids(
-        &self,
-        file_path: &Path,
-        file_nodes: &[FileNode],
-        id_generator: &NodeIdGenerator,
-    ) -> Result<()> {
-        log::info!(
-            "Writing {} file nodes with IDs to Parquet: {}",
-            file_nodes.len(),
-            file_path.display()
-        );
-
-        // Define Arrow schema for FileNode with ID
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::UInt32, false),
-            Field::new("path", DataType::Utf8, false),
-            Field::new("absolute_path", DataType::Utf8, false),
-            Field::new("language", DataType::Utf8, false),
-            Field::new("repository_name", DataType::Utf8, false),
-            Field::new("extension", DataType::Utf8, false),
-            Field::new("name", DataType::Utf8, false),
-        ]));
-
-        // Convert data to Arrow arrays
-        let id_array = UInt32Array::from(
-            file_nodes
-                .iter()
-                .map(|n| id_generator.get_file_id(&n.path).unwrap())
-                .collect::<Vec<_>>(),
-        );
-        let path_array = StringArray::from(
-            file_nodes
-                .iter()
-                .map(|n| n.path.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let absolute_path_array = StringArray::from(
-            file_nodes
-                .iter()
-                .map(|n| n.absolute_path.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let language_array = StringArray::from(
-            file_nodes
-                .iter()
-                .map(|n| n.language.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let repository_name_array = StringArray::from(
-            file_nodes
-                .iter()
-                .map(|n| n.repository_name.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let extension_array = StringArray::from(
-            file_nodes
-                .iter()
-                .map(|n| n.extension.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let name_array = StringArray::from(
-            file_nodes
-                .iter()
-                .map(|n| n.name.as_str())
-                .collect::<Vec<_>>(),
-        );
-
-        // Create record batch
-        let batch = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(id_array),
-                Arc::new(path_array),
-                Arc::new(absolute_path_array),
-                Arc::new(language_array),
-                Arc::new(repository_name_array),
-                Arc::new(extension_array),
-                Arc::new(name_array),
-            ],
-        )?;
-
-        // Write to parquet file
-        let file = File::create(file_path)
-            .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
-
-        let props = WriterProperties::builder()
-            .set_compression(Compression::SNAPPY)
-            .build();
-
-        let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
-        writer.write(&batch)?;
-        writer.close()?;
-
-        log::info!(
-            "✅ Successfully wrote {} file nodes with IDs to Parquet",
-            file_nodes.len()
-        );
-        Ok(())
-    }
-
-    /// Write definition nodes with integer IDs
-    fn write_definition_nodes_with_ids(
-        &self,
-        file_path: &Path,
-        definition_nodes: &[DefinitionNode],
-        id_generator: &NodeIdGenerator,
-    ) -> Result<usize> {
-        log::info!(
-            "Writing {} definition nodes with IDs to Parquet: {}",
-            definition_nodes.len(),
-            file_path.display()
-        );
-
-        // Create one record per definition using primary location
-        let mut id_values = Vec::new();
-        let mut fqn_values = Vec::new();
-        let mut name_values = Vec::new();
-        let mut definition_type_values = Vec::new();
-        let mut primary_file_path_values = Vec::new();
-        let mut primary_start_byte_values = Vec::new();
-        let mut primary_end_byte_values = Vec::new();
-        let mut start_line_values = Vec::new();
-        let mut end_line_values = Vec::new();
-        let mut start_col_values = Vec::new();
-        let mut end_col_values = Vec::new();
-        let mut total_locations_values = Vec::new();
-
-        for definition_node in definition_nodes {
-            let location = definition_node.location.clone();
-            id_values.push(
-                id_generator
-                    .get_definition_id(&location.file_path, &location.to_range())
-                    .unwrap(),
-            );
-            fqn_values.push(definition_node.fqn.as_str());
-            name_values.push(definition_node.name.as_str());
-            definition_type_values.push(definition_node.definition_type.as_str());
-            primary_file_path_values.push(location.file_path.clone());
-            primary_start_byte_values.push(location.start_byte);
-            primary_end_byte_values.push(location.end_byte);
-            start_line_values.push(location.start_line);
-            end_line_values.push(location.end_line);
-            start_col_values.push(location.start_col);
-            end_col_values.push(location.end_col);
-            total_locations_values.push(1);
-        }
-
-        let total_records = fqn_values.len();
-        log::info!("Created {total_records} definition records (one per unique FQN)");
-
-        // Define Arrow schema matching the database schema with ID
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::UInt32, false),
-            Field::new("fqn", DataType::Utf8, false),
-            Field::new("name", DataType::Utf8, false),
-            Field::new("definition_type", DataType::Utf8, false),
-            Field::new("primary_file_path", DataType::Utf8, false),
-            Field::new("primary_start_byte", DataType::Int64, false),
-            Field::new("primary_end_byte", DataType::Int64, false),
-            Field::new("start_line", DataType::Int32, false),
-            Field::new("end_line", DataType::Int32, false),
-            Field::new("start_col", DataType::Int32, false),
-            Field::new("end_col", DataType::Int32, false),
-            Field::new("total_locations", DataType::Int32, false),
-        ]));
-
-        // Convert data to Arrow arrays
-        let id_array = UInt32Array::from(id_values);
-        let fqn_array = StringArray::from(fqn_values);
-        let name_array = StringArray::from(name_values);
-        let definition_type_array = StringArray::from(definition_type_values);
-        let primary_file_path_array = StringArray::from(primary_file_path_values);
-        let primary_start_byte_array = Int64Array::from(primary_start_byte_values);
-        let primary_end_byte_array = Int64Array::from(primary_end_byte_values);
-        let start_line_array = Int32Array::from(start_line_values);
-        let end_line_array = Int32Array::from(end_line_values);
-        let start_col_array = Int32Array::from(start_col_values);
-        let end_col_array = Int32Array::from(end_col_values);
-        let total_locations_array = Int32Array::from(total_locations_values);
-
-        // Create record batch
-        let batch = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(id_array),
-                Arc::new(fqn_array),
-                Arc::new(name_array),
-                Arc::new(definition_type_array),
-                Arc::new(primary_file_path_array),
-                Arc::new(primary_start_byte_array),
-                Arc::new(primary_end_byte_array),
-                Arc::new(start_line_array),
-                Arc::new(end_line_array),
-                Arc::new(start_col_array),
-                Arc::new(end_col_array),
-                Arc::new(total_locations_array),
-            ],
-        )?;
-
-        // Write to parquet file
-        let file = File::create(file_path)
-            .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
-
-        let props = WriterProperties::builder()
-            .set_compression(Compression::SNAPPY)
-            .build();
-
-        let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
-        writer.write(&batch)?;
-        writer.close()?;
-
-        log::info!("✅ Successfully wrote {total_records} definition records to Parquet");
-        Ok(total_records)
-    }
-
-    /// Write imported symbol nodes with integer IDs
-    fn write_imported_symbol_nodes_with_ids(
-        &self,
-        file_path: &Path,
-        imported_symbol_nodes: &[ImportedSymbolNode],
-        id_generator: &NodeIdGenerator,
-    ) -> Result<usize> {
-        log::info!(
-            "Writing {} imported symbol nodes with IDs to Parquet: {}",
-            imported_symbol_nodes.len(),
-            file_path.display()
-        );
-
-        // Create one record per imported symbol
-        let mut id_values = Vec::new();
-        let mut import_type_values = Vec::new();
-        let mut import_path_values = Vec::new();
-        let mut name_values = Vec::new();
-        let mut alias_values = Vec::new();
-        let mut file_path_values = Vec::new();
-        let mut start_byte_values = Vec::new();
-        let mut end_byte_values = Vec::new();
-        let mut start_line_values = Vec::new();
-        let mut end_line_values = Vec::new();
-        let mut start_col_values = Vec::new();
-        let mut end_col_values = Vec::new();
-
-        for imported_symbol_node in imported_symbol_nodes {
-            let location = imported_symbol_node.location.clone();
-            let identifier = &imported_symbol_node.identifier;
-
-            id_values.push(id_generator.get_imported_symbol_id(&location).unwrap());
-            import_type_values.push(imported_symbol_node.import_type.as_str());
-            import_path_values.push(imported_symbol_node.import_path.clone());
-            file_path_values.push(location.file_path.clone());
-            start_byte_values.push(location.start_byte);
-            end_byte_values.push(location.end_byte);
-            start_line_values.push(location.start_line);
-            end_line_values.push(location.end_line);
-            start_col_values.push(location.start_col);
-            end_col_values.push(location.end_col);
-
-            if !identifier.is_some() {
-                name_values.push(None);
-                alias_values.push(None);
-            } else {
-                name_values.push(Some(identifier.as_ref().unwrap().name.clone()));
-                alias_values.push(identifier.as_ref().unwrap().alias.clone());
-            }
-        }
-
-        let total_records = id_values.len();
-        log::info!("Created {total_records} imported symbol records");
-
-        // Define Arrow schema matching the database schema with ID
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::UInt32, false),
-            Field::new("import_type", DataType::Utf8, false),
-            Field::new("import_path", DataType::Utf8, false),
-            Field::new("name", DataType::Utf8, true),
-            Field::new("alias", DataType::Utf8, true),
-            Field::new("file_path", DataType::Utf8, false),
-            Field::new("start_byte", DataType::Int64, false),
-            Field::new("end_byte", DataType::Int64, false),
-            Field::new("start_line", DataType::Int32, false),
-            Field::new("end_line", DataType::Int32, false),
-            Field::new("start_col", DataType::Int32, false),
-            Field::new("end_col", DataType::Int32, false),
-        ]));
-
-        // Convert data to Arrow arrays
-        let id_array = UInt32Array::from(id_values);
-        let import_type_array = StringArray::from(import_type_values);
-        let import_path_array = StringArray::from(import_path_values);
-        let name_array = StringArray::from(name_values);
-        let alias_array = StringArray::from(alias_values);
-        let file_path_array = StringArray::from(file_path_values);
-        let start_byte_array = Int64Array::from(start_byte_values);
-        let end_byte_array = Int64Array::from(end_byte_values);
-        let start_line_array = Int32Array::from(start_line_values);
-        let end_line_array = Int32Array::from(end_line_values);
-        let start_col_array = Int32Array::from(start_col_values);
-        let end_col_array = Int32Array::from(end_col_values);
-
-        // Create record batch
-        let batch = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(id_array),
-                Arc::new(import_type_array),
-                Arc::new(import_path_array),
-                Arc::new(name_array),
-                Arc::new(alias_array),
-                Arc::new(file_path_array),
-                Arc::new(start_byte_array),
-                Arc::new(end_byte_array),
-                Arc::new(start_line_array),
-                Arc::new(end_line_array),
-                Arc::new(start_col_array),
-                Arc::new(end_col_array),
-            ],
-        )?;
-
-        // Write to parquet file
-        let file = File::create(file_path)
-            .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
-
-        let props = WriterProperties::builder()
-            .set_compression(Compression::SNAPPY)
-            .build();
-
-        let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
-        writer.write(&batch)?;
-        writer.close()?;
-
-        log::info!("✅ Successfully wrote {total_records} imported symbol records to Parquet");
-        Ok(total_records)
-    }
-
     /// Write consolidated relationships to a Parquet file
     fn write_consolidated_relationships(
         &self,
@@ -730,6 +290,7 @@ impl WriterService {
             file_path.display()
         );
 
+        // TODO: For now, this schema will be hardcoded
         // Define Arrow schema for consolidated relationships
         let schema = Arc::new(Schema::new(vec![
             Field::new("source_id", DataType::UInt32, false),
@@ -767,17 +328,7 @@ impl WriterService {
             ],
         )?;
 
-        // Write to parquet file
-        let file = File::create(file_path)
-            .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
-
-        let props = WriterProperties::builder()
-            .set_compression(Compression::SNAPPY)
-            .build();
-
-        let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
-        writer.write(&batch)?;
-        writer.close()?;
+        self.write_batch_to_parquet(file_path, schema, &batch)?;
 
         log::info!(
             "✅ Successfully wrote {} consolidated relationships to Parquet",

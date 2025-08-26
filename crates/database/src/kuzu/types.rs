@@ -42,7 +42,7 @@ impl std::fmt::Display for DatabaseStats {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum QueryNoop {
     Yes = true as isize,
     No = false as isize,
