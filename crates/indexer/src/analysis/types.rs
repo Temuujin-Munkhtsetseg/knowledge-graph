@@ -1,4 +1,5 @@
 use database::graph::RelationshipType;
+use database::schema::types::NodeFieldAccess;
 use parser_core::{
     csharp::types::{CSharpDefinitionType, CSharpFqn, CSharpImportType},
     definitions::DefinitionTypeInfo,
@@ -11,7 +12,6 @@ use parser_core::{
     typescript::types::{TypeScriptDefinitionType, TypeScriptFqn, TypeScriptImportType},
     utils::{Position, Range},
 };
-
 use serde::{Deserialize, Serialize};
 
 /// Structured graph data ready for writing to Parquet files
@@ -50,6 +50,33 @@ pub struct DirectoryNode {
     pub name: String,
 }
 
+/// Implementation of NodeFieldAccess for DirectoryNode
+impl NodeFieldAccess for DirectoryNode {
+    fn get_string_field(&self, field_name: &str) -> Option<String> {
+        match field_name {
+            "path" => Some(self.path.clone()),
+            "absolute_path" => Some(self.absolute_path.clone()),
+            "repository_name" => Some(self.repository_name.clone()),
+            "name" => Some(self.name.clone()),
+            _ => None,
+        }
+    }
+
+    fn get_i32_field(&self, _field_name: &str) -> Option<i32> {
+        None // DirectoryNode has no i32 fields
+    }
+
+    fn get_id_field<F>(&self, field_name: &str, id_callback: F) -> Option<u32>
+    where
+        F: FnOnce(&Self) -> u32,
+    {
+        match field_name {
+            "id" => Some(id_callback(self)),
+            _ => None,
+        }
+    }
+}
+
 /// Represents a file node in the graph
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileNode {
@@ -65,6 +92,31 @@ pub struct FileNode {
     pub extension: String,
     /// File name (last component of path)
     pub name: String,
+}
+
+/// Implementation of NodeFieldAccess for FileNode
+impl NodeFieldAccess for FileNode {
+    fn get_string_field(&self, field_name: &str) -> Option<String> {
+        match field_name {
+            "path" => Some(self.path.clone()),
+            "absolute_path" => Some(self.absolute_path.clone()),
+            "language" => Some(self.language.clone()),
+            "repository_name" => Some(self.repository_name.clone()),
+            "extension" => Some(self.extension.clone()),
+            "name" => Some(self.name.clone()),
+            _ => None,
+        }
+    }
+
+    fn get_id_field<F>(&self, field_name: &str, id_callback: F) -> Option<u32>
+    where
+        F: FnOnce(&Self) -> u32,
+    {
+        match field_name {
+            "id" => Some(id_callback(self)),
+            _ => None,
+        }
+    }
 }
 
 /// Represents a single location where a definition is found
@@ -166,6 +218,48 @@ impl DefinitionNode {
     }
 }
 
+/// Implementation of NodeFieldAccess for DefinitionNode
+impl NodeFieldAccess for DefinitionNode {
+    fn get_string_field(&self, field_name: &str) -> Option<String> {
+        match field_name {
+            "fqn" => Some(self.fqn.clone()),
+            "name" => Some(self.name.clone()),
+            "definition_type" => Some(self.definition_type.as_str().to_string()),
+            "primary_file_path" => Some(self.location.file_path.clone()),
+            _ => None,
+        }
+    }
+
+    fn get_i32_field(&self, field_name: &str) -> Option<i32> {
+        match field_name {
+            "start_line" => Some(self.location.start_line),
+            "end_line" => Some(self.location.end_line),
+            "start_col" => Some(self.location.start_col),
+            "end_col" => Some(self.location.end_col),
+            "total_locations" => Some(1), // Default to 1 for single location
+            _ => None,
+        }
+    }
+
+    fn get_i64_field(&self, field_name: &str) -> Option<i64> {
+        match field_name {
+            "primary_start_byte" => Some(self.location.start_byte),
+            "primary_end_byte" => Some(self.location.end_byte),
+            _ => None,
+        }
+    }
+
+    fn get_id_field<F>(&self, field_name: &str, id_callback: F) -> Option<u32>
+    where
+        F: FnOnce(&Self) -> u32,
+    {
+        match field_name {
+            "id" => Some(id_callback(self)),
+            _ => None,
+        }
+    }
+}
+
 /// Represents a single location where an imported symbol is found
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ImportedSymbolLocation {
@@ -246,6 +340,48 @@ impl ImportedSymbolNode {
             import_path,
             identifier,
             location,
+        }
+    }
+}
+
+/// Implementation of NodeFieldAccess for ImportedSymbolNode
+impl NodeFieldAccess for ImportedSymbolNode {
+    fn get_string_field(&self, field_name: &str) -> Option<String> {
+        match field_name {
+            "import_type" => Some(self.import_type.as_str().to_string()),
+            "import_path" => Some(self.import_path.clone()),
+            "name" => self.identifier.as_ref().map(|id| id.name.clone()),
+            "alias" => self.identifier.as_ref().and_then(|id| id.alias.clone()),
+            "file_path" => Some(self.location.file_path.clone()),
+            _ => None,
+        }
+    }
+
+    fn get_i32_field(&self, field_name: &str) -> Option<i32> {
+        match field_name {
+            "start_line" => Some(self.location.start_line),
+            "end_line" => Some(self.location.end_line),
+            "start_col" => Some(self.location.start_col),
+            "end_col" => Some(self.location.end_col),
+            _ => None,
+        }
+    }
+
+    fn get_i64_field(&self, field_name: &str) -> Option<i64> {
+        match field_name {
+            "start_byte" => Some(self.location.start_byte),
+            "end_byte" => Some(self.location.end_byte),
+            _ => None,
+        }
+    }
+
+    fn get_id_field<F>(&self, field_name: &str, id_callback: F) -> Option<u32>
+    where
+        F: FnOnce(&Self) -> u32,
+    {
+        match field_name {
+            "id" => Some(id_callback(self)),
+            _ => None,
         }
     }
 }

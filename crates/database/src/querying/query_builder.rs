@@ -2,6 +2,7 @@ use crate::graph::{RelationshipType, RelationshipTypeMapping};
 use crate::kuzu::types::{
     FromKuzuNode, KuzuNodeType, QueryGeneratorResult, QueryNoop, QuoteEscape,
 };
+use crate::schema::types::{NodeTable, RelationshipTable};
 use tracing::info;
 
 #[derive(Default)]
@@ -34,6 +35,62 @@ impl QueryBuilder {
             info!("Query: {query}");
         }
     }
+
+    // DATA INGESTION
+    pub fn create_node_table(&self, table: &NodeTable) -> QueryGeneratorResult {
+        let columns_str = table
+            .columns
+            .iter()
+            .map(|col| {
+                let mut col_def = format!("{} {}", col.name, col.data_type);
+                if col.is_primary_key {
+                    col_def.push_str(" PRIMARY KEY");
+                }
+                col_def
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let query = format!(
+            "CREATE NODE TABLE IF NOT EXISTS {} ({})",
+            table.name, columns_str
+        );
+
+        (QueryNoop::No, query)
+    }
+
+    pub fn create_relationship_table(&self, table: &RelationshipTable) -> QueryGeneratorResult {
+        let mut query = format!("CREATE REL TABLE IF NOT EXISTS {} (", table.name);
+
+        // Handle multiple FROM-TO pairs if specified
+        if !table.from_to_pairs.is_empty() {
+            let from_to_clauses = table
+                .from_to_pairs
+                .iter()
+                .map(|(from, to)| format!("FROM {} TO {}", from.name, to.name))
+                .collect::<Vec<_>>()
+                .join(", ");
+            query.push_str(&from_to_clauses);
+        } else {
+            return (QueryNoop::Yes, String::new());
+        }
+
+        if !table.columns.is_empty() {
+            let columns_str = table
+                .columns
+                .iter()
+                .map(|col| format!("{} {}", col.name, col.data_type))
+                .collect::<Vec<_>>()
+                .join(", ");
+            query.push_str(&format!(", {columns_str}"));
+        }
+
+        query.push(')');
+
+        (QueryNoop::No, query)
+    }
+
+    // DATA QUERYING
 
     pub fn delete_by<T: std::fmt::Display + QuoteEscape>(
         &self,

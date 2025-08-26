@@ -1,9 +1,9 @@
-use database::kuzu::schema::SchemaManager;
 use database::kuzu::service::NodeDatabaseService;
 use database::kuzu::types::{
     DefinitionNodeFromKuzu, DirectoryNodeFromKuzu, FileNodeFromKuzu, FromKuzuNode,
     ImportedSymbolNodeFromKuzu, KuzuNodeType,
 };
+use database::schema::manager::SchemaManager;
 use kuzu::Database;
 
 use crate::analysis::types::GraphData;
