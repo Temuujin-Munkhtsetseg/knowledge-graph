@@ -18,7 +18,7 @@ To get started with your preferred IDE, install the GitLab extension:
 
 ### GKG setup
 
-Ensure your gkg [installation](../install) is on your PATH:
+Ensure your gkg [installation](/getting-started/install) is on your PATH:
 
 ```bash
 gkg -V

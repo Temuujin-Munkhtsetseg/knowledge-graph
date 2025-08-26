@@ -1,0 +1,2 @@
+# Ignore remark plugin due to final newline conflict with xtasks-verify-newlines
+remark-base-url.mjs
