@@ -1,11 +1,8 @@
 #!/bin/bash
 # GitLab Knowledge Graph (gkg) Installation Script
 # Supports Mac (darwin) and Linux with x86_64 and aarch64 architectures
-# Usage: curl -fsSL https://example.com/install.sh | bash
-#    or: curl -fsSL https://example.com/install.sh | bash -s -- --version v0.6.0
-#    or: GITLAB_TOKEN=your-token curl -fsSL https://example.com/install.sh | bash
 # To run the already downloaded script:
-# cat install.sh | bash
+#   bash install.sh
 
 set -euo pipefail
 
@@ -54,25 +51,19 @@ usage() {
 Usage: $0 [OPTIONS]
 
 OPTIONS:
-    --version VERSION    Install specific version (e.g., v0.6.0)
+    --version VERSION    Install specific version (e.g., v0.11.0)
     --force             Force installation even if gkg already exists
     --help              Show this help message
 
-ENVIRONMENT VARIABLES:
-    GITLAB_TOKEN        GitLab personal access token for authentication
-
 EXAMPLES:
     # Install latest version
-    curl -fsSL https://example.com/install-gkg.sh | bash
+    bash install.sh
 
     # Install specific version
-    curl -fsSL https://example.com/install-gkg.sh | bash -s -- --version v0.6.0
-
-    # Install with GitLab authentication
-    GITLAB_TOKEN=your-token curl -fsSL https://example.com/install-gkg.sh | bash
+    bash install.sh --version v0.11.0
 
     # Force reinstall
-    curl -fsSL https://example.com/install-gkg.sh | bash -s -- --force
+    bash install.sh --force
 EOF
 }
 
@@ -80,6 +71,9 @@ EOF
 while [[ $# -gt 0 ]]; do
     case $1 in
         --version)
+            if [[ -z "${2:-}" || "$2" == --* ]]; then
+                error "Missing value for --version"
+            fi
             VERSION="$2"
             shift 2
             ;;
@@ -96,6 +90,14 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Normalize version to include leading 'v' when provided
+if [ -n "$VERSION" ]; then
+    case "$VERSION" in
+        v*) : ;;
+        *) VERSION="v$VERSION" ;;
+    esac
+fi
 
 # Detect OS
 detect_os() {
@@ -140,26 +142,11 @@ command_exists() {
 download_file() {
     local url="$1"
     local output="$2"
-    
-    # TODO: Remove this when our repository becomes public
-    # Prepare authentication headers if GITLAB_TOKEN is set
-    local auth_header=""
-    if [ -n "${GITLAB_TOKEN:-}" ]; then
-        auth_header="Authorization: Bearer $GITLAB_TOKEN"
-    fi
-    
+
     if command_exists curl; then
-        if [ -n "$auth_header" ]; then
-            curl -fsSL --progress-bar -H "$auth_header" "$url" -o "$output" || return 1
-        else
-            curl -fsSL --progress-bar "$url" -o "$output" || return 1
-        fi
+        curl -fsSL --progress-bar "$url" -o "$output" || return 1
     elif command_exists wget; then
-        if [ -n "$auth_header" ]; then
-            wget -q --show-progress --header="$auth_header" "$url" -O "$output" || return 1
-        else
-            wget -q --show-progress "$url" -O "$output" || return 1
-        fi
+        wget -q --show-progress "$url" -O "$output" || return 1
     else
         error "Neither curl nor wget found. Please install one of them."
     fi
@@ -173,7 +160,7 @@ verify_checksum() {
     
     echo "Downloading checksum..."
     if ! download_file "$checksum_url" "$checksum_file"; then
-        error "Checksum file not found. Installation aborted for security reasons."
+        error "Checksum file not found at $checksum_url. Installation aborted for security reasons."
     fi
     
     echo "Verifying checksum..."
@@ -190,7 +177,7 @@ verify_checksum() {
     fi
     
     if [ "$expected_checksum" != "$actual_checksum" ]; then
-        error "Checksum verification failed!\nExpected: $expected_checksum\nActual: $actual_checksum"
+        error "Checksum verification failed for $file using $checksum_url\nExpected: $expected_checksum\nActual:   $actual_checksum"
     fi
     
     success "Checksum verified successfully."
@@ -204,14 +191,16 @@ install_gkg() {
     # Check if gkg already exists
     if [ "$FORCE_INSTALL" = false ] && [ -f "$INSTALL_DIR/gkg" ]; then
         warning "GitLab Knowledge Graph (gkg) is already installed at $INSTALL_DIR/gkg"
-        echo "Use --force to reinstall."
+        echo "To upgrade or reinstall:"
+        echo "  - Reinstall same/latest: run with --force"
+        echo "  - Install specific: run with --version vX.Y.Z [and optionally --force]"
         exit 0
     fi
     
     # Create install directory if it doesn't exist
     mkdir -p "$INSTALL_DIR"
     
-    # Construct download URL using GitLab API v4 to avoid Cloudflare
+    # Construct download URL using GitLab API v4
     local project_path="69095239"
     local artifact_name="gkg-${platform}-${arch}.tar.gz"
     local download_url
@@ -228,20 +217,11 @@ install_gkg() {
         checksum_url="https://gitlab.com/api/v4/projects/${project_path}/releases/${VERSION}/downloads/${artifact_name}.sha256"
     fi
     
-    # Check if authentication might be needed
-    if [ -n "${GITLAB_TOKEN:-}" ]; then
-        echo "Using GitLab authentication token..."
-    fi
-    
     # Download the tarball
     local tarball="${TEMP_DIR}/${artifact_name}"
     echo "Downloading GitLab Knowledge Graph for ${platform}-${arch}..."
     if ! download_file "$download_url" "$tarball"; then
-        if [ -z "${GITLAB_TOKEN:-}" ]; then
-            error "Failed to download GitLab Knowledge Graph. If the repository requires authentication, please set GITLAB_TOKEN environment variable."
-        else
-            error "Failed to download GitLab Knowledge Graph. Please check your internet connection, GitLab token permissions, and the version number."
-        fi
+        error "Failed to download GitLab Knowledge Graph from $download_url. Please check your internet connection and the version number."
     fi
     
     # Verify checksum
@@ -265,70 +245,76 @@ install_gkg() {
     fi
 
     # TODO: This may include copying default config files or any runtime libraries in future
-    
-    # Make sure it's executable
-    chmod +x "$gkg_binary"
-    
-    # Move to install directory
+
+    # Install to install directory
     echo "Installing gkg to $INSTALL_DIR..."
-    mv "$gkg_binary" "$INSTALL_DIR/gkg"
+    if command_exists install; then
+        install -m 0755 "$gkg_binary" "$INSTALL_DIR/gkg"
+    else
+        chmod +x "$gkg_binary"
+        mv "$gkg_binary" "$INSTALL_DIR/gkg"
+    fi
     
     success "GitLab Knowledge Graph (gkg) has been successfully installed to $INSTALL_DIR/gkg"
 }
 
-# Update PATH
+# Update PATH for all detected shells
 update_path() {
-    local shell_rc=""
-    local shell_name=""
-    
-    # Detect shell
-    if [ -n "${BASH_VERSION:-}" ]; then
-        shell_name="bash"
-        shell_rc="${HOME}/.bashrc"
-        # Also update .bash_profile on macOS
-        if [ "$(uname -s)" = "Darwin" ]; then
-            shell_rc="${HOME}/.bash_profile"
-        fi
-    elif [ -n "${ZSH_VERSION:-}" ]; then
-        shell_name="zsh"
-        shell_rc="${HOME}/.zshrc"
-    else
-        shell_name="sh"
-        shell_rc="${HOME}/.profile"
-    fi
-    
-    # Check if PATH already contains INSTALL_DIR
-    if echo "$PATH" | grep -q "$INSTALL_DIR"; then
-        echo "PATH already contains $INSTALL_DIR"
-        return 0
-    fi
-    
-    # Add to PATH in shell rc file
-    echo "Updating PATH in $shell_rc..."
-    
-    # Create rc file if it doesn't exist
-    touch "$shell_rc"
-    
-    # Check if the export line already exists
-    if ! grep -q "export PATH=\"\$HOME/.local/bin:\$PATH\"" "$shell_rc"; then
-        echo "" >> "$shell_rc"
-        echo "# Added by GitLab Knowledge Graph installer" >> "$shell_rc"
-        echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$shell_rc"
-        success "PATH has been updated in $shell_rc"
-    else
-        echo "PATH export already exists in $shell_rc"
-    fi
-    
-    # Also update .profile for broader compatibility
-    if [ "$shell_rc" != "${HOME}/.profile" ] && [ -f "${HOME}/.profile" ]; then
-        if ! grep -q "export PATH=\"\$HOME/.local/bin:\$PATH\"" "${HOME}/.profile"; then
-            echo "" >> "${HOME}/.profile"
-            echo "# Added by GitLab Knowledge Graph installer" >> "${HOME}/.profile"
-            echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "${HOME}/.profile"
+    local targets=()
+    local os_name="$(uname -s)"
+
+    # Detect and prepare rc files for zsh and bash, regardless of current shell
+    if command_exists zsh || [ -x "/bin/zsh" ]; then
+        targets+=("${HOME}/.zshrc")
+        if [ "$os_name" = "Darwin" ]; then
+            targets+=("${HOME}/.zprofile")
         fi
     fi
-    
-    warning "Please run 'source $shell_rc' or restart your terminal for PATH changes to take effect."
+
+    if command_exists bash || [ -x "/bin/bash" ]; then
+        if [ "$os_name" = "Darwin" ]; then
+            targets+=("${HOME}/.bash_profile")
+        else
+            targets+=("${HOME}/.bashrc")
+        fi
+    fi
+
+    # Always include .profile for broader compatibility
+    targets+=("${HOME}/.profile")
+
+    # Ensure PATH export exists in each target file
+    for shell_rc in "${targets[@]}"; do
+        echo "Updating PATH in $shell_rc..."
+        touch "$shell_rc"
+
+        # Consider it present if any PATH assignment mentions .local/bin via $HOME, ${HOME}, ~, or expanded absolute path
+        local home_path="${HOME}/.local/bin"
+
+        if grep -Fq "# Added by GitLab Knowledge Graph installer" "$shell_rc"; then
+            echo "PATH export already exists in $shell_rc"
+            continue
+        fi
+
+        if grep -Eq '^[[:space:]]*(export[[:space:]]+)?PATH=.*((\$HOME|\${HOME}|~)/\.local/bin)' "$shell_rc" || \
+           grep -Fq "$home_path" "$shell_rc"; then
+            echo "PATH export already exists in $shell_rc"
+        else
+            echo "" >> "$shell_rc"
+            echo "# Added by GitLab Knowledge Graph installer" >> "$shell_rc"
+            echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$shell_rc"
+            success "PATH has been updated in $shell_rc"
+        fi
+    done
+}
+
+# Ensure required dependencies are available
+ensure_dependencies() {
+    if ! command_exists tar; then
+        error "Required dependency 'tar' not found. Please install it and re-run the installer."
+    fi
+    if ! command_exists curl && ! command_exists wget; then
+        error "Neither 'curl' nor 'wget' found. Please install one of them and re-run the installer."
+    fi
 }
 
 # Main installation process
@@ -343,6 +329,9 @@ main() {
     echo "Detected system: ${platform}-${arch}"
     echo
     
+    # Check dependencies
+    ensure_dependencies
+
     # Install gkg
     install_gkg "$platform" "$arch"
     
@@ -352,9 +341,17 @@ main() {
     echo
     success "Installation complete!"
     echo
-    echo "To start using gkg, either:"
-    echo "  1. Run: source ~/.bashrc (or ~/.zshrc, ~/.profile)"
-    echo "  2. Open a new terminal"
+    echo "To start using gkg in your terminal run:"
+    if [ "$platform" = "darwin" ]; then
+        echo "  - zsh:  'source ~/.zshrc' (login shells: 'source ~/.zprofile')"
+        echo "  - bash: 'source ~/.bash_profile'"
+    else
+        echo "  - zsh:  'source ~/.zshrc'"
+        echo "  - bash: 'source ~/.bashrc'"
+    fi
+    echo "  - Or open a new terminal"
+    echo
+    echo "If you use other shells or terminals, add \$HOME/.local/bin to PATH manually."
     echo
     echo "Then verify the installation with: gkg --version"
 }
