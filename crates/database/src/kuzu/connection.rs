@@ -1,7 +1,4 @@
-use crate::kuzu::{
-    database::KuzuQueryResult,
-    types::{DatabaseError, DatabaseStats},
-};
+use crate::kuzu::types::{DatabaseError, DatabaseStats, KuzuQueryResult};
 
 use anyhow::Error;
 use kuzu::{Connection, Database};

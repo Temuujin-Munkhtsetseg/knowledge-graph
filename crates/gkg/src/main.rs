@@ -5,8 +5,8 @@ mod cli;
 mod commands;
 mod utils;
 
-use crate::commands::{clean, index, server};
-use cli::{Commands, GkgCli, ServerCommands, ServerStartArgs};
+use crate::commands::{clean, index, list, query, server};
+use cli::{Commands, DevToolsCommands, GkgCli, ServerCommands, ServerStartArgs};
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use logging::LogMode;
@@ -21,6 +21,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Index { verbose, .. } => verbose,
         Commands::Server { .. } => false,
         Commands::Clean => false,
+        Commands::DevTools { .. } => false,
     };
 
     let mode = match cli.command {
@@ -37,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
             None => LogMode::ServerForeground, // Default to start command
         },
         Commands::Clean => LogMode::Cli,
+        Commands::DevTools { .. } => LogMode::Cli,
     };
 
     let _guard = logging::init(mode, verbose)?;
@@ -98,5 +100,36 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Commands::Clean => clean::run(Arc::clone(&workspace_manager)),
+        Commands::DevTools { command } => match command {
+            DevToolsCommands::Query {
+                project,
+                query_or_file,
+            } => {
+                use crate::commands::query::QueryArgs;
+                query::run(
+                    Arc::clone(&workspace_manager),
+                    Arc::clone(&database),
+                    QueryArgs {
+                        project,
+                        query_or_file,
+                    },
+                )
+            }
+            DevToolsCommands::List {
+                projects,
+                workspace_folders,
+                header,
+            } => {
+                use crate::commands::list::ListArgs;
+                list::run(
+                    Arc::clone(&workspace_manager),
+                    ListArgs {
+                        projects,
+                        workspace_folders,
+                        header,
+                    },
+                )
+            }
+        },
     }
 }
