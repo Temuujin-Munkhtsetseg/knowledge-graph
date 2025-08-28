@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "database"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -1485,7 +1485,7 @@ dependencies = [
 
 [[package]]
 name = "event-bus"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "serde",
@@ -1748,6 +1748,7 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.5.1"
+source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.5.1#abb696198f2be5bd1f4894b1af2fa057dccef543"
 dependencies = [
  "ignore",
  "serde",
@@ -2001,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "gkg"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2199,7 +2200,7 @@ dependencies = [
 
 [[package]]
 name = "http-server"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2509,7 +2510,7 @@ dependencies = [
 
 [[package]]
 name = "indexer"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -2547,7 +2548,7 @@ dependencies = [
 
 [[package]]
 name = "indexer-c-bindings"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "indexer",
  "tokio",
@@ -2952,7 +2953,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "logging"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "file-rotate",
@@ -2988,7 +2989,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcp"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3475,6 +3476,7 @@ dependencies = [
 [[package]]
 name = "parser-core"
 version = "0.17.0"
+source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.17.0#b491154dd1adfad4ece52e33390d47a2ec4e5b43"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
@@ -4967,7 +4969,7 @@ dependencies = [
 
 [[package]]
 name = "testing"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "reqwest",
@@ -6383,7 +6385,7 @@ dependencies = [
 
 [[package]]
 name = "workspace-manager"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "dirs",
@@ -6406,7 +6408,7 @@ checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
 
 [[package]]
 name = "xtask"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",

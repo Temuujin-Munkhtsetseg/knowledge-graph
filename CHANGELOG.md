@@ -1,3 +1,31 @@
+## [0.12.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.11.1...v0.12.0) (2025-08-28)
+
+### :sparkles: Features
+
+* **db:** less hardcoded, more declarative defining of schema + management ([48401ec](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/48401ecfbd2539f00d084d625cc40bf09dc757e4)) by Michael Usachenko
+* **docs:** add documentation for Python ([5098c5d](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5098c5da5bb8cb084f703ff7df89ec65ddd72dff)) by Jonathan Shobrook
+* **docs:** fufill branding request ([97a72c2](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/97a72c29bba6371a635a47631f038ca69ee3288e)) by Michael Angelo Rivera
+* **indexer:** added indexing for Python references ([aeb2318](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/aeb231849f762d6703313ce73dc10f225e7e6847)) by Jonathan Shobrook
+* **java:** index Java cross-file reference ([e9cf740](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e9cf740852b5585a0bc9fea5b0b389cf168942ed)) by Jean-Gabriel Doyon
+
+### :bug: Fixes
+
+* added the prototocol to the web interface output ([1a399bb](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1a399bb81f3e3b9abf8c2ada737e94c796224697)) by Denys Mishunov
+* **docs:** resolve 404 errors on hosted page ([0078ed5](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/0078ed57d289bca44ea2fb6bc9f6780e1f61ab1e)) by Adam Mulvany
+* **indexer:** fix string concatenation error in ruby reference resolver ([7d7c087](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7d7c087b8bcc64685f8e947d4d15eb16250a2511)) by Michael Usachenko
+* **install:** improve install script path updates ([5e691a4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5e691a44d6bf5257502aa59a221d3b13de9a3ad9)) by Bohdan Parkhomchuk
+* update download command ([c83c249](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c83c249d2f58469ba4abf3642832b8a380640f42)) by Jan Provaznik
+* update go version in bindings and rename module ([7899ab8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7899ab8b210336710e88b41ccbc1e9df0cf5b069)) by Omar Qunsul
+
+### :memo: Documentation
+
+* **pages:** fix absolute links causing 503 errors ([ba43f6c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ba43f6c8b984d0481c61a60857f079bba7541b87)) by Adam Mulvany
+
+### :repeat: Chore
+
+* **indexer:** use tokio-rayon::spawn instead of tokio::task::spawn_blocking ([c402db0](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c402db0860543d1042635f48f2c0d0ac2077b198)) by Michael Usachenko
+* **mr:** shorten performance analysis section in merge request ([fe0865e](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/fe0865e6104111930ce1ddccf12f156e98681151)) by Jean-Gabriel Doyon
+
 ## [0.11.1](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.11.0...v0.11.1) (2025-08-16)
 
 ### :bug: Fixes
