@@ -4,11 +4,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
-pub struct KuzuQueryResult {
-    pub column_names: Vec<String>,
-    pub result: Vec<Vec<kuzu::Value>>,
-}
-
 pub struct KuzuDatabase {
     databases: Mutex<HashMap<String, Arc<Database>>>,
 }

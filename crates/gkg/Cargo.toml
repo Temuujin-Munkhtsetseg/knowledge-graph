@@ -4,6 +4,10 @@ version = "0.12.0"
 edition = "2024"
 description = "GitLab Knowledge Graph CLI"
 
+[features]
+default = []
+dev-tools = []
+
 [dependencies]
 indexer = { path = "../indexer" }
 workspace-manager = { path = "../workspace-manager" }

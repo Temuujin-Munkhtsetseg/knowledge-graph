@@ -1,5 +1,21 @@
 use kuzu::{LogicalType, Value};
+use std::fmt::Display;
 use thiserror::Error;
+
+pub struct KuzuQueryResult {
+    pub column_names: Vec<String>,
+    pub result: Vec<Vec<kuzu::Value>>,
+}
+
+impl Display for KuzuQueryResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "KuzuQueryResult {{ column_names: {:?}, result: {:?} }}",
+            self.column_names, self.result
+        )
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum DatabaseError {

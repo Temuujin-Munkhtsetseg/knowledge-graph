@@ -21,6 +21,12 @@ impl GkgCli {
     }
 }
 
+#[cfg(not(any(debug_assertions, feature = "dev-tools")))]
+const DEV_TOOLS_ENABLED: bool = false;
+
+#[cfg(any(debug_assertions, feature = "dev-tools"))]
+const DEV_TOOLS_ENABLED: bool = true;
+
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Index repositories in a workspace
@@ -48,6 +54,37 @@ pub enum Commands {
     },
     /// Remove all indexed data
     Clean,
+    /// Developer tools (enabled for debug builds or with --features dev-tools in release builds)
+    #[command(hide = !DEV_TOOLS_ENABLED, name="devtools")]
+    DevTools {
+        #[command(subcommand)]
+        command: DevToolsCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DevToolsCommands {
+    /// Query the knowledge graph with a query string or a query file
+    Query {
+        /// Project path for query to be executed against
+        #[arg(long)]
+        project: String,
+        /// Query string or file path containing the query
+        #[arg(value_name = "QUERY_OR_FILE")]
+        query_or_file: String,
+    },
+    /// List all indexed repositories
+    List {
+        /// List projects in a workspace folder
+        #[arg(long, default_value_t = true)]
+        projects: bool,
+        /// List workspace folders
+        #[arg(long, default_value_t = false)]
+        workspace_folders: bool,
+        /// Don't print headers
+        #[arg(long, default_value_t = false)]
+        header: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

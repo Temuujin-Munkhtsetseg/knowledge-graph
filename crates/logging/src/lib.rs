@@ -18,6 +18,7 @@ pub enum LogMode {
     Cli,
     ServerForeground,
     ServerBackground,
+    DataStdout,
 }
 
 /// Guard that keeps background logging workers alive.
@@ -100,5 +101,6 @@ pub fn init(mode: LogMode, verbose: bool) -> Result<Option<LoggingGuards>> {
                 _guards: vec![guard],
             }))
         }
+        LogMode::DataStdout => Ok(None),
     }
 }
