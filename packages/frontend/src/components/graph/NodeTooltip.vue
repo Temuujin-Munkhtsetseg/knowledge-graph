@@ -230,19 +230,6 @@ const tooltipPosition = computed(() => {
                 {{ node.properties.import_alias ? node.properties.import_alias : node.label }}
               </Badge>
             </div>
-            <Separator />
-            <div class="text-xs text-muted-foreground">
-              <div class="flex items-center gap-2">
-                <Calendar class="w-3 h-3 flex-shrink-0" />
-                <span class="min-w-0">{{
-                  formatLocation(
-                    node.properties.start_line,
-                    node.properties.primary_start_byte,
-                    node.properties.primary_end_byte,
-                  )
-                }}</span>
-              </div>
-            </div>
           </div>
         </div>
       </Card>

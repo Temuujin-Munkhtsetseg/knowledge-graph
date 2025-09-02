@@ -62,13 +62,6 @@ pub static IMPORTED_SYMBOL_TABLE: LazyLock<NodeTable> = LazyLock::new(|| NodeTab
         ColumnDefinition::new("import_path"),
         ColumnDefinition::new("name"),
         ColumnDefinition::new("alias"),
-        ColumnDefinition::new("file_path"),
-        ColumnDefinition::new("start_byte").int64(),
-        ColumnDefinition::new("end_byte").int64(),
-        ColumnDefinition::new("start_line").int32(),
-        ColumnDefinition::new("end_line").int32(),
-        ColumnDefinition::new("start_col").int32(),
-        ColumnDefinition::new("end_col").int32(),
     ],
     primary_key: "id",
 });

@@ -203,13 +203,6 @@ pub struct ImportedSymbolNodeFromKuzu {
     pub import_path: String,
     pub name: Option<String>,
     pub alias: Option<String>,
-    pub file_path: String,
-    pub start_byte: i64,
-    pub end_byte: i64,
-    pub start_line: i32,
-    pub end_line: i32,
-    pub start_col: i32,
-    pub end_col: i32,
 }
 
 impl ImportedSymbolNodeFromKuzu {
@@ -220,13 +213,6 @@ impl ImportedSymbolNodeFromKuzu {
             import_path: String::new(),
             name: None,
             alias: None,
-            file_path: String::new(),
-            start_byte: 0,
-            end_byte: 0,
-            start_line: 0,
-            end_line: 0,
-            start_col: 0,
-            end_col: 0,
         }
     }
 
@@ -240,12 +226,11 @@ impl ImportedSymbolNodeFromKuzu {
                             node.id = *i
                         }
                     }
-                    "import_type" | "import_path" | "file_path" => {
+                    "import_type" | "import_path" => {
                         if let Value::String(s) = prop_value {
                             match prop_name.as_str() {
                                 "import_type" => node.import_type = s.to_string(),
                                 "import_path" => node.import_path = s.to_string(),
-                                "file_path" => node.file_path = s.to_string(),
                                 _ => (),
                             }
                         }
@@ -263,26 +248,6 @@ impl ImportedSymbolNodeFromKuzu {
                         },
                         _ => (),
                     },
-                    "start_byte" | "end_byte" => {
-                        if let Value::Int64(i) = prop_value {
-                            match prop_name.as_str() {
-                                "start_byte" => node.start_byte = *i,
-                                "end_byte" => node.end_byte = *i,
-                                _ => (),
-                            }
-                        }
-                    }
-                    "start_line" | "end_line" | "start_col" | "end_col" => {
-                        if let Value::Int32(i) = prop_value {
-                            match prop_name.as_str() {
-                                "start_line" => node.start_line = *i,
-                                "end_line" => node.end_line = *i,
-                                "start_col" => node.start_col = *i,
-                                "end_col" => node.end_col = *i,
-                                _ => (),
-                            }
-                        }
-                    }
                     _ => (),
                 }
             }
@@ -301,19 +266,8 @@ impl std::fmt::Display for ImportedSymbolNodeFromKuzu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ImportedSymbolNodeFromKuzu(id: {}, import_type: {}, import_path: {}, name: {:?}, alias: {:?}, file_path: {}, start_byte: {}, end_byte: {}, start_line: {}, end_line: {}, start_col: {}, end_col: {})",
-            self.id,
-            self.import_type,
-            self.import_path,
-            self.name,
-            self.alias,
-            self.file_path,
-            self.start_byte,
-            self.end_byte,
-            self.start_line,
-            self.end_line,
-            self.start_col,
-            self.end_col
+            "ImportedSymbolNodeFromKuzu(id: {}, import_type: {}, import_path: {}, name: {:?}, alias: {:?})",
+            self.id, self.import_type, self.import_path, self.name, self.alias,
         )
     }
 }
