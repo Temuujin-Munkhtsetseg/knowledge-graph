@@ -260,25 +260,6 @@ impl NodeFieldAccess for DefinitionNode {
     }
 }
 
-/// Represents a single location where an imported symbol is found
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ImportedSymbolLocation {
-    /// File path where this symbol was imported
-    pub file_path: String,
-    /// Start byte position in the file
-    pub start_byte: i64,
-    /// End byte position in the file  
-    pub end_byte: i64,
-    /// Start line number
-    pub start_line: i32,
-    /// End line number
-    pub end_line: i32,
-    /// Start column
-    pub start_col: i32,
-    /// End column
-    pub end_col: i32,
-}
-
 /// Represents a language-specific import type
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ImportType {
