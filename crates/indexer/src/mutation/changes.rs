@@ -213,10 +213,9 @@ impl<'a> KuzuChanges<'a> {
                 .get_by::<String, R>(node_type, "path", &changed_files)
                 .unwrap(),
 
-            KuzuNodeType::ImportedSymbolNode => self
-                .node_database_service
-                .get_by::<String, R>(node_type, "file_path", &changed_files)
-                .unwrap(),
+            KuzuNodeType::ImportedSymbolNode => {
+                self.node_database_service.get_all::<R>(node_type).unwrap()
+            }
         }
     }
 

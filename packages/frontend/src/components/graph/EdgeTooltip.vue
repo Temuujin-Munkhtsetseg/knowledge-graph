@@ -137,7 +137,10 @@ const tooltipPosition = computed(() => {
                   {{ sourceNode.node_type.replace('Node', '') }}
                 </Badge>
               </div>
-              <div class="text-xs text-muted-foreground break-words">
+              <div
+                v-if="sourceNode.node_type !== 'ImportedSymbolNode'"
+                class="text-xs text-muted-foreground break-words"
+              >
                 {{
                   sourceNode.properties.path ||
                   (sourceNode.node_type === 'DefinitionNode' ? sourceNode.properties.fqn : '')
@@ -167,7 +170,10 @@ const tooltipPosition = computed(() => {
                   {{ targetNode.node_type.replace('Node', '') }}
                 </Badge>
               </div>
-              <div class="text-xs text-muted-foreground break-words">
+              <div
+                v-if="targetNode.node_type !== 'ImportedSymbolNode'"
+                class="text-xs text-muted-foreground break-words"
+              >
                 {{
                   targetNode.properties.path ||
                   (targetNode.node_type === 'DefinitionNode' ? targetNode.properties.fqn : '')

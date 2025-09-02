@@ -1,8 +1,7 @@
 use crate::analysis::types::{
     DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
     DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
-    ImportedSymbolNode,
+    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolNode,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
@@ -89,8 +88,6 @@ impl TypeScriptAnalyzer {
             && let Some(imports) = imported_symbols.iter_typescript()
         {
             for imported_symbol in imports {
-                let location =
-                    self.create_imported_symbol_location(imported_symbol, relative_file_path);
                 let identifier = self.create_imported_symbol_identifier(imported_symbol);
                 let scope_fqn_string = if let Some(ref scope) = imported_symbol.scope {
                     typescript_fqn_to_string(scope)
@@ -101,23 +98,22 @@ impl TypeScriptAnalyzer {
                     ImportType::TypeScript(imported_symbol.import_type),
                     imported_symbol.import_path.clone(),
                     identifier,
-                    location.clone(),
                 );
 
                 if let Some(imported_symbol_nodes) = imported_symbol_map
                     .get_mut(&(scope_fqn_string.clone(), relative_file_path.to_string()))
                 {
-                    imported_symbol_nodes.push(imported_symbol_node);
+                    imported_symbol_nodes.push(imported_symbol_node.clone());
                 } else {
                     imported_symbol_map.insert(
                         (scope_fqn_string.clone(), relative_file_path.to_string()),
-                        vec![imported_symbol_node],
+                        vec![imported_symbol_node.clone()],
                     );
                 }
 
                 file_import_relationships.push(FileImportedSymbolRelationship {
                     file_path: relative_file_path.to_string(),
-                    import_location: location.clone(),
+                    imported_symbol: imported_symbol_node,
                     relationship_type: RelationshipType::FileImports,
                 });
             }
@@ -198,14 +194,14 @@ impl TypeScriptAnalyzer {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             // Handle definition-to-imported-symbol relationships
             if let Some(imported_symbol_nodes) =
-                imported_symbol_map.get(&(child_fqn_string.clone(), child_file_path.to_string()))
+                imported_symbol_map.get(&(child_fqn_string.clone(), child_file_path.clone()))
             {
                 for imported_symbol in imported_symbol_nodes {
                     definition_imported_symbol_relationships.push(
                         DefinitionImportedSymbolRelationship {
                             file_path: child_file_path.clone(),
                             definition_fqn: child_fqn_string.clone(),
-                            imported_symbol_location: imported_symbol.location.clone(),
+                            imported_symbol: imported_symbol.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
                             definition_location: child_def.location.clone(),
                         },
@@ -252,23 +248,6 @@ impl TypeScriptAnalyzer {
         };
 
         Ok(Some((location, definition.fqn.clone())))
-    }
-
-    /// Create an imported symbol location from an imported symbol info
-    fn create_imported_symbol_location(
-        &self,
-        imported_symbol: &TypeScriptImportedSymbolInfo,
-        file_path: &str,
-    ) -> ImportedSymbolLocation {
-        ImportedSymbolLocation {
-            file_path: file_path.to_string(),
-            start_byte: imported_symbol.range.byte_offset.0 as i64,
-            end_byte: imported_symbol.range.byte_offset.1 as i64,
-            start_line: imported_symbol.range.start.line as i32,
-            end_line: imported_symbol.range.end.line as i32,
-            start_col: imported_symbol.range.start.column as i32,
-            end_col: imported_symbol.range.end.column as i32,
-        }
     }
 
     fn create_definition_location_from_reference(

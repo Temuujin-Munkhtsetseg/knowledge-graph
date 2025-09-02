@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, info, warn};
 
-use crate::analysis::types::{GraphData, ImportedSymbolLocation};
+use crate::analysis::types::{GraphData, ImportedSymbolNode};
 use crate::mutation::types::{ConsolidatedRelationship, ConsolidatedRelationships};
 use database::graph::RelationshipType;
 use database::graph::RelationshipTypeMapping;
@@ -16,8 +16,8 @@ pub struct NodeIdGenerator {
     file_ids: HashMap<String, u32>,
     /// Definition byte range to ID mapping
     definition_ids: HashMap<(String, usize, usize), u32>,
-    /// Imported symbol byte range to ID mapping
-    imported_symbol_ids: HashMap<(String, usize, usize), u32>,
+    /// Imported symbol node to ID mapping
+    imported_symbol_ids: HashMap<ImportedSymbolNode, u32>,
     /// Next available IDs for each type
     pub next_directory_id: u32,
     pub next_file_id: u32,
@@ -97,24 +97,13 @@ impl NodeIdGenerator {
         id
     }
 
-    pub fn get_or_assign_imported_symbol_id(&mut self, location: &ImportedSymbolLocation) -> u32 {
-        if let Some(&id) = self.imported_symbol_ids.get(&(
-            location.file_path.to_string(),
-            location.start_byte as usize,
-            location.end_byte as usize,
-        )) {
+    pub fn get_or_assign_imported_symbol_id(&mut self, node: &ImportedSymbolNode) -> u32 {
+        if let Some(&id) = self.imported_symbol_ids.get(node) {
             return id;
         }
 
         let id = self.next_imported_symbol_id;
-        self.imported_symbol_ids.insert(
-            (
-                location.file_path.to_string(),
-                location.start_byte as usize,
-                location.end_byte as usize,
-            ),
-            id,
-        );
+        self.imported_symbol_ids.insert(node.clone(), id);
         self.next_imported_symbol_id += 1;
 
         id
@@ -138,14 +127,8 @@ impl NodeIdGenerator {
             .copied()
     }
 
-    pub fn get_imported_symbol_id(&self, location: &ImportedSymbolLocation) -> Option<u32> {
-        self.imported_symbol_ids
-            .get(&(
-                location.file_path.clone(),
-                location.start_byte as usize,
-                location.end_byte as usize,
-            ))
-            .copied()
+    pub fn get_imported_symbol_id(&self, node: &ImportedSymbolNode) -> Option<u32> {
+        self.imported_symbol_ids.get(node).copied()
     }
 }
 
@@ -194,7 +177,7 @@ impl<'a> GraphMapper<'a> {
         // Assign imported symbol IDs
         for imported_symbol_node in &self.graph_data.imported_symbol_nodes {
             self.node_id_generator
-                .get_or_assign_imported_symbol_id(&imported_symbol_node.location);
+                .get_or_assign_imported_symbol_id(imported_symbol_node);
         }
     }
 
@@ -332,12 +315,12 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) = id_generator.get_imported_symbol_id(&file_rel.import_location)
+            let Some(target_id) = id_generator.get_imported_symbol_id(&file_rel.imported_symbol)
             else {
                 import_not_found += 1;
                 warn!(
-                    "(FILE_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: Location({:?}) File({})",
-                    file_rel.import_location, file_rel.file_path,
+                    "(FILE_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: {:?} File({})",
+                    file_rel.imported_symbol, file_rel.file_path,
                 );
                 continue;
             };
@@ -422,13 +405,12 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) =
-                id_generator.get_imported_symbol_id(&def_rel.imported_symbol_location)
+            let Some(target_id) = id_generator.get_imported_symbol_id(&def_rel.imported_symbol)
             else {
                 import_not_found += 1;
                 warn!(
                     "(DEFINITION_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
-                    def_rel.imported_symbol_location,
+                    def_rel.imported_symbol,
                 );
                 continue;
             };

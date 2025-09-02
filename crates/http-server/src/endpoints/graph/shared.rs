@@ -37,10 +37,6 @@ pub struct DefinitionNodeProperties {
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
 #[ts(export, export_to = "../../../packages/gkg/src/api.ts")]
 pub struct ImportedSymbolNodeProperties {
-    pub path: String,
-    pub start_line: i32,
-    pub primary_start_byte: i64,
-    pub primary_end_byte: i64,
     pub import_type: String,
     pub import_path: String,
     pub import_alias: String,
@@ -180,10 +176,6 @@ pub fn create_typed_node(data: NodeData) -> Result<TypedGraphNode, Box<dyn std::
             node_id: data.node_id,
             label: data.name,
             properties: ImportedSymbolNodeProperties {
-                path: data.path,
-                start_line: data.start_line as i32,
-                primary_start_byte: data.primary_start_byte,
-                primary_end_byte: data.primary_end_byte,
                 import_type: data.import_type,
                 import_path: data.import_path,
                 import_alias: data.import_alias,

@@ -1,8 +1,7 @@
 use crate::analysis::types::{
     DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
     DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
-    ImportedSymbolNode,
+    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolNode,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
@@ -86,15 +85,12 @@ impl RustAnalyzer {
             && let Some(rust_imports) = imports.iter_rust()
         {
             for import in rust_imports {
-                if let Ok(Some((location, import_fqn))) =
-                    self.create_import_location(import, relative_file_path)
-                {
+                if let Ok(Some(import_fqn)) = self.create_import_fqn(import) {
                     let import_fqn_string = rust_fqn_to_string(&import_fqn);
                     let imported_symbol_node = ImportedSymbolNode::new(
                         ImportType::Rust(import.import_type),
                         import.import_path.clone(),
                         Some(self.create_import_identifier(import)),
-                        location.clone(),
                     );
 
                     let key = (import_fqn_string, relative_file_path.to_string());
@@ -105,7 +101,7 @@ impl RustAnalyzer {
 
                     file_imported_symbol_relationships.push(FileImportedSymbolRelationship {
                         file_path: relative_file_path.to_string(),
-                        import_location: location.clone(),
+                        imported_symbol: imported_symbol_node,
                         relationship_type: RelationshipType::FileImports,
                     });
                 }
@@ -152,21 +148,10 @@ impl RustAnalyzer {
     }
 
     /// Create import location from Rust import info
-    fn create_import_location(
+    fn create_import_fqn(
         &self,
         import: &RustImportedSymbolInfo,
-        file_path: &str,
-    ) -> Result<Option<(ImportedSymbolLocation, RustFqn)>, String> {
-        let location = ImportedSymbolLocation {
-            file_path: file_path.to_string(),
-            start_line: import.range.start.line as i32,
-            start_col: import.range.start.column as i32,
-            end_line: import.range.end.line as i32,
-            end_col: import.range.end.column as i32,
-            start_byte: import.range.byte_offset.0 as i64,
-            end_byte: import.range.byte_offset.1 as i64,
-        };
-
+    ) -> Result<Option<RustFqn>, String> {
         // For Rust imports, we need to construct an FQN from the import information
         let import_fqn = if let Some(scope) = &import.scope {
             scope.clone()
@@ -175,7 +160,7 @@ impl RustAnalyzer {
             RustFqn::new(SmallVec::new())
         };
 
-        Ok(Some((location, import_fqn)))
+        Ok(Some(import_fqn))
     }
 
     /// Create import identifier from Rust import info
@@ -211,7 +196,7 @@ impl RustAnalyzer {
                         DefinitionImportedSymbolRelationship {
                             file_path: file_path.clone(),
                             definition_fqn: definition_fqn_string.clone(),
-                            imported_symbol_location: imported_symbol.location.clone(),
+                            imported_symbol: imported_symbol.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
                             definition_location: definition_node.location.clone(),
                         },
