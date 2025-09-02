@@ -156,24 +156,9 @@ impl AnalysisService {
                                 references,
                                 &relative_path,
                                 &mut definition_relationships,
+                                &mut definition_imported_symbol_relationships,
                             );
                         }
-                    }
-                }
-            }
-
-            // Process references for Java when available
-            if language == SupportedLanguage::Java {
-                for file_result in &results {
-                    if let Some(references) = &file_result.references {
-                        let relative_path = self
-                            .filesystem_analyzer
-                            .get_relative_path(&file_result.file_path);
-                        self.java_analyzer.process_references(
-                            references,
-                            &relative_path,
-                            &mut definition_relationships,
-                        );
                     }
                 }
             }
