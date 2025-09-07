@@ -10,9 +10,9 @@ use parser_core::{
 
 use crate::{
     analysis::types::{
-        DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-        FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-        ImportType, ImportedSymbolLocation, ImportedSymbolNode,
+        DefinitionNode, DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
+        FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType,
+        ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
     },
     parsing::processor::FileProcessingResult,
 };
@@ -124,6 +124,7 @@ impl CSharpAnalyzer {
                     from_location: parent_def.location.clone(),
                     to_location: child_def.location.clone(),
                     relationship_type,
+                    source_location: None,
                 });
             }
         }
@@ -288,8 +289,8 @@ impl CSharpAnalyzer {
         &self,
         definition: &CSharpDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, CSharpFqn)>, String> {
-        let location = DefinitionLocation {
+    ) -> Result<Option<(SourceLocation, CSharpFqn)>, String> {
+        let location = SourceLocation {
             file_path: file_path.to_string(),
             start_byte: definition.range.byte_offset.0 as i64,
             end_byte: definition.range.byte_offset.1 as i64,

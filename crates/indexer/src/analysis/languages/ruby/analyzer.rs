@@ -5,8 +5,8 @@
 //! Knowledge Graph with accurate cross-references.
 
 use crate::analysis::types::{
-    DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-    FileDefinitionRelationship, FqnType,
+    DefinitionNode, DefinitionRelationship, DefinitionType, FileDefinitionRelationship, FqnType,
+    SourceLocation,
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
@@ -122,8 +122,8 @@ impl RubyAnalyzer {
         &self,
         definition: &RubyDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, RubyFqn)>, String> {
-        let location = DefinitionLocation {
+    ) -> Result<Option<(SourceLocation, RubyFqn)>, String> {
+        let location = SourceLocation {
             file_path: file_path.to_string(),
             start_byte: definition.range.byte_offset.0 as i64,
             end_byte: definition.range.byte_offset.1 as i64,
@@ -161,6 +161,7 @@ impl RubyAnalyzer {
                         from_location: parent_def.location.clone(),
                         to_location: child_def.location.clone(),
                         relationship_type,
+                        source_location: None,
                     });
                 }
             }

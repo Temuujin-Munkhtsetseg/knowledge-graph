@@ -12,7 +12,7 @@ use crate::{
         },
         types::{
             DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship,
-            DefinitionType, ImportType, ImportedSymbolNode,
+            DefinitionType, ImportType, ImportedSymbolNode, SourceLocation,
         },
     },
     parsing::processor::References,
@@ -109,6 +109,15 @@ impl ExpressionResolver {
                                 from_location: from_definition.location.clone(),
                                 to_location: to_definition.location.clone(),
                                 relationship_type: RelationshipType::Calls,
+                                source_location: Some(SourceLocation {
+                                    file_path: file_path.to_string(),
+                                    start_byte: reference.range.byte_offset.0 as i64,
+                                    end_byte: reference.range.byte_offset.1 as i64,
+                                    start_line: reference.range.start.line as i32,
+                                    end_line: reference.range.end.line as i32,
+                                    start_col: reference.range.start.column as i32,
+                                    end_col: reference.range.end.column as i32,
+                                }),
                             });
                         }
                     }

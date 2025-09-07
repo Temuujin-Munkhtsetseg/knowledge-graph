@@ -12,10 +12,10 @@ use crate::{
     analysis::{
         languages::java::{expression_resolver::ExpressionResolver, utils::full_import_path},
         types::{
-            DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
-            DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-            FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType,
-            ImportedSymbolLocation, ImportedSymbolNode,
+            DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship,
+            DefinitionType, FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType,
+            ImportIdentifier, ImportType, ImportedSymbolLocation, ImportedSymbolNode,
+            SourceLocation,
         },
     },
     parsing::processor::{FileProcessingResult, References},
@@ -172,6 +172,9 @@ impl JavaAnalyzer {
                     from_location: parent_def.location.clone(),
                     to_location: child_def.location.clone(),
                     relationship_type,
+                    // FIXME: https://gitlab.com/gitlab-org/rust/knowledge-graph/-/issues/177
+                    // Definition Heirarchy relationships should have their own struct
+                    source_location: None,
                 });
             }
         }
@@ -290,9 +293,9 @@ impl JavaAnalyzer {
         &self,
         definition: &JavaDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, JavaFqn)>, String> {
+    ) -> Result<Option<(SourceLocation, JavaFqn)>, String> {
         // All definitions now have mandatory FQNs
-        let location = DefinitionLocation {
+        let location = SourceLocation {
             file_path: file_path.to_string(),
             start_byte: definition.range.byte_offset.0 as i64,
             end_byte: definition.range.byte_offset.1 as i64,

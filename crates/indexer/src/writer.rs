@@ -5,7 +5,7 @@ use crate::mutation::types::ConsolidatedRelationship;
 use crate::mutation::utils::{GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Error, Result};
 use arrow::{
-    array::{UInt8Array, UInt32Array},
+    array::{Int32Array, Int64Array, UInt8Array, UInt32Array},
     datatypes::{DataType, Field, Schema},
     record_batch::RecordBatch,
 };
@@ -241,7 +241,13 @@ impl WriterService {
 
                 if !relationships.0.is_empty() {
                     let file_path = self.output_directory.join(filename.clone());
-                    self.write_consolidated_relationships(&file_path, relationships.0)?;
+                    // DIRECTORY_RELATIONSHIPS keeps minimal schema; others have extended optional location columns
+                    let with_location = table.name != "DIRECTORY_RELATIONSHIPS";
+                    self.write_consolidated_relationships(
+                        &file_path,
+                        relationships.0,
+                        with_location,
+                    )?;
                     files_written.push(WrittenFile {
                         file_path: file_path.clone(),
                         file_type: filename.clone(),
@@ -283,20 +289,34 @@ impl WriterService {
         &self,
         file_path: &Path,
         relationships: &[ConsolidatedRelationship],
+        with_location: bool,
     ) -> Result<()> {
         log::info!(
-            "Writing {} consolidated relationships to Parquet: {}",
+            "Writing {} consolidated relationships to Parquet: {} (with_location={})",
             relationships.len(),
-            file_path.display()
+            file_path.display(),
+            with_location
         );
-
-        // TODO: For now, this schema will be hardcoded
         // Define Arrow schema for consolidated relationships
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("source_id", DataType::UInt32, false),
-            Field::new("target_id", DataType::UInt32, false),
-            Field::new("type", DataType::UInt8, false),
-        ]));
+        let schema = if with_location {
+            Arc::new(Schema::new(vec![
+                Field::new("source_id", DataType::UInt32, false),
+                Field::new("target_id", DataType::UInt32, false),
+                Field::new("type", DataType::UInt8, false),
+                Field::new("source_start_byte", DataType::Int64, true),
+                Field::new("source_end_byte", DataType::Int64, true),
+                Field::new("source_start_line", DataType::Int32, true),
+                Field::new("source_end_line", DataType::Int32, true),
+                Field::new("source_start_col", DataType::Int32, true),
+                Field::new("source_end_col", DataType::Int32, true),
+            ]))
+        } else {
+            Arc::new(Schema::new(vec![
+                Field::new("source_id", DataType::UInt32, false),
+                Field::new("target_id", DataType::UInt32, false),
+                Field::new("type", DataType::UInt8, false),
+            ]))
+        };
 
         // Convert data to Arrow arrays
         let source_id_array = UInt32Array::from(
@@ -318,15 +338,68 @@ impl WriterService {
                 .collect::<Vec<_>>(),
         );
 
-        // Create record batch
-        let batch = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(source_id_array),
-                Arc::new(target_id_array),
-                Arc::new(type_array),
-            ],
-        )?;
+        let batch = if with_location {
+            let start_byte_array = Int64Array::from(
+                relationships
+                    .iter()
+                    .map(|r| r.start_byte.map(|v| v as i64))
+                    .collect::<Vec<_>>(),
+            );
+            let end_byte_array = Int64Array::from(
+                relationships
+                    .iter()
+                    .map(|r| r.end_byte.map(|v| v as i64))
+                    .collect::<Vec<_>>(),
+            );
+            let start_line_array = Int32Array::from(
+                relationships
+                    .iter()
+                    .map(|r| r.start_line.map(|v| v as i32))
+                    .collect::<Vec<_>>(),
+            );
+            let end_line_array = Int32Array::from(
+                relationships
+                    .iter()
+                    .map(|r| r.end_line.map(|v| v as i32))
+                    .collect::<Vec<_>>(),
+            );
+            let start_col_array = Int32Array::from(
+                relationships
+                    .iter()
+                    .map(|r| r.start_column.map(|v| v as i32))
+                    .collect::<Vec<_>>(),
+            );
+            let end_col_array = Int32Array::from(
+                relationships
+                    .iter()
+                    .map(|r| r.end_column.map(|v| v as i32))
+                    .collect::<Vec<_>>(),
+            );
+
+            RecordBatch::try_new(
+                schema.clone(),
+                vec![
+                    Arc::new(source_id_array),
+                    Arc::new(target_id_array),
+                    Arc::new(type_array),
+                    Arc::new(start_byte_array),
+                    Arc::new(end_byte_array),
+                    Arc::new(start_line_array),
+                    Arc::new(end_line_array),
+                    Arc::new(start_col_array),
+                    Arc::new(end_col_array),
+                ],
+            )?
+        } else {
+            RecordBatch::try_new(
+                schema.clone(),
+                vec![
+                    Arc::new(source_id_array),
+                    Arc::new(target_id_array),
+                    Arc::new(type_array),
+                ],
+            )?
+        };
 
         self.write_batch_to_parquet(file_path, schema, &batch)?;
 

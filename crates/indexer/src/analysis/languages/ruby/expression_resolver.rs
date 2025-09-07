@@ -33,7 +33,9 @@ use super::{
     scope_resolver::ScopeResolver,
     type_map::{InferredType, ScopeId, VariableId},
 };
-use crate::analysis::types::{DefinitionNode, DefinitionRelationship, DefinitionType};
+use crate::analysis::types::{
+    DefinitionNode, DefinitionRelationship, DefinitionType, SourceLocation,
+};
 use crate::parsing::processor::{References, RubyReference};
 use database::graph::RelationshipType;
 use parser_core::ruby::types::RubyDefinitionType;
@@ -394,6 +396,15 @@ impl ExpressionResolver {
                                     from_location: calling_definition.location.clone(),
                                     to_location: definition.location.clone(),
                                     relationship_type: RelationshipType::Calls,
+                                    source_location: Some(SourceLocation {
+                                        file_path: context.file_path.clone(),
+                                        start_byte: symbol.range.byte_offset.0 as i64,
+                                        end_byte: symbol.range.byte_offset.1 as i64,
+                                        start_line: symbol.range.start.line as i32,
+                                        end_line: symbol.range.end.line as i32,
+                                        start_col: symbol.range.start.column as i32,
+                                        end_col: symbol.range.end.column as i32,
+                                    }),
                                 };
                                 resolved_relationships.push(call_relationship);
                                 created_relationships.insert(relationship_key);
@@ -692,7 +703,7 @@ impl ResolutionStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::types::{DefinitionLocation, DefinitionType};
+    use crate::analysis::types::{DefinitionType, SourceLocation};
     use parser_core::ruby::types::{RubyDefinitionType, RubyFqn};
     use parser_core::utils::Range;
 
@@ -705,7 +716,7 @@ mod tests {
             "User#save".to_string(),
             "save".to_string(),
             DefinitionType::Ruby(RubyDefinitionType::Method),
-            DefinitionLocation {
+            SourceLocation {
                 file_path: "user.rb".to_string(),
                 start_byte: 0,
                 end_byte: 10,

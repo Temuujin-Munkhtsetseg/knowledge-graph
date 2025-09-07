@@ -491,6 +491,76 @@ async fn test_full_reindexing_pipeline_git_status_typescript() {
     assert_eq!(imported_symbols.len(), 5);
 }
 
+#[traced_test]
+#[tokio::test]
+async fn test_typescript_call_relationship_has_location() {
+    use database::graph::{RelationshipType, RelationshipTypeMapping};
+    use database::kuzu::connection::KuzuConnection;
+
+    let database = Arc::new(database::kuzu::database::KuzuDatabase::new());
+    let mut setup = setup_reindexing_pipeline(&database, SupportedLanguage::TypeScript).await;
+
+    // Ensure we are using the TS test repo
+    modify_test_repo_typescript(&setup.local_repo.workspace_path, "test-repo")
+        .await
+        .expect("modify ts repo");
+
+    // Re-run index with modifications
+    let git_status = setup
+        .file_source
+        .repository
+        .get_status()
+        .expect("Failed to get git status");
+    let reindexer_file_changes = FileChanges::from_git_status(git_status);
+    setup
+        .indexer
+        .reindex_repository(
+            &database,
+            reindexer_file_changes,
+            &setup.config,
+            &setup.database_path,
+            &setup.output_path,
+        )
+        .await
+        .expect("Failed to reindex repository");
+
+    let database_instance = database
+        .get_or_create_database(&setup.database_path, None)
+        .expect("db open");
+    let conn = KuzuConnection::new(&database_instance).expect("conn");
+
+    // Validate known call: Authentication.createSession in Application.testTokenManagement at line 80 (0-based 79)
+    let mapping = RelationshipTypeMapping::new();
+    let calls_id = mapping.get_type_id(RelationshipType::Calls);
+    // Assert a known internal call's location: Application::testTokenManagement -> Application::run at 0-based line 20
+    let ts_query = format!(
+        "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
+         WHERE source.fqn = 'Application::testTokenManagement' AND target.fqn = 'Application::run' AND r.type = {} \
+         RETURN r.source_start_line, r.source_end_line",
+        calls_id
+    );
+    let result = conn.query(&ts_query).expect("query ok");
+    let rows: Vec<_> = result.into_iter().collect();
+    assert!(!rows.is_empty(), "Expected TS internal call row");
+    let row = &rows[0];
+    let start_line = row
+        .first()
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("start_line");
+    let end_line = row
+        .get(1)
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("end_line");
+    assert_eq!(start_line, 20);
+    assert_eq!(end_line, 20);
+}
+
 async fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDatabase> {
     // Create temporary repository with test files
     let repo_path = temp_repo.path.to_str().unwrap();

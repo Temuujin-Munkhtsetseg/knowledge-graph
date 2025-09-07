@@ -11,9 +11,9 @@ use parser_core::kotlin::{
 
 use crate::{
     analysis::types::{
-        DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-        FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-        ImportType, ImportedSymbolLocation, ImportedSymbolNode,
+        DefinitionNode, DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
+        FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType,
+        ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
     },
     parsing::processor::{FileProcessingResult, References},
 };
@@ -142,7 +142,7 @@ impl KotlinAnalyzer {
                             continue;
                         }
 
-                        let relationship = self.create_definition_relationship(
+                        let mut relationship = self.create_definition_relationship(
                             &source_definition.0,
                             &target_definition.unwrap().0,
                             match reference.reference_type {
@@ -152,6 +152,17 @@ impl KotlinAnalyzer {
                                 }
                             },
                         );
+                        if matches!(reference.reference_type, KotlinReferenceType::MethodCall) {
+                            relationship.source_location = Some(SourceLocation {
+                                file_path: file_path.clone(),
+                                start_byte: reference.range.byte_offset.0 as i64,
+                                end_byte: reference.range.byte_offset.1 as i64,
+                                start_line: reference.range.start.line as i32,
+                                end_line: reference.range.end.line as i32,
+                                start_col: reference.range.start.column as i32,
+                                end_col: reference.range.end.column as i32,
+                            });
+                        }
 
                         definition_relationships.push(relationship);
                     }
@@ -171,7 +182,7 @@ impl KotlinAnalyzer {
                                         continue;
                                     }
 
-                                    let relationship = self.create_definition_relationship(
+                                    let mut relationship = self.create_definition_relationship(
                                         &source_definition.0,
                                         &target_definition.unwrap().0,
                                         match reference.reference_type {
@@ -183,6 +194,20 @@ impl KotlinAnalyzer {
                                             }
                                         },
                                     );
+                                    if matches!(
+                                        reference.reference_type,
+                                        KotlinReferenceType::MethodCall
+                                    ) {
+                                        relationship.source_location = Some(SourceLocation {
+                                            file_path: file_path.clone(),
+                                            start_byte: reference.range.byte_offset.0 as i64,
+                                            end_byte: reference.range.byte_offset.1 as i64,
+                                            start_line: reference.range.start.line as i32,
+                                            end_line: reference.range.end.line as i32,
+                                            start_col: reference.range.start.column as i32,
+                                            end_col: reference.range.end.column as i32,
+                                        });
+                                    }
 
                                     definition_relationships.push(relationship);
                                 }
@@ -218,6 +243,7 @@ impl KotlinAnalyzer {
                     from_location: parent_def.location.clone(),
                     to_location: child_def.location.clone(),
                     relationship_type,
+                    source_location: None,
                 });
             }
         }
@@ -365,6 +391,7 @@ impl KotlinAnalyzer {
             from_location: from_definition.location.clone(),
             to_location: to_definition.location.clone(),
             relationship_type,
+            source_location: None,
         }
     }
 
@@ -372,8 +399,8 @@ impl KotlinAnalyzer {
         &self,
         definition: &KotlinDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, KotlinFqn)>, String> {
-        let location = DefinitionLocation {
+    ) -> Result<Option<(SourceLocation, KotlinFqn)>, String> {
+        let location = SourceLocation {
             file_path: file_path.to_string(),
             start_byte: definition.range.byte_offset.0 as i64,
             end_byte: definition.range.byte_offset.1 as i64,

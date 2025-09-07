@@ -1,8 +1,7 @@
 use crate::analysis::types::{
-    DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
-    DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
-    ImportedSymbolNode,
+    DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DefinitionType,
+    FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
+    ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
@@ -257,6 +256,7 @@ impl PythonAnalyzer {
                     from_location: parent_def.location.clone(),
                     to_location: child_def.location.clone(),
                     relationship_type,
+                    source_location: None,
                 });
             }
         }
@@ -309,6 +309,15 @@ impl PythonAnalyzer {
                 } else {
                     RelationshipType::Calls
                 },
+                source_location: Some(SourceLocation {
+                    file_path: file_path.to_string(),
+                    start_byte: target_definition_info.range.byte_offset.0 as i64,
+                    end_byte: target_definition_info.range.byte_offset.1 as i64,
+                    start_line: target_definition_info.range.start.line as i32,
+                    end_line: target_definition_info.range.end.line as i32,
+                    start_col: target_definition_info.range.start.column as i32,
+                    end_col: target_definition_info.range.end.column as i32,
+                }),
             };
             definition_relationships.push(relationship);
         }
@@ -379,8 +388,8 @@ impl PythonAnalyzer {
         &self,
         definition: &PythonDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, PythonFqn)>, String> {
-        let location = DefinitionLocation {
+    ) -> Result<Option<(SourceLocation, PythonFqn)>, String> {
+        let location = SourceLocation {
             file_path: file_path.to_string(),
             start_byte: definition.range.byte_offset.0 as i64,
             end_byte: definition.range.byte_offset.1 as i64,

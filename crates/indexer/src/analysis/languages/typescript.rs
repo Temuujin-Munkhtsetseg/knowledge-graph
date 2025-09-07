@@ -1,8 +1,7 @@
 use crate::analysis::types::{
-    DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
-    DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
-    ImportedSymbolNode,
+    DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DefinitionType,
+    FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
+    ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
@@ -150,7 +149,7 @@ impl TypeScriptAnalyzer {
                         .map(typescript_fqn_to_string)
                         .unwrap_or_default();
 
-                    let from_location = DefinitionLocation {
+                    let from_location = SourceLocation {
                         file_path: relative_file_path.to_string(),
                         start_byte: target_defn.range.byte_offset.0 as i64,
                         end_byte: target_defn.range.byte_offset.1 as i64,
@@ -158,6 +157,17 @@ impl TypeScriptAnalyzer {
                         end_line: target_defn.range.end.line as i32,
                         start_col: target_defn.range.start.column as i32,
                         end_col: target_defn.range.end.column as i32,
+                    };
+
+                    // Call-site location
+                    let call_location = SourceLocation {
+                        file_path: relative_file_path.to_string(),
+                        start_byte: reference.range.byte_offset.0 as i64,
+                        end_byte: reference.range.byte_offset.1 as i64,
+                        start_line: reference.range.start.line as i32,
+                        end_line: reference.range.end.line as i32,
+                        start_col: reference.range.start.column as i32,
+                        end_col: reference.range.end.column as i32,
                     };
 
                     let Some(to_location) = self
@@ -180,6 +190,7 @@ impl TypeScriptAnalyzer {
                         from_location: from_location.clone(),
                         to_location: to_location.clone(),
                         relationship_type: RelationshipType::Calls,
+                        source_location: Some(call_location),
                     };
                     definition_relationships.push(rel);
                 }
@@ -230,6 +241,7 @@ impl TypeScriptAnalyzer {
                     from_location: parent_def.location.clone(),
                     to_location: child_def.location.clone(),
                     relationship_type,
+                    source_location: None,
                 });
             }
         }
@@ -240,8 +252,8 @@ impl TypeScriptAnalyzer {
         &self,
         definition: &TypeScriptDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, TypeScriptFqn)>, String> {
-        let location = DefinitionLocation {
+    ) -> Result<Option<(SourceLocation, TypeScriptFqn)>, String> {
+        let location = SourceLocation {
             file_path: file_path.to_string(),
             start_byte: definition.range.byte_offset.0 as i64,
             end_byte: definition.range.byte_offset.1 as i64,
@@ -275,13 +287,13 @@ impl TypeScriptAnalyzer {
         &self,
         reference: &TypeScriptReferenceInfo,
         file_path: &str,
-    ) -> Option<DefinitionLocation> {
+    ) -> Option<SourceLocation> {
         let Some(scope) = &reference.scope else {
             return None;
         };
         let scope_range = scope.last().map(|part| part.range)?;
 
-        Some(DefinitionLocation {
+        Some(SourceLocation {
             file_path: file_path.to_string(),
             start_byte: scope_range.byte_offset.0 as i64,
             end_byte: scope_range.byte_offset.1 as i64,

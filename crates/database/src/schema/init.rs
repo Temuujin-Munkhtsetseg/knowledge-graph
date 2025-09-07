@@ -99,7 +99,20 @@ pub static DIRECTORY_RELATIONSHIPS: LazyLock<RelationshipTable> =
 // Note: Kuzu automatically handles FROM-TO connections, we only need custom properties
 pub static FILE_RELATIONSHIPS: LazyLock<RelationshipTable> = LazyLock::new(|| RelationshipTable {
     name: "FILE_RELATIONSHIPS",
-    columns: vec![ColumnDefinition::new("type").uint8()],
+    columns: vec![
+        ColumnDefinition::new("type").uint8(),
+        // Optional source location fields for imports and calls
+        ColumnDefinition::new("source_start_byte")
+            .int64()
+            .nullable(),
+        ColumnDefinition::new("source_end_byte").int64().nullable(),
+        ColumnDefinition::new("source_start_line")
+            .int32()
+            .nullable(),
+        ColumnDefinition::new("source_end_line").int32().nullable(),
+        ColumnDefinition::new("source_start_col").int32().nullable(),
+        ColumnDefinition::new("source_end_col").int32().nullable(),
+    ],
     from_to_pairs: vec![
         (&FILE_TABLE, &DEFINITION_TABLE),
         (&FILE_TABLE, &IMPORTED_SYMBOL_TABLE),
@@ -111,7 +124,20 @@ pub static FILE_RELATIONSHIPS: LazyLock<RelationshipTable> = LazyLock::new(|| Re
 pub static DEFINITION_RELATIONSHIPS: LazyLock<RelationshipTable> =
     LazyLock::new(|| RelationshipTable {
         name: "DEFINITION_RELATIONSHIPS",
-        columns: vec![ColumnDefinition::new("type").uint8()],
+        columns: vec![
+            ColumnDefinition::new("type").uint8(),
+            // Optional source location fields for import call sites and definition references
+            ColumnDefinition::new("source_start_byte")
+                .int64()
+                .nullable(),
+            ColumnDefinition::new("source_end_byte").int64().nullable(),
+            ColumnDefinition::new("source_start_line")
+                .int32()
+                .nullable(),
+            ColumnDefinition::new("source_end_line").int32().nullable(),
+            ColumnDefinition::new("source_start_col").int32().nullable(),
+            ColumnDefinition::new("source_end_col").int32().nullable(),
+        ],
         from_to_pairs: vec![
             (&DEFINITION_TABLE, &DEFINITION_TABLE),
             (&DEFINITION_TABLE, &IMPORTED_SYMBOL_TABLE),
