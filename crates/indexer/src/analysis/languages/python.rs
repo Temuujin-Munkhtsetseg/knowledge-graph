@@ -1,7 +1,8 @@
 use crate::analysis::types::{
     DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
     DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolNode,
+    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
+    ImportedSymbolNode,
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
@@ -81,27 +82,35 @@ impl PythonAnalyzer {
             && let Some(imports) = imported_symbols.iter_python()
         {
             for imported_symbol in imports {
+                let location =
+                    self.create_imported_symbol_location(imported_symbol, relative_file_path);
+                let identifier = self.create_imported_symbol_identifier(imported_symbol);
                 let scope_fqn_string = if let Some(ref scope) = imported_symbol.scope {
                     python_fqn_to_string(scope)
                 } else {
                     "".to_string()
                 };
+                let imported_symbol_node = ImportedSymbolNode::new(
+                    ImportType::Python(imported_symbol.import_type),
+                    imported_symbol.import_path.clone(),
+                    identifier,
+                    location.clone(),
+                );
 
-                let imported_symbol_node = self.create_imported_symbol_node(imported_symbol);
                 if let Some(imported_symbol_nodes) = imported_symbol_map
                     .get_mut(&(scope_fqn_string.clone(), relative_file_path.to_string()))
                 {
-                    imported_symbol_nodes.push(imported_symbol_node.clone());
+                    imported_symbol_nodes.push(imported_symbol_node);
                 } else {
                     imported_symbol_map.insert(
-                        (scope_fqn_string, relative_file_path.to_string()),
-                        vec![imported_symbol_node.clone()],
+                        (scope_fqn_string.clone(), relative_file_path.to_string()),
+                        vec![imported_symbol_node],
                     );
                 }
 
                 file_import_relationships.push(FileImportedSymbolRelationship {
                     file_path: relative_file_path.to_string(),
-                    imported_symbol: imported_symbol_node,
+                    import_location: location.clone(),
                     relationship_type: RelationshipType::FileImports,
                 });
             }
@@ -114,6 +123,7 @@ impl PythonAnalyzer {
         file_references: &Option<References>,
         relative_file_path: &str,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
         definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
@@ -151,6 +161,7 @@ impl PythonAnalyzer {
                                     &file_path,
                                     &source_definition,
                                     target_import_info,
+                                    imported_symbol_map,
                                     definition_imported_symbol_relationships,
                                     file_import_relationships,
                                     false,
@@ -181,6 +192,7 @@ impl PythonAnalyzer {
                                         &file_path,
                                         &source_definition,
                                         target_import_info,
+                                        imported_symbol_map,
                                         definition_imported_symbol_relationships,
                                         file_import_relationships,
                                         true,
@@ -213,14 +225,14 @@ impl PythonAnalyzer {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             // Handle definition-to-imported-symbol relationships
             if let Some(imported_symbol_nodes) =
-                imported_symbol_map.get(&(child_fqn_string.clone(), child_file_path.clone()))
+                imported_symbol_map.get(&(child_fqn_string.clone(), child_file_path.to_string()))
             {
                 for imported_symbol in imported_symbol_nodes {
                     definition_imported_symbol_relationships.push(
                         DefinitionImportedSymbolRelationship {
                             file_path: child_file_path.clone(),
                             definition_fqn: child_fqn_string.clone(),
-                            imported_symbol: imported_symbol.clone(),
+                            imported_symbol_location: imported_symbol.location.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
                             definition_location: child_def.location.clone(),
                         },
@@ -308,16 +320,36 @@ impl PythonAnalyzer {
         file_path: &str,
         source_definition: &Option<DefinitionNode>,
         target_imported_symbol_info: &PythonImportedSymbolInfo,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
         file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
         is_ambiguous: bool,
     ) {
-        let target_imported_symbol = self.create_imported_symbol_node(target_imported_symbol_info);
+        let scope_fqn_string = if let Some(ref scope) = target_imported_symbol_info.scope {
+            python_fqn_to_string(scope)
+        } else {
+            "".to_string()
+        };
+        let imported_symbols = imported_symbol_map.get(&(scope_fqn_string, file_path.to_string()));
+        if imported_symbols.is_none() {
+            return;
+        }
+
+        let target_location =
+            self.create_imported_symbol_location(target_imported_symbol_info, file_path);
+        let target_imported_symbol = imported_symbols
+            .unwrap()
+            .iter()
+            .find(|i| i.location == target_location);
+        if target_imported_symbol.is_none() {
+            return;
+        }
+        let target_imported_symbol = target_imported_symbol.unwrap();
 
         if source_definition.is_none() {
             let relationship = FileImportedSymbolRelationship {
                 file_path: file_path.to_string(),
-                imported_symbol: target_imported_symbol.clone(),
+                import_location: target_imported_symbol.location.clone(),
                 relationship_type: if is_ambiguous {
                     RelationshipType::AmbiguouslyCalls
                 } else {
@@ -330,7 +362,7 @@ impl PythonAnalyzer {
             let relationship = DefinitionImportedSymbolRelationship {
                 file_path: file_path.to_string(),
                 definition_fqn: source_definition.fqn.clone(),
-                imported_symbol: target_imported_symbol.clone(),
+                imported_symbol_location: target_imported_symbol.location.clone(),
                 relationship_type: if is_ambiguous {
                     RelationshipType::AmbiguouslyCalls
                 } else {
@@ -361,15 +393,21 @@ impl PythonAnalyzer {
         Ok(Some((location, definition.fqn.clone())))
     }
 
-    fn create_imported_symbol_node(
+    /// Create an imported symbol location from an imported symbol info
+    fn create_imported_symbol_location(
         &self,
         imported_symbol: &PythonImportedSymbolInfo,
-    ) -> ImportedSymbolNode {
-        ImportedSymbolNode::new(
-            ImportType::Python(imported_symbol.import_type),
-            imported_symbol.import_path.clone(),
-            self.create_imported_symbol_identifier(imported_symbol),
-        )
+        file_path: &str,
+    ) -> ImportedSymbolLocation {
+        ImportedSymbolLocation {
+            file_path: file_path.to_string(),
+            start_byte: imported_symbol.range.byte_offset.0 as i64,
+            end_byte: imported_symbol.range.byte_offset.1 as i64,
+            start_line: imported_symbol.range.start.line as i32,
+            end_line: imported_symbol.range.end.line as i32,
+            start_col: imported_symbol.range.start.column as i32,
+            end_col: imported_symbol.range.end.column as i32,
+        }
     }
 
     fn create_imported_symbol_identifier(

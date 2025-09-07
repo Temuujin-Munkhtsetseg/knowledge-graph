@@ -304,7 +304,7 @@ impl ImportType {
 }
 
 /// Represents an identifier associated with an imported symbol
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone)]
 pub struct ImportIdentifier {
     /// Original name, e.g. "foo" in `from module import foo as bar`
     pub name: String,
@@ -313,7 +313,7 @@ pub struct ImportIdentifier {
 }
 
 /// Represents an imported symbol node in the graph
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone)]
 pub struct ImportedSymbolNode {
     /// Language-specific type of import (regular, from, aliased, wildcard, etc.)
     pub import_type: ImportType,
@@ -323,6 +323,8 @@ pub struct ImportedSymbolNode {
     /// Information about the imported identifier(s)
     /// None for side-effect imports like `import "./styles.css"`
     pub identifier: Option<ImportIdentifier>,
+    /// Location of the enclosing import statement
+    pub location: ImportedSymbolLocation,
 }
 
 impl ImportedSymbolNode {
@@ -331,11 +333,13 @@ impl ImportedSymbolNode {
         import_type: ImportType,
         import_path: String,
         identifier: Option<ImportIdentifier>,
+        location: ImportedSymbolLocation,
     ) -> Self {
         Self {
             import_type,
             import_path,
             identifier,
+            location,
         }
     }
 }
@@ -348,6 +352,25 @@ impl NodeFieldAccess for ImportedSymbolNode {
             "import_path" => Some(self.import_path.clone()),
             "name" => self.identifier.as_ref().map(|id| id.name.clone()),
             "alias" => self.identifier.as_ref().and_then(|id| id.alias.clone()),
+            "file_path" => Some(self.location.file_path.clone()),
+            _ => None,
+        }
+    }
+
+    fn get_i32_field(&self, field_name: &str) -> Option<i32> {
+        match field_name {
+            "start_line" => Some(self.location.start_line),
+            "end_line" => Some(self.location.end_line),
+            "start_col" => Some(self.location.start_col),
+            "end_col" => Some(self.location.end_col),
+            _ => None,
+        }
+    }
+
+    fn get_i64_field(&self, field_name: &str) -> Option<i64> {
+        match field_name {
+            "start_byte" => Some(self.location.start_byte),
+            "end_byte" => Some(self.location.end_byte),
             _ => None,
         }
     }
@@ -392,8 +415,8 @@ pub struct FileDefinitionRelationship {
 pub struct FileImportedSymbolRelationship {
     /// File path (foreign key to FileNode.path)
     pub file_path: String,
-    /// Imported symbol node (foreign key to ImportedSymbolNode)
-    pub imported_symbol: ImportedSymbolNode,
+    /// Imported symbol location (foreign key to ImportedSymbolNode.location)
+    pub import_location: ImportedSymbolLocation,
     /// Type of relationship (import, or a reference)
     pub relationship_type: RelationshipType,
 }
@@ -426,8 +449,8 @@ pub struct DefinitionImportedSymbolRelationship {
     pub file_path: String,
     /// Definition FQN (foreign key to DefinitionNode.fqn)
     pub definition_fqn: String,
-    /// Imported symbol node (foreign key to ImportedSymbolNode)
-    pub imported_symbol: ImportedSymbolNode,
+    /// Imported symbol location (foreign key to ImportedSymbolNode.location)
+    pub imported_symbol_location: ImportedSymbolLocation,
     /// Type of relationship (either "DEFINES_IMPORTED_SYMBOL" or "CALLS_IMPORTED_SYMBOL" for now)
     pub relationship_type: RelationshipType,
     /// Definition location (foreign key to DefinitionNode.location)

@@ -295,10 +295,23 @@ async fn setup_reindexing_pipeline(
         );
     } else if language == SupportedLanguage::TypeScript {
         assert_eq!(
-            imported_symbol_count, 7,
-            "Should have 7 imported symbols after initial indexing"
+            imported_symbol_count, 8,
+            "Should have 8 imported symbols after initial indexing"
         );
+        let imported_symbols = node_database_service
+            .get_by::<String, ImportedSymbolNodeFromKuzu>(
+                KuzuNodeType::ImportedSymbolNode,
+                "file_path",
+                &["main.ts".to_string()],
+            )
+            .unwrap();
+        assert_eq!(imported_symbols.len(), 3);
     }
+
+    let agg_by_file_path = node_database_service
+        .agg_node_by::<ImportedSymbolNodeFromKuzu>("count", "file_path")
+        .unwrap();
+    println!("agg_by_file_path: {agg_by_file_path}");
 
     println!("repo_path: {repo_path_str:?}");
     println!("file_source: {file_source:?}");
@@ -463,15 +476,19 @@ async fn test_full_reindexing_pipeline_git_status_typescript() {
         "Should have 32 definitions after reindexing (user_model.ts and base_model.ts, with mandatory FQN)"
     );
 
-    let imported_symbols = node_database_service
-        .get_all::<ImportedSymbolNodeFromKuzu>(KuzuNodeType::ImportedSymbolNode)
+    let mut imported_symbols = node_database_service
+        .get_by::<String, ImportedSymbolNodeFromKuzu>(
+            KuzuNodeType::ImportedSymbolNode,
+            "file_path",
+            &["main.ts".to_string()],
+        )
         .unwrap();
 
+    imported_symbols.sort_by_key(|symbol| symbol.start_line);
     for symbol in &imported_symbols {
         println!("symbol: {symbol:?}");
     }
-
-    assert_eq!(imported_symbols.len(), 3);
+    assert_eq!(imported_symbols.len(), 5);
 }
 
 async fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDatabase> {
