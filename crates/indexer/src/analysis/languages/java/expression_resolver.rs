@@ -1,7 +1,10 @@
 use database::graph::RelationshipType;
 use parser_core::java::{
     ast::java_fqn_to_string,
-    types::{JavaDefinitionInfo, JavaDefinitionType, JavaExpression, JavaImportType},
+    types::{
+        JavaDefinitionInfo, JavaDefinitionType, JavaExpression, JavaImportType,
+        JavaImportedSymbolInfo,
+    },
 };
 
 use crate::{
@@ -10,30 +13,16 @@ use crate::{
             java_file::{JavaClass, JavaFile},
             utils::full_import_path,
         },
-        types::{
-            DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship,
-            DefinitionType, ImportType, ImportedSymbolNode,
-        },
+        types::{DefinitionNode, DefinitionRelationship, DefinitionType},
     },
     parsing::processor::References,
 };
 
 use rustc_hash::FxHashMap;
 
-#[derive(Default)]
-pub(crate) struct Resolutions {
-    definition_resolutions: Vec<DefinitionResolution>,
-    import_resolutions: Vec<ImportedSymbolNode>,
-}
-
-pub(crate) enum ResolvedType {
-    Definition(DefinitionResolution),
-    Import(ImportedSymbolNode),
-}
-
 // Resolved expression to a FQN. Can be a type, a method or a class.
 #[derive(Debug, Clone)]
-pub(crate) struct DefinitionResolution {
+pub(crate) struct Resolution {
     pub name: String,
     pub fqn: String,
 }
@@ -45,8 +34,6 @@ pub(crate) struct ExpressionResolver {
     declaration_files: FxHashMap<String, String>,
     /// FQN -> definition_node
     definition_nodes: FxHashMap<String, DefinitionNode>,
-    /// Full import path -> imported symbol node
-    import_nodes: FxHashMap<String, ImportedSymbolNode>,
     /// Package name -> (class name -> file_path). This index works because all top-level classes are declared in the same file.
     package_class_index: FxHashMap<String, FxHashMap<String, String>>,
 }
@@ -63,7 +50,6 @@ impl ExpressionResolver {
             files: FxHashMap::default(),
             declaration_files: FxHashMap::default(),
             definition_nodes: FxHashMap::default(),
-            import_nodes: FxHashMap::default(),
             package_class_index: FxHashMap::default(),
         }
     }
@@ -73,7 +59,6 @@ impl ExpressionResolver {
         file_path: &str,
         references: &References,
         definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
         if let Some(java_iterator) = references.iter_java() {
             for reference in java_iterator {
@@ -97,11 +82,11 @@ impl ExpressionResolver {
                 };
 
                 if let Some(expression) = expression {
-                    let mut resolutions = Resolutions::default();
-                    self.resolve_expression(file_path, range, &expression, &mut resolutions);
+                    let mut resolved_calls = Vec::new();
+                    self.resolve_expression(file_path, range, &expression, &mut resolved_calls);
 
-                    for resolved_definition in resolutions.definition_resolutions {
-                        let to_definition = self.definition_nodes.get(&resolved_definition.fqn);
+                    for resolved_call in resolved_calls {
+                        let to_definition = self.definition_nodes.get(&resolved_call.fqn);
 
                         if let Some(to_definition) = to_definition {
                             definition_relationships.push(DefinitionRelationship {
@@ -115,18 +100,6 @@ impl ExpressionResolver {
                             });
                         }
                     }
-
-                    for resolved_import in resolutions.import_resolutions {
-                        definition_imported_symbol_relationships.push(
-                            DefinitionImportedSymbolRelationship {
-                                file_path: file_path.to_string(),
-                                definition_fqn: from_definition.fqn.clone(),
-                                imported_symbol: resolved_import,
-                                relationship_type: RelationshipType::Calls,
-                                definition_location: from_definition.location.clone(),
-                            },
-                        );
-                    }
                 }
             }
         }
@@ -138,77 +111,61 @@ impl ExpressionResolver {
         file_path: &str,
         range: (u64, u64),
         expression: &JavaExpression,
-        resolutions: &mut Resolutions,
-    ) -> Option<ResolvedType> {
+        resolved_calls: &mut Vec<Resolution>,
+    ) -> Option<Resolution> {
         match expression {
             JavaExpression::Identifier { name } => {
                 self.resolve_identifier_expression(file_path, range, name)
             }
             JavaExpression::FieldAccess { target, member } => {
-                let target = self.resolve_expression(file_path, range, target, resolutions);
+                let target = self.resolve_expression(file_path, range, target, resolved_calls);
 
-                if let Some(ResolvedType::Definition(target)) = target {
+                if let Some(target) = target {
                     return self.resolve_field_access(&target, member);
-                } else if let Some(ResolvedType::Import(import)) = target {
-                    resolutions.import_resolutions.push(import);
                 }
 
                 None
             }
             JavaExpression::MemberMethodCall { target, member } => {
-                let target = self.resolve_expression(file_path, range, target, resolutions);
+                let target = self.resolve_expression(file_path, range, target, resolved_calls);
 
-                if let Some(ResolvedType::Definition(target)) = target {
-                    return self.resolve_method_call(&target, member, resolutions);
-                } else if let Some(ResolvedType::Import(import)) = target {
-                    resolutions.import_resolutions.push(import);
+                if let Some(target) = target {
+                    return self.resolve_method_call(&target, member, resolved_calls);
                 }
 
                 None
             }
             JavaExpression::MethodCall { name } => {
-                self.resolve_class_method_call(file_path, range, name, resolutions)
+                self.resolve_class_method_call(file_path, range, name, resolved_calls)
             }
             JavaExpression::MethodReference { target, member } => {
-                let target = self.resolve_expression(file_path, range, target, resolutions);
-
-                if let Some(ResolvedType::Definition(target)) = target {
-                    return self.resolve_method_call(&target, member, resolutions);
-                } else if let Some(ResolvedType::Import(import)) = target {
-                    resolutions.import_resolutions.push(import);
-                }
-
-                None
+                let target = self.resolve_expression(file_path, range, target, resolved_calls)?;
+                self.resolve_method_call(&target, member, resolved_calls)
             }
             JavaExpression::Index { target } => {
-                self.resolve_expression(file_path, range, target, resolutions)
+                self.resolve_expression(file_path, range, target, resolved_calls)
             }
             JavaExpression::ObjectCreation { target } => {
-                self.resolve_constructor_call(file_path, &target.name, resolutions)
+                self.resolve_constructor_call(file_path, &target.name, resolved_calls)
             }
             JavaExpression::ArrayCreation { target } => {
-                self.resolve_constructor_call(file_path, &target.name, resolutions)
+                self.resolve_constructor_call(file_path, &target.name, resolved_calls)
             }
             JavaExpression::ArrayItem { target } => {
-                self.resolve_expression(file_path, range, target, resolutions)
+                self.resolve_expression(file_path, range, target, resolved_calls)
             }
             JavaExpression::This => self.resolve_this_reference(file_path, range),
             JavaExpression::Super => self.resolve_super_reference(file_path, range),
             JavaExpression::ArrayAccess { target } => {
-                self.resolve_expression(file_path, range, target, resolutions)
+                self.resolve_expression(file_path, range, target, resolved_calls)
             }
             JavaExpression::Annotation { name } => {
                 if let Some(resolution) = self.resolve_type(file_path, name) {
-                    match resolution {
-                        ResolvedType::Definition(definition) => {
-                            resolutions.definition_resolutions.push(definition.clone());
-                            return Some(ResolvedType::Definition(definition));
-                        }
-                        ResolvedType::Import(import) => {
-                            resolutions.import_resolutions.push(import);
-                            return None;
-                        }
-                    }
+                    resolved_calls.push(Resolution {
+                        name: resolution.name.clone(),
+                        fqn: resolution.fqn.clone(),
+                    });
+                    return Some(resolution);
                 }
 
                 None
@@ -219,15 +176,15 @@ impl ExpressionResolver {
 
     pub fn resolve_method_call(
         &self,
-        target: &DefinitionResolution,
+        target: &Resolution,
         member: &str,
-        resolutions: &mut Resolutions,
-    ) -> Option<ResolvedType> {
+        resolved_calls: &mut Vec<Resolution>,
+    ) -> Option<Resolution> {
         let relative_path = self.declaration_files.get(target.fqn.as_str())?;
         let file = self.files.get(relative_path)?;
 
         let class = file.classes.get(target.name.as_str())?;
-        self.resolve_method_in_class_hierarchy(class, member, file, resolutions)
+        self.resolve_method_in_class_hierarchy(class, member, file, resolved_calls)
     }
 
     fn resolve_method_in_class_hierarchy(
@@ -235,17 +192,15 @@ impl ExpressionResolver {
         class: &JavaClass,
         member: &str,
         file: &JavaFile,
-        resolutions: &mut Resolutions,
-    ) -> Option<ResolvedType> {
+        resolved_calls: &mut Vec<Resolution>,
+    ) -> Option<Resolution> {
         // Look for method in current class
         let method_fqn = format!("{}.{}", java_fqn_to_string(&class.fqn), member);
         if let Some(method) = file.methods.get(&method_fqn) {
-            resolutions
-                .definition_resolutions
-                .push(DefinitionResolution {
-                    name: method.name.clone(),
-                    fqn: method_fqn,
-                });
+            resolved_calls.push(Resolution {
+                name: method.name.clone(),
+                fqn: method_fqn,
+            });
 
             if let Some(resolution) =
                 self.resolve_type(file.file_path.as_str(), &method.return_type)
@@ -256,9 +211,7 @@ impl ExpressionResolver {
 
         // Then check all super types recursively
         for super_type in class.super_types.iter() {
-            if let Some(ResolvedType::Definition(super_class)) =
-                self.resolve_type(file.file_path.as_str(), super_type)
-            {
+            if let Some(super_class) = self.resolve_type(file.file_path.as_str(), super_type) {
                 let super_class_definition_file = match self.declaration_files.get(&super_class.fqn)
                 {
                     Some(file_path) => self.files.get(file_path).unwrap(),
@@ -275,7 +228,7 @@ impl ExpressionResolver {
                     super_class_definition_class,
                     member,
                     super_class_definition_file,
-                    resolutions,
+                    resolved_calls,
                 ) {
                     return Some(result);
                 }
@@ -291,27 +244,27 @@ impl ExpressionResolver {
         file_path: &str,
         range: (u64, u64),
         name: &str,
-        resolutions: &mut Resolutions,
-    ) -> Option<ResolvedType> {
+        resolved_calls: &mut Vec<Resolution>,
+    ) -> Option<Resolution> {
         // Find the enclosing class to look for the method
         let file = self.files.get(file_path)?;
         let class = file.get_class_at_offset(range.0)?;
 
         // Look for method in current class and its hierarchy
-        self.resolve_method_in_class_hierarchy(class, name, file, resolutions)
+        self.resolve_method_in_class_hierarchy(&Box::new(class.clone()), name, file, resolved_calls)
     }
 
-    fn resolve_this_reference(&self, file_path: &str, range: (u64, u64)) -> Option<ResolvedType> {
+    fn resolve_this_reference(&self, file_path: &str, range: (u64, u64)) -> Option<Resolution> {
         let file = self.files.get(file_path)?;
         let class = file.get_class_at_offset(range.0)?;
 
-        Some(ResolvedType::Definition(DefinitionResolution {
+        Some(Resolution {
             name: class.name.clone(),
             fqn: java_fqn_to_string(&class.fqn),
-        }))
+        })
     }
 
-    fn resolve_super_reference(&self, file_path: &str, range: (u64, u64)) -> Option<ResolvedType> {
+    fn resolve_super_reference(&self, file_path: &str, range: (u64, u64)) -> Option<Resolution> {
         let file = self.files.get(file_path)?;
         let class = file.get_class_at_offset(range.0)?;
 
@@ -319,37 +272,27 @@ impl ExpressionResolver {
         let super_type = class.super_types.iter().next()?;
 
         // Try to resolve the super type
-        if let Some(ResolvedType::Definition(super_class)) =
-            self.resolve_type(file_path, super_type)
-        {
-            return Some(ResolvedType::Definition(super_class));
-        }
-
-        None
+        self.resolve_type(file_path, super_type)
     }
 
-    pub fn resolve_field_access(
-        &self,
-        target: &DefinitionResolution,
-        member: &str,
-    ) -> Option<ResolvedType> {
+    pub fn resolve_field_access(&self, target: &Resolution, member: &str) -> Option<Resolution> {
         let relative_path = self.declaration_files.get(target.fqn.as_str())?;
         let file = self.files.get(relative_path)?;
 
         if let Some(class) = file.classes.get(member) {
-            return Some(ResolvedType::Definition(DefinitionResolution {
+            return Some(Resolution {
                 name: class.name.clone(),
                 fqn: java_fqn_to_string(&class.fqn),
-            }));
+            });
         }
 
         if let Some(constants) = file.enum_constants_by_enum.get(target.name.as_str())
             && constants.contains(member)
         {
-            return Some(ResolvedType::Definition(DefinitionResolution {
+            return Some(Resolution {
                 name: target.name.clone(),
                 fqn: target.fqn.clone(),
-            }));
+            });
         }
 
         let class = file.classes.get(target.name.as_str())?;
@@ -361,25 +304,20 @@ impl ExpressionResolver {
         class: &JavaClass,
         member: &str,
         file: &JavaFile,
-    ) -> Option<ResolvedType> {
+    ) -> Option<Resolution> {
         // Check in current class first
         let scope = file.get_scope_by_fqn(&class.fqn)?;
         if let Some(binding) = scope.definition_map.unique_definitions.get(member) {
             // A field is always typed in Java
-            if let Some(binding_type) = &binding.java_type
-                && let Some(resolved_type) =
-                    self.resolve_type(file.file_path.as_str(), binding_type)
-            {
-                return Some(resolved_type);
+            if let Some(binding_type) = &binding.java_type {
+                return self.resolve_type(file.file_path.as_str(), binding_type);
             }
         }
 
         // Then check all super types recursively
         for super_type in class.super_types.iter() {
             // First check if super type is in the same file
-            if let Some(ResolvedType::Definition(super_class)) =
-                self.resolve_type(file.file_path.as_str(), super_type)
-            {
+            if let Some(super_class) = self.resolve_type(file.file_path.as_str(), super_type) {
                 let super_class_definition_file = match self.declaration_files.get(&super_class.fqn)
                 {
                     Some(file_path) => self.files.get(file_path).unwrap(),
@@ -411,7 +349,7 @@ impl ExpressionResolver {
         file_path: &str,
         range: (u64, u64),
         name: &str,
-    ) -> Option<ResolvedType> {
+    ) -> Option<Resolution> {
         let file = self.files.get(file_path).unwrap();
 
         // Quickly look up if the identifier is a class name the imported symbols
@@ -420,10 +358,10 @@ impl ExpressionResolver {
                 // If the imported symbol is a class, resolve to the class.
                 let imported_file = self.files.get(imported_file_path).unwrap();
                 if let Some(class) = imported_file.classes.get(name) {
-                    return Some(ResolvedType::Definition(DefinitionResolution {
+                    return Some(Resolution {
                         name: class.name.clone(),
                         fqn: java_fqn_to_string(&class.fqn),
-                    }));
+                    });
                 }
 
                 // If the imported symbol is an enum constant, resolve to its parent enum type.
@@ -440,17 +378,13 @@ impl ExpressionResolver {
 
                     let parent_name = parent_fqn.rsplit('.').next().unwrap_or(parent_fqn);
 
-                    return Some(ResolvedType::Definition(DefinitionResolution {
+                    return Some(Resolution {
                         name: parent_name.to_string(),
                         fqn: parent_fqn.to_string(),
-                    }));
+                    });
                 }
             } else {
-                if let Some(imported_symbol_node) = self.import_nodes.get(import_path) {
-                    return Some(ResolvedType::Import(imported_symbol_node.clone()));
-                }
-
-                return None;
+                return None; // This means the import is not in the indexed code. We can't resolve it.
             }
         }
 
@@ -463,10 +397,10 @@ impl ExpressionResolver {
                 && let Some(imported_file) = self.files.get(imported_file_path)
                 && let Some(class) = imported_file.classes.get(name)
             {
-                return Some(ResolvedType::Definition(DefinitionResolution {
+                return Some(Resolution {
                     name: class.name.clone(),
                     fqn: java_fqn_to_string(&class.fqn),
-                }));
+                });
             }
         }
 
@@ -478,10 +412,10 @@ impl ExpressionResolver {
             && let Some(class_file) = self.files.get(class_file_path)
             && let Some(class) = class_file.classes.get(name)
         {
-            return Some(ResolvedType::Definition(DefinitionResolution {
+            return Some(Resolution {
                 name: class.name.clone(),
                 fqn: java_fqn_to_string(&class.fqn),
-            }));
+            });
         }
 
         self.resolve_identifier_type(file_path, range, name)
@@ -492,7 +426,7 @@ impl ExpressionResolver {
         file_path: &str,
         range: (u64, u64),
         name: &str,
-    ) -> Option<ResolvedType> {
+    ) -> Option<Resolution> {
         let file = self.files.get(file_path).unwrap();
         let file_scope = file.get_scope_at_offset(range.0);
 
@@ -503,16 +437,9 @@ impl ExpressionResolver {
             if let Some(binding) = scope.definition_map.unique_definitions.get(name) {
                 // Resolve binding type
                 if let Some(binding_type) = &binding.java_type {
-                    if let Some(resolved_type) = self.resolve_type(file_path, binding_type) {
-                        return Some(resolved_type);
-                    }
+                    return self.resolve_type(file_path, binding_type);
                 } else if let Some(init) = &binding.init {
-                    return self.resolve_expression(
-                        file_path,
-                        range,
-                        init,
-                        &mut Resolutions::default(),
-                    );
+                    return self.resolve_expression(file_path, range, init, &mut Vec::new());
                 }
             }
 
@@ -521,16 +448,13 @@ impl ExpressionResolver {
                 for binding in bindings {
                     if binding.range.0 <= range.0 && binding.range.1 >= range.1 {
                         if let Some(binding_type) = &binding.java_type {
-                            if let Some(resolved_type) = self.resolve_type(file_path, binding_type)
-                            {
-                                return Some(resolved_type);
-                            }
+                            return self.resolve_type(file_path, binding_type);
                         } else if let Some(init) = &binding.init {
                             return self.resolve_expression(
                                 file_path,
                                 range,
                                 init,
-                                &mut Resolutions::default(),
+                                &mut Vec::new(),
                             );
                         }
                     }
@@ -552,48 +476,34 @@ impl ExpressionResolver {
         &self,
         file_path: &str,
         type_name: &str,
-        resolutions: &mut Resolutions,
-    ) -> Option<ResolvedType> {
-        match self.resolve_type(file_path, type_name) {
-            Some(ResolvedType::Definition(java_type)) => {
-                let file = self.files.get(file_path);
+        resolved_calls: &mut Vec<Resolution>,
+    ) -> Option<Resolution> {
+        if let Some(java_type) = self.resolve_type(file_path, type_name) {
+            let file = self.files.get(file_path)?;
 
-                let name = java_type.name.clone();
-                let fqn = java_type.fqn.clone();
+            let constructor_resolution = Resolution {
+                name: java_type.name.clone(),
+                fqn: format!("{}.{}", java_type.fqn, java_type.name),
+            };
 
-                let constructor_resolution = DefinitionResolution {
-                    name: name.clone(),
-                    fqn: format!("{}.{}", fqn, name),
-                };
+            let class_resolution = Resolution {
+                name: java_type.name,
+                fqn: java_type.fqn,
+            };
 
-                let class_resolution = DefinitionResolution { name, fqn };
-
-                if file.is_some()
-                    && file
-                        .unwrap()
-                        .methods
-                        .contains_key(&constructor_resolution.fqn)
-                {
-                    resolutions
-                        .definition_resolutions
-                        .push(constructor_resolution.clone());
-                } else {
-                    resolutions
-                        .definition_resolutions
-                        .push(class_resolution.clone());
-                }
-
-                Some(ResolvedType::Definition(java_type))
+            if file.methods.contains_key(&constructor_resolution.fqn) {
+                resolved_calls.push(constructor_resolution.clone());
+            } else {
+                resolved_calls.push(class_resolution.clone());
             }
-            Some(ResolvedType::Import(import)) => {
-                resolutions.import_resolutions.push(import);
-                None
-            }
-            None => None,
+
+            return Some(class_resolution);
         }
+
+        None
     }
 
-    pub fn resolve_type(&self, file_path: &str, type_name: &str) -> Option<ResolvedType> {
+    pub fn resolve_type(&self, file_path: &str, type_name: &str) -> Option<Resolution> {
         // if type name first letter is a lowercase, it's a FQN.
         if let Some(first_letter) = type_name.chars().next()
             && first_letter.is_lowercase()
@@ -606,19 +516,19 @@ impl ExpressionResolver {
     }
 
     // ex: java.util.List
-    fn resolve_fully_qualified_name(&self, type_name: &str) -> Option<ResolvedType> {
+    fn resolve_fully_qualified_name(&self, type_name: &str) -> Option<Resolution> {
         if let Some(definition) = self.definition_nodes.get(type_name) {
-            return Some(ResolvedType::Definition(DefinitionResolution {
+            return Some(Resolution {
                 name: definition.name.clone(),
                 fqn: definition.fqn.clone(),
-            }));
+            });
         }
 
         None
     }
 
     // ex: Map, Map.Entry, Map.Entry.Key
-    fn resolve_class_name(&self, file_path: &str, type_name: &str) -> Option<ResolvedType> {
+    fn resolve_class_name(&self, file_path: &str, type_name: &str) -> Option<Resolution> {
         // All sub classes are declared in the same file. We need to find the imported symbol that contains any part of the class name, than lookup the class in the file.
         let parts = type_name.split('.').collect::<Vec<&str>>();
         let file = self.files.get(file_path)?;
@@ -631,18 +541,11 @@ impl ExpressionResolver {
             }
 
             // Look at the imported symbols
-            if let Some(import_path) = file.imported_symbols.get(*parent_symbol) {
-                if let Some(file_path) = self.declaration_files.get(import_path)
-                    && let Some(file) = self.files.get(file_path)
-                {
-                    parent_symbol_file = Some(file);
-                } else {
-                    if let Some(imported_symbol_node) = self.import_nodes.get(import_path) {
-                        return Some(ResolvedType::Import(imported_symbol_node.clone()));
-                    }
-
-                    return None;
-                }
+            if let Some(import_path) = file.imported_symbols.get(*parent_symbol)
+                && let Some(file_path) = self.declaration_files.get(import_path)
+                && let Some(file) = self.files.get(file_path)
+            {
+                parent_symbol_file = Some(file);
             }
 
             // Look at the wildward imports
@@ -675,10 +578,10 @@ impl ExpressionResolver {
                 .classes
                 .get(parts.last()?.to_string().as_str())
         {
-            return Some(ResolvedType::Definition(DefinitionResolution {
+            return Some(Resolution {
                 name: class.name.clone(),
                 fqn: java_fqn_to_string(&class.fqn),
-            }));
+            });
         }
 
         None
@@ -756,7 +659,7 @@ impl ExpressionResolver {
             .index_definition(&definition);
     }
 
-    pub fn add_import(&mut self, file_path: String, imported_symbol: &ImportedSymbolNode) {
+    pub fn add_import(&mut self, file_path: String, imported_symbol: &JavaImportedSymbolInfo) {
         if !self.files.contains_key(&file_path) {
             self.files.insert(
                 file_path.clone(),
@@ -766,19 +669,12 @@ impl ExpressionResolver {
 
         let file = self.files.get_mut(&file_path).unwrap();
 
-        if matches!(
-            imported_symbol.import_type,
-            ImportType::Java(JavaImportType::WildcardImport)
-        ) {
+        if matches!(imported_symbol.import_type, JavaImportType::WildcardImport) {
             file.wildcard_imports
                 .insert(imported_symbol.import_path.clone());
-            self.import_nodes
-                .insert(imported_symbol.import_path.clone(), imported_symbol.clone());
         } else {
             let (name, import_path) = full_import_path(imported_symbol);
-            file.imported_symbols.insert(name, import_path.clone());
-            self.import_nodes
-                .insert(import_path, imported_symbol.clone());
+            file.imported_symbols.insert(name, import_path);
         }
     }
 }
