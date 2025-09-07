@@ -4,6 +4,12 @@ pub struct ConsolidatedRelationship {
     pub source_id: Option<u32>,
     pub target_id: Option<u32>,
     pub relationship_type: u8,
+    pub start_byte: Option<usize>,
+    pub end_byte: Option<usize>,
+    pub start_line: Option<usize>,
+    pub end_line: Option<usize>,
+    pub start_column: Option<usize>,
+    pub end_column: Option<usize>,
 }
 
 /// Container for different types of consolidated relationships

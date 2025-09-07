@@ -598,7 +598,7 @@ impl ScopeResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::types::{DefinitionLocation, DefinitionType};
+    use crate::analysis::types::{DefinitionType, SourceLocation};
 
     #[test]
     fn test_definition_map_method_lookup() {
@@ -609,7 +609,7 @@ mod tests {
             "User#save".to_string(),
             "save".to_string(),
             DefinitionType::Ruby(RubyDefinitionType::Method),
-            DefinitionLocation {
+            SourceLocation {
                 file_path: "user.rb".to_string(),
                 start_byte: 0,
                 end_byte: 10,

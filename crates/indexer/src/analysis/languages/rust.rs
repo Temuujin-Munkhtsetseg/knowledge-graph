@@ -1,8 +1,7 @@
 use crate::analysis::types::{
-    DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
-    DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-    FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType, ImportedSymbolLocation,
-    ImportedSymbolNode,
+    DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DefinitionType,
+    FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
+    ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
@@ -137,8 +136,8 @@ impl RustAnalyzer {
         &self,
         definition: &RustDefinitionInfo,
         file_path: &str,
-    ) -> Result<Option<(DefinitionLocation, RustFqn)>, String> {
-        let location = DefinitionLocation {
+    ) -> Result<Option<(SourceLocation, RustFqn)>, String> {
+        let location = SourceLocation {
             file_path: file_path.to_string(),
             start_line: definition.range.start.line as i32,
             start_col: definition.range.start.column as i32,
@@ -286,6 +285,7 @@ impl RustAnalyzer {
                         to_file_path: node.location.file_path.clone(),
                         to_location: node.location.clone(),
                         relationship_type: rel_type,
+                        source_location: None,
                     });
                     break; // Only create relationship with immediate parent
                 }

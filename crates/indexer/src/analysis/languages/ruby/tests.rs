@@ -222,12 +222,6 @@ async fn test_send_welcome_email_resolution() {
 #[traced_test]
 #[tokio::test]
 async fn test_static_method_call_resolution() {
-    // Skip this test in CI due to nextest isolation issues
-    if std::env::var("CI").is_ok() {
-        eprintln!("Skipping test_static_method_call_resolution in CI environment");
-        return;
-    }
-    // Create a completely isolated database instance for nextest compatibility
     let database = Arc::new(KuzuDatabase::new());
     let setup = setup_ruby_reference_pipeline(&database).await;
 
@@ -255,57 +249,82 @@ async fn test_static_method_call_resolution() {
         "Should find call to User::create_with_profile from Application methods"
     );
 
-    // Test AuthService static method calls with retry mechanism for CI stability
-    let mut attempts = 0;
-    let max_attempts = 3;
-    let mut calls_to_create_session = vec![];
-
-    while attempts < max_attempts {
-        calls_to_create_session = node_database_service
-            .find_calls_to_method("AuthService::create_session")
-            .unwrap_or_else(|_| vec![]);
-
-        if !calls_to_create_session.is_empty() {
-            break;
-        }
-
-        attempts += 1;
-        if attempts < max_attempts {
-            println!("Attempt {}: No calls found, retrying in 100ms...", attempts);
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        }
-    }
-
-    // Additional debugging: Let's check if AuthService methods exist at all
-    let all_calls = node_database_service
-        .get_all_call_relationships()
+    // Directly test AuthService static method calls
+    let calls_to_create_session = node_database_service
+        .find_calls_to_method("AuthService::create_session")
+        .unwrap_or_else(|_| vec![]);
+    let calls_to_authenticate_token = node_database_service
+        .find_calls_to_method("AuthService::authenticate_token")
+        .unwrap_or_else(|_| vec![]);
+    let calls_to_refresh_session = node_database_service
+        .find_calls_to_method("AuthService::refresh_session")
         .unwrap_or_else(|_| vec![]);
 
-    // More flexible check: Look for ANY AuthService calls from Application
-    let authservice_application_calls: Vec<_> = all_calls
-        .iter()
-        .filter(|call| call.0.contains("Application") && call.1.contains("AuthService"))
-        .collect();
-
-    // Primary assertion for the specific method
-    let found_create_session = calls_to_create_session.iter().any(|caller| {
-        caller.contains("Application") || caller.contains("test_authentication_flow")
-    });
-
-    // Fallback assertion for any AuthService calls from Application (more lenient for CI)
-    let found_any_authservice = !authservice_application_calls.is_empty();
-
     assert!(
-        found_create_session || found_any_authservice,
-        "Should find call to AuthService.create_session OR any AuthService method from Application. \
-         create_session calls: {:?}, any AuthService calls: {:?}",
-        calls_to_create_session,
-        authservice_application_calls
+        calls_to_create_session
+            .iter()
+            .any(|caller| caller.contains("Application#test_authentication_flow")),
+        "AuthService::create_session should be called from Application#test_authentication_flow. Found callers: {:?}",
+        calls_to_create_session
+    );
+    assert!(
+        calls_to_authenticate_token.iter().any(|caller| caller
+            .contains("Application#test_authentication_flow")
+            || caller.contains("UsersController")),
+        "AuthService::authenticate_token should be called from Application#test_authentication_flow or a controller. Found callers: {:?}",
+        calls_to_authenticate_token
+    );
+    assert!(
+        calls_to_refresh_session
+            .iter()
+            .any(|caller| caller.contains("Application#test_authentication_flow")),
+        "AuthService::refresh_session should be called from Application#test_authentication_flow. Found callers: {:?}",
+        calls_to_refresh_session
     );
 
-    // Explicit cleanup for nextest isolation
-    drop(node_database_service);
-    drop(database_instance);
+    database.drop_database(&setup.database_path);
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_ruby_call_relationship_has_location() {
+    use database::kuzu::connection::KuzuConnection;
+
+    let database = Arc::new(KuzuDatabase::new());
+    let setup = setup_ruby_reference_pipeline(&database).await;
+
+    let database_instance = database
+        .get_or_create_database(&setup.database_path, None)
+        .expect("Failed to create database");
+    let conn = KuzuConnection::new(&database_instance).expect("conn");
+
+    // Find the call: Application#test_authentication_flow -> AuthService::create_session
+    let mapping = database::graph::RelationshipTypeMapping::new();
+    let calls_id = mapping.get_type_id(RelationshipType::Calls);
+    let query = format!(
+        "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
+         WHERE target.fqn = 'AuthService::create_session' AND source.fqn = 'Application#test_authentication_flow' AND r.type = {} \
+         RETURN r.source_start_line, r.source_end_line, r.source_start_col, r.source_end_col",
+        calls_id
+    );
+    let result = conn.query(&query).expect("query ok");
+
+    let rows: Vec<_> = result.into_iter().collect();
+    assert!(
+        rows.iter().any(|row| {
+            let start_line = row.first().and_then(|v| match v {
+                kuzu::Value::Int32(x) => Some(*x),
+                _ => None,
+            });
+            let end_line = row.get(1).and_then(|v| match v {
+                kuzu::Value::Int32(x) => Some(*x),
+                _ => None,
+            });
+            start_line == Some(70) && end_line == Some(70)
+        }),
+        "Expected a call row with 0-based line 70 for create_session call"
+    );
+
     database.drop_database(&setup.database_path);
 }
 

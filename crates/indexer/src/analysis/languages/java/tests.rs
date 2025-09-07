@@ -309,3 +309,77 @@ async fn test_java_reference_resolution_to_imported_symbol() {
         "Traceable should have a Retention annotation"
     );
 }
+
+#[traced_test]
+#[tokio::test]
+async fn test_java_call_relationship_has_location() {
+    use database::kuzu::connection::KuzuConnection;
+
+    let database = Arc::new(KuzuDatabase::new());
+    let setup = setup_java_reference_pipeline(&database).await;
+
+    let database_instance = database
+        .get_or_create_database(&setup.database_path, None)
+        .expect("Failed to create database");
+    let conn = KuzuConnection::new(&database_instance).expect("conn");
+
+    // Assert exact expected lines for specific calls in fixtures
+    let mapping = database::graph::RelationshipTypeMapping::new();
+    let calls_id = mapping.get_type_id(database::graph::RelationshipType::Calls);
+
+    // 1) com.example.app.Main.main -> await(() -> super.run()) on line 22 (0-based 21)
+    let query = format!(
+        "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
+         WHERE source.fqn = 'com.example.app.Main.main' AND target.fqn = 'com.example.app.Application.run' AND r.type = {} \
+         RETURN r.source_start_line, r.source_end_line",
+        calls_id
+    );
+    let result = conn.query(&query).expect("query ok");
+    let rows: Vec<_> = result.into_iter().collect();
+    assert!(!rows.is_empty(), "Expected Application.run call row");
+    let row = &rows[0];
+    let start_line = row
+        .first()
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("start_line");
+    let end_line = row
+        .get(1)
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("end_line");
+    assert_eq!(start_line, 21);
+    assert_eq!(end_line, 21);
+
+    // 2) com.example.app.Main.main -> Outer.make() on line 25 (0-based 24)
+    let query = format!(
+        "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
+         WHERE source.fqn = 'com.example.app.Main.main' AND target.fqn = 'com.example.util.Outer.make' AND r.type = {} \
+         RETURN r.source_start_line, r.source_end_line",
+        calls_id
+    );
+    let result = conn.query(&query).expect("query ok");
+    let rows: Vec<_> = result.into_iter().collect();
+    assert!(!rows.is_empty(), "Expected Outer.make call row");
+    let row = &rows[0];
+    let start_line = row
+        .first()
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("start_line");
+    let end_line = row
+        .get(1)
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("end_line");
+    assert_eq!(start_line, 24);
+    assert_eq!(end_line, 24);
+}

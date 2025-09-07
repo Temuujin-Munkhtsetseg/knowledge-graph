@@ -119,10 +119,10 @@ impl NodeFieldAccess for FileNode {
     }
 }
 
-/// Represents a single location where a definition is found
+/// Represents a single location where a definition or reference call is found
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DefinitionLocation {
-    /// File path where this definition location is found
+pub struct SourceLocation {
+    /// File path where this definition or reference call location is found
     pub file_path: String,
     /// Start byte position in the file
     pub start_byte: i64,
@@ -138,7 +138,7 @@ pub struct DefinitionLocation {
     pub end_col: i32,
 }
 
-impl DefinitionLocation {
+impl SourceLocation {
     pub fn to_range(&self) -> Range {
         Range::new(
             Position::new(self.start_line as usize, self.start_col as usize),
@@ -198,7 +198,7 @@ pub struct DefinitionNode {
     /// Type of definition
     pub definition_type: DefinitionType,
     /// File location of the definition
-    pub location: DefinitionLocation,
+    pub location: SourceLocation,
 }
 
 impl DefinitionNode {
@@ -207,7 +207,7 @@ impl DefinitionNode {
         fqn: String,
         name: String,
         definition_type: DefinitionType,
-        location: DefinitionLocation,
+        location: SourceLocation,
     ) -> Self {
         Self {
             fqn,
@@ -407,7 +407,7 @@ pub struct FileDefinitionRelationship {
     /// Type of relationship (always "DEFINES" for now)
     pub relationship_type: RelationshipType,
     /// Definition location (foreign key to DefinitionNode.location)
-    pub definition_location: DefinitionLocation,
+    pub definition_location: SourceLocation,
 }
 
 /// Represents a relationship between a file and an imported symbol
@@ -433,11 +433,13 @@ pub struct DefinitionRelationship {
     /// Child definition FQN (foreign key to DefinitionNode.fqn)
     pub to_definition_fqn: String,
     /// Parent definition location (foreign key to DefinitionNode.location)
-    pub from_location: DefinitionLocation,
+    pub from_location: SourceLocation,
     /// Child definition location (foreign key to DefinitionNode.location)
-    pub to_location: DefinitionLocation,
+    pub to_location: SourceLocation,
     /// Type of relationship (e.g., "MODULE_TO_CLASS", "CLASS_TO_METHOD", etc.)
     pub relationship_type: RelationshipType,
+    /// Optional call-site/source location for reference edges (e.g., Calls)
+    pub source_location: Option<SourceLocation>,
 }
 
 /// Represents a relationship between a definition and an imported symbol
@@ -454,5 +456,5 @@ pub struct DefinitionImportedSymbolRelationship {
     /// Type of relationship (either "DEFINES_IMPORTED_SYMBOL" or "CALLS_IMPORTED_SYMBOL" for now)
     pub relationship_type: RelationshipType,
     /// Definition location (foreign key to DefinitionNode.location)
-    pub definition_location: DefinitionLocation,
+    pub definition_location: SourceLocation,
 }
