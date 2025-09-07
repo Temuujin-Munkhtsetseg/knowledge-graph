@@ -360,33 +360,6 @@ impl<'a> NodeDatabaseService<'a> {
         Ok(source_fqns)
     }
 
-    pub fn find_calls_to_imported_symbol(
-        &self,
-        import_path: &str,
-        import_name: &str,
-    ) -> Result<Vec<String>, DatabaseError> {
-        let query = format!(
-            "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:ImportedSymbolNode) 
-             WHERE target.import_path = '{}' AND target.name = '{}' AND r.type = {} 
-             RETURN source.fqn",
-            import_path,
-            import_name,
-            self.get_calls_relationship_type_id()
-        );
-
-        let conn = self.get_connection();
-        let result = conn.query(&query)?;
-
-        let mut source_fqns = Vec::new();
-        for row in result {
-            if let Some(kuzu::Value::String(source_fqn)) = row.first() {
-                source_fqns.push(source_fqn.to_string());
-            }
-        }
-
-        Ok(source_fqns)
-    }
-
     /// Find all methods that call a specific target method
     pub fn find_n_first_calls_to_method(
         &self,
