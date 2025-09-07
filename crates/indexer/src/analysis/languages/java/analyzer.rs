@@ -10,11 +10,12 @@ use parser_core::java::{
 
 use crate::{
     analysis::{
-        languages::java::expression_resolver::ExpressionResolver,
+        languages::java::{expression_resolver::ExpressionResolver, utils::full_import_path},
         types::{
-            DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
-            FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-            ImportType, ImportedSymbolLocation, ImportedSymbolNode,
+            DefinitionImportedSymbolRelationship, DefinitionLocation, DefinitionNode,
+            DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
+            FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType,
+            ImportedSymbolLocation, ImportedSymbolNode,
         },
     },
     parsing::processor::{FileProcessingResult, References},
@@ -114,12 +115,10 @@ impl JavaAnalyzer {
                     location.clone(),
                 );
 
+                let (_, full_import_path) = full_import_path(&imported_symbol_node);
                 imported_symbol_map.insert(
-                    (
-                        imported_symbol.import_path.clone(),
-                        relative_file_path.to_string(),
-                    ),
-                    vec![imported_symbol_node],
+                    (full_import_path, relative_file_path.to_string()),
+                    vec![imported_symbol_node.clone()],
                 );
 
                 file_import_relationships.push(FileImportedSymbolRelationship {
@@ -129,7 +128,7 @@ impl JavaAnalyzer {
                 });
 
                 self.expression_resolver
-                    .add_import(relative_file_path.to_string(), imported_symbol);
+                    .add_import(relative_file_path.to_string(), &imported_symbol_node);
             }
         }
     }
@@ -140,11 +139,13 @@ impl JavaAnalyzer {
         references: &References,
         file_path: &str,
         definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
         self.expression_resolver.resolve_references(
             file_path,
             references,
             definition_relationships,
+            definition_imported_symbol_relationships,
         );
     }
 

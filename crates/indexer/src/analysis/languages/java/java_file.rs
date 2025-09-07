@@ -8,7 +8,7 @@ use parser_core::java::{
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 
-use crate::analysis::languages::java::types::ScopeTree;
+use crate::analysis::{languages::java::types::ScopeTree, types::ImportedSymbolNode};
 
 #[derive(Debug, Clone)]
 pub(crate) struct JavaBinding {
@@ -34,6 +34,8 @@ pub(crate) struct JavaClass {
 pub(crate) struct JavaFile {
     pub package_name: String,
     pub file_path: String,
+    /// Full import path -> ImportedSymbolNode
+    pub import_nodes: FxHashMap<String, ImportedSymbolNode>,
     /// Imported symbol -> Import path (e.g. "Outer" -> "com.example.util.Outer")
     pub imported_symbols: FxHashMap<String, String>,
     /// Imported packages (e.g. "com.example.util.*")
@@ -55,6 +57,7 @@ impl JavaFile {
         Self {
             package_name,
             file_path,
+            import_nodes: FxHashMap::default(),
             imported_symbols: FxHashMap::default(),
             wildcard_imports: FxHashSet::default(),
             classes: FxHashMap::default(),
@@ -69,6 +72,7 @@ impl JavaFile {
         Self {
             file_path,
             package_name: String::new(),
+            import_nodes: FxHashMap::default(),
             imported_symbols: FxHashMap::default(),
             wildcard_imports: FxHashSet::default(),
             classes: FxHashMap::default(),

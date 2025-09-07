@@ -2,6 +2,8 @@ package com.example.app;
 
 import com.example.util.Outer;
 import com.example.helpers.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Main extends Application {
     Foo myParameter;
@@ -36,6 +38,9 @@ public class Main extends Application {
         
         var enumValue = EnumClass.ENUM_VALUE_2;
         enumValue.enumMethod2();
+
+        var list = new ArrayList<String>();
+        var list2 = List.of("a", "b", "c");
     }
 
     public void await(Runnable fn) {
