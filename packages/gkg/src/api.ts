@@ -62,7 +62,7 @@ export type GraphStatsSuccessResponse = { total_nodes: number, total_relationshi
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 
-export type ImportedSymbolNodeProperties = { import_type: string, import_path: string, import_alias: string, };
+export type ImportedSymbolNodeProperties = { path: string, start_line: number, primary_start_byte: bigint, primary_end_byte: bigint, import_type: string, import_path: string, import_alias: string, };
 
 export type InfoEndpointDef = { method: HttpMethod, path: "/api/info", path_request: EmptyRequest, body_request: EmptyRequest, query_request: EmptyRequest, responses: InfoResponses, };
 

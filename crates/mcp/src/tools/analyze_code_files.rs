@@ -109,6 +109,7 @@ impl AnalyzeCodeFilesTool {
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
                     let alias = obj.get("alias").and_then(|v| v.as_str()).unwrap_or("");
+                    let line = obj.get("line_number").and_then(|v| v.as_u64()).unwrap_or(0);
 
                     let mut mapped = JsonObject::new();
                     mapped.insert("name".to_string(), Value::String(name.to_string()));
@@ -117,6 +118,10 @@ impl AnalyzeCodeFilesTool {
                         Value::String(import_path.to_string()),
                     );
                     mapped.insert("alias".to_string(), Value::String(alias.to_string()));
+
+                    let mut location = JsonObject::new();
+                    location.insert("line".to_string(), Value::Number(line.into()));
+                    mapped.insert("location".to_string(), Value::Object(location));
 
                     result.push(Value::Object(mapped));
                 }
@@ -324,6 +329,7 @@ mod tests {
             "BaseModel".to_string(),
             "base_model".to_string(),
             "BM".to_string(),
+            "1".to_string(),
         ]];
 
         let mock_query_service = MockQueryingService::new()
@@ -332,6 +338,7 @@ mod tests {
                     "name".to_string(),
                     "import_path".to_string(),
                     "alias".to_string(),
+                    "line_number".to_string(),
                 ],
                 imports,
             )
@@ -394,6 +401,11 @@ mod tests {
             "base_model"
         );
         assert_eq!(imp.get("alias").and_then(|v| v.as_str()).unwrap(), "BM");
+        let imp_loc = imp
+            .get("location")
+            .and_then(|v| v.as_object())
+            .expect("import should have location");
+        assert_eq!(imp_loc.get("line").and_then(|v| v.as_u64()).unwrap(), 1);
 
         // Validate definitions
         let definitions = repomap

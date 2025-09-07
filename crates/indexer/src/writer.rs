@@ -160,7 +160,9 @@ impl WriterService {
                     &graph_data.imported_symbol_nodes,
                     &database::schema::init::IMPORTED_SYMBOL_TABLE,
                     |n: &ImportedSymbolNode| {
-                        node_id_generator.get_imported_symbol_id(n).unwrap_or(0)
+                        node_id_generator
+                            .get_imported_symbol_id(&n.location)
+                            .unwrap_or(0)
                     },
                 ),
             ),

@@ -290,10 +290,17 @@ const highlightSearchTerm = (text: string, term: string) => {
                         class="text-xs text-muted-foreground truncate font-mono"
                         v-html="highlightSearchTerm(node.label, debouncedSearchTerm)"
                       />
+                      <p
+                        class="text-xs text-muted-foreground truncate"
+                        v-html="highlightSearchTerm(node.properties.path, debouncedSearchTerm)"
+                      />
                       <div class="flex items-center gap-2 mt-1">
                         <Badge variant="outline" class="text-xs">
                           {{ node.properties.import_type }}
                         </Badge>
+                        <span class="text-xs text-muted-foreground">
+                          Line {{ node.properties.start_line }}
+                        </span>
                       </div>
                     </div>
                   </div>

@@ -80,7 +80,7 @@ impl AnalysisService {
         );
 
         let mut definition_nodes: Vec<DefinitionNode> = Vec::new();
-        let mut imported_symbol_nodes: HashSet<ImportedSymbolNode> = HashSet::new();
+        let mut imported_symbol_nodes: Vec<ImportedSymbolNode> = Vec::new();
         let mut directory_nodes: Vec<DirectoryNode> = Vec::new();
         let mut file_nodes: Vec<FileNode> = Vec::new();
         let mut directory_relationships: Vec<DirectoryRelationship> = Vec::new();
@@ -208,7 +208,7 @@ impl AnalysisService {
             directory_nodes,
             file_nodes,
             definition_nodes,
-            imported_symbol_nodes: imported_symbol_nodes.into_iter().collect(),
+            imported_symbol_nodes,
             directory_relationships,
             file_imported_symbol_relationships,
             file_definition_relationships,
@@ -310,6 +310,7 @@ impl AnalysisService {
                     &file_result.references,
                     &relative_path,
                     definition_map,
+                    imported_symbol_map,
                     definition_relationships,
                     definition_imported_symbol_relationships,
                     file_definition_relationships,
@@ -406,7 +407,7 @@ impl AnalysisService {
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_nodes: &mut Vec<DefinitionNode>,
-        imported_symbol_nodes: &mut HashSet<ImportedSymbolNode>,
+        imported_symbol_nodes: &mut Vec<ImportedSymbolNode>,
     ) {
         // Add definition nodes
         let unrolled_definitions: Vec<DefinitionNode> = definition_map
@@ -416,7 +417,13 @@ impl AnalysisService {
         definition_nodes.extend(unrolled_definitions);
 
         // Add imported symbol nodes
-        imported_symbol_nodes.extend(imported_symbol_map.values().flatten().cloned());
+        imported_symbol_nodes.extend(
+            imported_symbol_map
+                .values()
+                .flatten()
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
     }
 
     fn add_relationships(

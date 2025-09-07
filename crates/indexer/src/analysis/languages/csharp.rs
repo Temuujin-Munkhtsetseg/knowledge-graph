@@ -12,7 +12,7 @@ use crate::{
     analysis::types::{
         DefinitionLocation, DefinitionNode, DefinitionRelationship, DefinitionType,
         FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-        ImportType, ImportedSymbolNode,
+        ImportType, ImportedSymbolLocation, ImportedSymbolNode,
     },
     parsing::processor::FileProcessingResult,
 };
@@ -74,22 +74,28 @@ impl CSharpAnalyzer {
             && let Some(imports) = imported_symbols.iter_csharp()
         {
             for imported_symbol in imports {
+                let location =
+                    self.create_imported_symbol_location(imported_symbol, relative_file_path);
                 let identifier = self.create_imported_symbol_identifier(imported_symbol);
 
                 let imported_symbol_node = ImportedSymbolNode::new(
                     ImportType::CSharp(imported_symbol.import_type),
                     imported_symbol.import_path.clone(),
                     identifier,
+                    location.clone(),
                 );
 
                 imported_symbol_map.insert(
-                    (imported_symbol.import_path.clone(), "".to_string()),
-                    vec![imported_symbol_node.clone()],
+                    (
+                        imported_symbol.import_path.clone(),
+                        relative_file_path.to_string(),
+                    ),
+                    vec![imported_symbol_node],
                 );
 
                 file_import_relationships.push(FileImportedSymbolRelationship {
                     file_path: relative_file_path.to_string(),
-                    imported_symbol: imported_symbol_node,
+                    import_location: location.clone(),
                     relationship_type: RelationshipType::FileImports,
                 });
             }
@@ -298,6 +304,22 @@ impl CSharpAnalyzer {
 
     fn is_top_level_definition(&self, fqn: &CSharpFqn) -> bool {
         fqn.len() == 1 || (fqn.len() == 2 && fqn[0].node_type == CSharpFqnPartType::Namespace)
+    }
+
+    fn create_imported_symbol_location(
+        &self,
+        imported_symbol: &ImportedSymbolInfo<CSharpImportType, CSharpFqn>,
+        file_path: &str,
+    ) -> ImportedSymbolLocation {
+        ImportedSymbolLocation {
+            file_path: file_path.to_string(),
+            start_byte: imported_symbol.range.byte_offset.0 as i64,
+            end_byte: imported_symbol.range.byte_offset.1 as i64,
+            start_line: imported_symbol.range.start.line as i32,
+            end_line: imported_symbol.range.end.line as i32,
+            start_col: imported_symbol.range.start.column as i32,
+            end_col: imported_symbol.range.end.column as i32,
+        }
     }
 
     fn create_imported_symbol_identifier(
