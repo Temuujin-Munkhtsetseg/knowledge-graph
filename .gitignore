@@ -8,6 +8,10 @@ output
 database.kz
 kuzu_db
 
+# Kuzu (old)
+db.kuzu
+
+
 # TypeScript test files
 test-bindings/
 
@@ -26,5 +30,20 @@ lib/
 # IDEs
 .idea/
 
-# Kuzu
-db.kuzu
+
+# Python
+__pycache__/
+.venv/
+
+# Environment variables
+.env
+
+# Evals
+packages/gkg-evals/data/patches.jsonl
+packages/gkg-evals/data/fixtures_metadata.json
+packages/gkg-evals/data/opencode_config.json
+packages/gkg-evals/data/metrics.jsonl
+packages/gkg-evals/data/repos
+packages/gkg-evals/pipeline/pnpm-lock.yaml
+packages/gkg-evals/data/opencode_logs.txt
+packages/gkg-evals/harness/
