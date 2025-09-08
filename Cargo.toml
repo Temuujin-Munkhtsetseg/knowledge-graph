@@ -25,7 +25,7 @@ repository = "https://gitlab.com/gitlab-org/rust/knowledge-graph"
 # use `cargo run -p xtask -- set-mode dev` to use local versions of the dependencies
 # defaults to ../crates/parser-core and ../crates/gitalisk-core
 parser-core = { git = "https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git", tag = "v0.17.0" }
-gitalisk-core = { git = "https://gitlab.com/gitlab-org/rust/gitalisk.git", tag = "v0.5.1" }
+gitalisk-core = { git = "https://gitlab.com/gitlab-org/rust/gitalisk.git", tag = "v0.6.0" }
 
 anyhow = "1.0.99"
 clap = { version = "4.5.45", features = ["derive"] }
