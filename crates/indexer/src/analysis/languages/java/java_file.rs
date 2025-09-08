@@ -27,7 +27,7 @@ pub(crate) struct JavaMethod {
 
 pub(crate) struct JavaClass {
     pub name: String,
-    pub fqn: JavaFqn,
+    pub fqn: String,
     pub super_types: FxHashSet<String>,
 }
 
@@ -112,7 +112,7 @@ impl JavaFile {
 
         let class = JavaClass {
             name: definition.name.clone(),
-            fqn: definition.fqn.clone(),
+            fqn: java_fqn_to_string(&definition.fqn),
             super_types,
         };
 
@@ -177,11 +177,6 @@ impl JavaFile {
         if let Some(scope) = self.get_enclosing_scope_mut(definition.fqn.clone()) {
             scope.add_binding(definition.name.clone(), binding);
         }
-    }
-
-    pub fn get_scope_by_fqn(&self, fqn: &JavaFqn) -> Option<&ScopeTree> {
-        let scope_name = java_fqn_to_string(fqn);
-        self.scopes.get(&scope_name)
     }
 
     pub fn get_class_at_offset(&self, offset: u64) -> Option<&JavaClass> {

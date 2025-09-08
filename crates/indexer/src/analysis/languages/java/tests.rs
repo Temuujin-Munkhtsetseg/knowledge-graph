@@ -312,6 +312,30 @@ async fn test_java_reference_resolution_to_imported_symbol() {
 
 #[traced_test]
 #[tokio::test]
+// Regression test for resolving a class in a package that contains two classes with the same name.
+async fn test_java_reference_resolution_same_class_name_in_same_package() {
+    let database = Arc::new(KuzuDatabase::new());
+    let setup = setup_java_reference_pipeline(&database).await;
+
+    let database_instance = database
+        .get_or_create_database(&setup.database_path, None)
+        .expect("Failed to create database");
+    let node_database_service = NodeDatabaseService::new(&database_instance);
+
+    // ServerFilter.Filter -> ServerFilter
+    let callers_to_filter = node_database_service
+        .find_calls_to_method("com.example.filter.Filter.apply")
+        .unwrap_or_default();
+    assert!(
+        callers_to_filter
+            .iter()
+            .any(|c| c.ends_with("com.example.filter.ServerFilter.Filter.apply")),
+        "ServerFilter.Filter should call ServerFilter.apply"
+    );
+}
+
+#[traced_test]
+#[tokio::test]
 async fn test_java_call_relationship_has_location() {
     use database::kuzu::connection::KuzuConnection;
 

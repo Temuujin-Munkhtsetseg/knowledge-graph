@@ -41,12 +41,8 @@ pub(crate) struct DefinitionResolution {
 pub(crate) struct ExpressionResolver {
     /// Relative file path -> file
     files: FxHashMap<String, JavaFile>,
-    /// FQN -> relative file path
-    declaration_files: FxHashMap<String, String>,
     /// FQN -> definition_node
     definition_nodes: FxHashMap<String, DefinitionNode>,
-    /// Package name -> (class name -> file_path). This index works because all top-level classes are declared in the same file.
-    package_class_index: FxHashMap<String, FxHashMap<String, String>>,
 }
 
 impl Default for ExpressionResolver {
@@ -59,9 +55,7 @@ impl ExpressionResolver {
     pub fn new() -> Self {
         Self {
             files: FxHashMap::default(),
-            declaration_files: FxHashMap::default(),
             definition_nodes: FxHashMap::default(),
-            package_class_index: FxHashMap::default(),
         }
     }
 
@@ -229,7 +223,7 @@ impl ExpressionResolver {
         member: &str,
         resolutions: &mut Resolutions,
     ) -> Option<ResolvedType> {
-        let relative_path = self.declaration_files.get(target.fqn.as_str())?;
+        let relative_path = self.definition_nodes.get(target.fqn.as_str())?.file_path();
         let file = self.files.get(relative_path)?;
 
         let class = file.classes.get(target.name.as_str())?;
@@ -244,7 +238,7 @@ impl ExpressionResolver {
         resolutions: &mut Resolutions,
     ) -> Option<ResolvedType> {
         // Look for method in current class
-        let method_fqn = format!("{}.{}", java_fqn_to_string(&class.fqn), member);
+        let method_fqn = format!("{}.{}", class.fqn, member);
         if let Some(method) = file.methods.get(&method_fqn) {
             resolutions
                 .definition_resolutions
@@ -265,9 +259,9 @@ impl ExpressionResolver {
             if let Some(ResolvedType::Definition(super_class)) =
                 self.resolve_type(file.file_path.as_str(), super_type)
             {
-                let super_class_definition_file = match self.declaration_files.get(&super_class.fqn)
+                let super_class_definition_file = match self.definition_nodes.get(&super_class.fqn)
                 {
-                    Some(file_path) => self.files.get(file_path).unwrap(),
+                    Some(definition) => self.files.get(definition.file_path()).unwrap(),
                     None => continue,
                 };
 
@@ -313,7 +307,7 @@ impl ExpressionResolver {
 
         Some(ResolvedType::Definition(DefinitionResolution {
             name: class.name.clone(),
-            fqn: java_fqn_to_string(&class.fqn),
+            fqn: class.fqn.clone(),
         }))
     }
 
@@ -339,13 +333,13 @@ impl ExpressionResolver {
         target: &DefinitionResolution,
         member: &str,
     ) -> Option<ResolvedType> {
-        let relative_path = self.declaration_files.get(target.fqn.as_str())?;
+        let relative_path = self.definition_nodes.get(target.fqn.as_str())?.file_path();
         let file = self.files.get(relative_path)?;
 
         if let Some(class) = file.classes.get(member) {
             return Some(ResolvedType::Definition(DefinitionResolution {
                 name: class.name.clone(),
-                fqn: java_fqn_to_string(&class.fqn),
+                fqn: class.fqn.clone(),
             }));
         }
 
@@ -369,7 +363,7 @@ impl ExpressionResolver {
         file: &JavaFile,
     ) -> Option<ResolvedType> {
         // Check in current class first
-        let scope = file.get_scope_by_fqn(&class.fqn)?;
+        let scope = file.scopes.get(&class.fqn)?;
         if let Some(binding) = scope.definition_map.unique_definitions.get(member) {
             // A field is always typed in Java
             if let Some(binding_type) = &binding.java_type
@@ -386,9 +380,9 @@ impl ExpressionResolver {
             if let Some(ResolvedType::Definition(super_class)) =
                 self.resolve_type(file.file_path.as_str(), super_type)
             {
-                let super_class_definition_file = match self.declaration_files.get(&super_class.fqn)
+                let super_class_definition_file = match self.definition_nodes.get(&super_class.fqn)
                 {
-                    Some(file_path) => self.files.get(file_path).unwrap(),
+                    Some(definition) => self.files.get(definition.file_path()).unwrap(),
                     None => continue,
                 };
 
@@ -420,15 +414,15 @@ impl ExpressionResolver {
     ) -> Option<ResolvedType> {
         let file = self.files.get(file_path).unwrap();
 
-        // Quickly look up if the identifier is a class name the imported symbols
+        // Look up if the identifier is a class name the imported symbols
         if let Some(import_path) = file.imported_symbols.get(name) {
-            if let Some(imported_file_path) = self.declaration_files.get(import_path) {
+            if let Some(imported_definition) = self.definition_nodes.get(import_path) {
                 // If the imported symbol is a class, resolve to the class.
-                let imported_file = self.files.get(imported_file_path).unwrap();
+                let imported_file = self.files.get(imported_definition.file_path()).unwrap();
                 if let Some(class) = imported_file.classes.get(name) {
                     return Some(ResolvedType::Definition(DefinitionResolution {
                         name: class.name.clone(),
-                        fqn: java_fqn_to_string(&class.fqn),
+                        fqn: class.fqn.clone(),
                     }));
                 }
 
@@ -460,33 +454,29 @@ impl ExpressionResolver {
             }
         }
 
-        // Quickly look up the file wildward imports
+        // Look up the file wildward imports
         for import_path in file.wildcard_imports.iter() {
-            if let Some(imported_file_path) = self
-                .package_class_index
-                .get(import_path)
-                .and_then(|map| map.get(name))
-                && let Some(imported_file) = self.files.get(imported_file_path)
+            let potential_fqn = format!("{}.{}", import_path, name);
+            if let Some(imported_file_path) = self.definition_nodes.get(&potential_fqn)
+                && let Some(imported_file) = self.files.get(imported_file_path.file_path())
                 && let Some(class) = imported_file.classes.get(name)
             {
                 return Some(ResolvedType::Definition(DefinitionResolution {
                     name: class.name.clone(),
-                    fqn: java_fqn_to_string(&class.fqn),
+                    fqn: class.fqn.clone(),
                 }));
             }
         }
 
         // Quickly check the class index to validate if the identifier is a class name
-        if let Some(class_file_path) = self
-            .package_class_index
-            .get(&file.package_name)
-            .and_then(|map| map.get(name))
-            && let Some(class_file) = self.files.get(class_file_path)
+        let potential_fqn = format!("{}.{}", file.package_name, name);
+        if let Some(class_file_path) = self.definition_nodes.get(&potential_fqn)
+            && let Some(class_file) = self.files.get(class_file_path.file_path())
             && let Some(class) = class_file.classes.get(name)
         {
             return Some(ResolvedType::Definition(DefinitionResolution {
                 name: class.name.clone(),
-                fqn: java_fqn_to_string(&class.fqn),
+                fqn: class.fqn.clone(),
             }));
         }
 
@@ -638,8 +628,8 @@ impl ExpressionResolver {
 
             // Look at the imported symbols
             if let Some(import_path) = file.imported_symbols.get(*parent_symbol) {
-                if let Some(file_path) = self.declaration_files.get(import_path)
-                    && let Some(file) = self.files.get(file_path)
+                if let Some(imported_definition) = self.definition_nodes.get(import_path)
+                    && let Some(file) = self.files.get(imported_definition.file_path())
                 {
                     parent_symbol_file = Some(file);
                 } else {
@@ -653,12 +643,9 @@ impl ExpressionResolver {
 
             // Look at the wildward imports
             for import_path in file.wildcard_imports.iter() {
-                if let Some(file_path) = self
-                    .package_class_index
-                    .get(import_path)
-                    .and_then(|map| map.get(parent_symbol.to_string().as_str()))
-                {
-                    if let Some(file) = self.files.get(file_path) {
+                let potential_fqn = format!("{}.{}", import_path, parent_symbol);
+                if let Some(definition) = self.definition_nodes.get(&potential_fqn) {
+                    if let Some(file) = self.files.get(definition.file_path()) {
                         parent_symbol_file = Some(file);
                     }
                     break;
@@ -666,11 +653,9 @@ impl ExpressionResolver {
             }
 
             // Look at all the files in the same package
-            if let Some(file_path) = self
-                .package_class_index
-                .get(&file.package_name)
-                .and_then(|map| map.get(parent_symbol.to_string().as_str()))
-                && let Some(file) = self.files.get(file_path)
+            let potential_fqn = format!("{}.{}", file.package_name, parent_symbol);
+            if let Some(file_path) = self.definition_nodes.get(&potential_fqn)
+                && let Some(file) = self.files.get(file_path.file_path())
             {
                 parent_symbol_file = Some(file);
             }
@@ -683,7 +668,7 @@ impl ExpressionResolver {
         {
             return Some(ResolvedType::Definition(DefinitionResolution {
                 name: class.name.clone(),
-                fqn: java_fqn_to_string(&class.fqn),
+                fqn: class.fqn.clone(),
             }));
         }
 
@@ -696,22 +681,8 @@ impl ExpressionResolver {
                 file_path.clone(),
                 JavaFile::new(package_name.clone(), file_path.clone()),
             );
-
-            if !self.package_class_index.contains_key(&package_name) {
-                self.package_class_index
-                    .insert(package_name.clone(), FxHashMap::default());
-            }
         } else {
             self.files.get_mut(&file_path).unwrap().package_name = package_name.clone();
-
-            // Backfill the package class index.
-            let file = self.files.get_mut(&file_path).unwrap();
-            for class in file.classes.values() {
-                self.package_class_index
-                    .entry(package_name.clone())
-                    .or_default()
-                    .insert(class.name.clone(), file_path.clone());
-            }
         }
     }
 
@@ -729,25 +700,13 @@ impl ExpressionResolver {
         }
 
         let fqn = java_fqn_to_string(&definition.fqn);
-        self.declaration_files
-            .insert(fqn.clone(), file_path.clone());
         match definition.definition_type {
             JavaDefinitionType::Class
             | JavaDefinitionType::Interface
             | JavaDefinitionType::Enum
             | JavaDefinitionType::Record
-            | JavaDefinitionType::Annotation => {
-                self.definition_nodes.insert(fqn.clone(), definition_node);
-
-                let file = self.files.get(&file_path).unwrap();
-                if !file.package_name.is_empty() {
-                    self.package_class_index
-                        .entry(file.package_name.clone())
-                        .or_default()
-                        .insert(definition.name.clone(), file_path.clone());
-                }
-            }
-            JavaDefinitionType::EnumConstant
+            | JavaDefinitionType::Annotation
+            | JavaDefinitionType::EnumConstant
             | JavaDefinitionType::AnnotationDeclaration
             | JavaDefinitionType::Method
             | JavaDefinitionType::Constructor => {
