@@ -7,7 +7,7 @@ use database::kuzu::service::NodeDatabaseService;
 use database::kuzu::types::DefinitionNodeFromKuzu;
 use database::kuzu::{database::KuzuDatabase, types::KuzuNodeType};
 use database::querying::{QueryLibrary, QueryingService};
-use rmcp::model::{CallToolResult, Content, ErrorCode, JsonObject, Tool};
+use rmcp::model::{CallToolResult, Content, ErrorCode, JsonObject, Tool, object};
 use serde_json::{Value, json};
 use workspace_manager::WorkspaceManager;
 
@@ -194,72 +194,39 @@ impl KnowledgeGraphTool for GetSymbolReferencesTool {
     }
 
     fn to_mcp_tool(&self) -> Tool {
-        let mut properties = JsonObject::new();
-
-        // absolute_file_path parameter
-        let mut file_path_property = JsonObject::new();
-        file_path_property.insert("type".to_string(), Value::String("string".to_string()));
-        file_path_property.insert(
-            "description".to_string(),
-            Value::String("The absolute path to the file containing the symbol".to_string()),
-        );
-        properties.insert(
-            "absolute_file_path".to_string(),
-            Value::Object(file_path_property),
-        );
-
-        // symbol parameter
-        let mut symbol_property = JsonObject::new();
-        symbol_property.insert("type".to_string(), Value::String("string".to_string()));
-        symbol_property.insert(
-            "description".to_string(),
-            Value::String("The name of the symbol to find references for".to_string()),
-        );
-        properties.insert("symbol_name".to_string(), Value::Object(symbol_property));
-
-        // depth parameter
-        let mut depth_property = JsonObject::new();
-        depth_property.insert("type".to_string(), Value::String("integer".to_string()));
-        depth_property.insert(
-            "description".to_string(),
-            Value::String(
-                "Maximum depth to traverse for finding references (default: 1, maximum: 3)"
-                    .to_string(),
-            ),
-        );
-        depth_property.insert("default".to_string(), Value::Number(1.into()));
-        depth_property.insert("minimum".to_string(), Value::Number(1.into()));
-        depth_property.insert("maximum".to_string(), Value::Number(3.into()));
-
-        // limit parameter
-        let mut limit_property = JsonObject::new();
-        limit_property.insert("type".to_string(), Value::String("number".to_string()));
-        limit_property.insert(
-            "description".to_string(),
-            Value::String("The maximum number of results to return".to_string()),
-        );
-        limit_property.insert("default".to_string(), Value::Number(50.into()));
-        limit_property.insert("minimum".to_string(), Value::Number(1.into()));
-        limit_property.insert("maximum".to_string(), Value::Number(100.into()));
-        properties.insert("limit".to_string(), Value::Object(limit_property));
-
-        properties.insert("depth".to_string(), Value::Object(depth_property));
-
-        let mut input_schema = JsonObject::new();
-        input_schema.insert("type".to_string(), Value::String("object".to_string()));
-        input_schema.insert("properties".to_string(), Value::Object(properties));
-        input_schema.insert(
-            "required".to_string(),
-            Value::Array(vec![
-                Value::String("absolute_file_path".to_string()),
-                Value::String("symbol".to_string()),
-            ]),
-        );
+        let input_schema = json!({
+            "type": "object",
+            "properties": {
+                "absolute_file_path": {
+                    "type": "string",
+                    "description": "The absolute path to the file containing the symbol."
+                },
+                "symbol_name": {
+                    "type": "string",
+                    "description": "The name of the symbol to find references for."
+                },
+                "depth": {
+                    "type": "integer",
+                    "description": "Maximum depth to traverse for finding references (default: 1, maximum: 3).",
+                    "default": 1,
+                    "minimum": 1,
+                    "maximum": 3
+                },
+                "limit": {
+                    "type": "number",
+                    "description": "The maximum number of results to return.",
+                    "default": 50,
+                    "minimum": 1,
+                    "maximum": 100
+                }
+            },
+            "required": ["absolute_file_path", "symbol_name"]
+        });
 
         Tool {
             name: Cow::Borrowed(GET_SYMBOL_REFERENCES_TOOL_NAME),
             description: Some(Cow::Borrowed(GET_SYMBOL_REFERENCES_TOOL_DESCRIPTION)),
-            input_schema: Arc::new(input_schema),
+            input_schema: Arc::new(object(input_schema)),
             output_schema: None,
             annotations: None,
         }

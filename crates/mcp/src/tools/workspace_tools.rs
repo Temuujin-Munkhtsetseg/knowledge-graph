@@ -1,4 +1,4 @@
-use rmcp::model::{CallToolResult, Content, JsonObject, Tool};
+use rmcp::model::{CallToolResult, Content, JsonObject, Tool, object};
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -23,17 +23,18 @@ impl KnowledgeGraphTool for ListProjectsTool {
     }
 
     fn to_mcp_tool(&self) -> Tool {
-        let mut input_schema = JsonObject::new();
-        input_schema.insert("type".to_string(), Value::String("object".to_string()));
-        input_schema.insert("properties".to_string(), Value::Object(JsonObject::new()));
-        input_schema.insert("required".to_string(), Value::Array(vec![]));
+        let input_schema = json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        });
 
         Tool {
             name: Cow::Borrowed("list_projects"),
             description: Some(Cow::Borrowed(
                 "Get a list of all projects in the knowledge graph.",
             )),
-            input_schema: Arc::new(input_schema),
+            input_schema: Arc::new(object(input_schema)),
             output_schema: None,
             annotations: None,
         }

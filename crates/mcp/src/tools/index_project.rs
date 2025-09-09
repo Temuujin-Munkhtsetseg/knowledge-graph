@@ -5,8 +5,8 @@ use std::thread;
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use indexer::execution::{config::IndexingConfigBuilder, executor::IndexingExecutor};
-use rmcp::model::{CallToolResult, Content, ErrorCode, JsonObject, Tool};
-use serde_json::Value;
+use rmcp::model::{CallToolResult, Content, ErrorCode, JsonObject, Tool, object};
+use serde_json::{Value, json};
 use tokio::runtime::Builder;
 use workspace_manager::WorkspaceManager;
 
@@ -45,34 +45,21 @@ impl KnowledgeGraphTool for IndexProjectTool {
     }
 
     fn to_mcp_tool(&self) -> Tool {
-        let mut properties = JsonObject::new();
-
-        let mut project_property = JsonObject::new();
-        project_property.insert("type".to_string(), Value::String("string".to_string()));
-        project_property.insert(
-            "description".to_string(),
-            Value::String(
-                "The absolute path to the current project directory to re-index synchronously."
-                    .to_string(),
-            ),
-        );
-        properties.insert(
-            "project_absolute_path".to_string(),
-            Value::Object(project_property),
-        );
-
-        let mut input_schema = JsonObject::new();
-        input_schema.insert("type".to_string(), Value::String("object".to_string()));
-        input_schema.insert("properties".to_string(), Value::Object(properties));
-        input_schema.insert(
-            "required".to_string(),
-            Value::Array(vec![Value::String("project_absolute_path".to_string())]),
-        );
+        let input_schema = json!({
+            "type": "object",
+            "properties": {
+                "project_absolute_path": {
+                    "type": "string",
+                    "description": "The absolute path to the current project directory to re-index synchronously."
+                }
+            },
+            "required": ["project_absolute_path"]
+        });
 
         Tool {
             name: Cow::Borrowed(INDEX_PROJECT_TOOL_NAME),
             description: Some(Cow::Borrowed(INDEX_PROJECT_TOOL_DESCRIPTION)),
-            input_schema: Arc::new(input_schema),
+            input_schema: Arc::new(object(input_schema)),
             output_schema: None,
             annotations: None,
         }
