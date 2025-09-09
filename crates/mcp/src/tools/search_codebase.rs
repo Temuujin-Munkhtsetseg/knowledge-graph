@@ -1,14 +1,14 @@
 use std::{borrow::Cow, sync::Arc};
 
 use database::querying::QueryLibrary;
-use rmcp::model::{CallToolResult, Content, ErrorCode, JsonObject, Tool};
-use serde_json::{Map, Value};
+use rmcp::model::{CallToolResult, Content, ErrorCode, Tool, object};
+use serde_json::{Map, Value, json};
 
 use crate::tools::types::KnowledgeGraphTool;
 use workspace_manager::WorkspaceManager;
 
 pub const SEARCH_CODEBASE_TOOL_NAME: &str = "search_codebase";
-const SEARCH_CODEBASE_TOOL_DESCRIPTION: &str = "Searches for specific text, functions, variables, or code across all files in the codebase. \
+const SEARCH_CODEBASE_TOOL_DESCRIPTION: &str = "Searches for specific classes, functions, variables, or code across all files in the codebase. \
 Use this to locate specific implementations, track dependencies, find usage examples, or identify all occurrences of a particular element.";
 
 pub struct SearchCodebaseTool {
@@ -34,61 +34,33 @@ impl KnowledgeGraphTool for SearchCodebaseTool {
     }
 
     fn to_mcp_tool(&self) -> Tool {
-        let mut properties = JsonObject::new();
-
-        let mut project_property = JsonObject::new();
-        project_property.insert("type".to_string(), Value::String("string".to_string()));
-        project_property.insert(
-            "description".to_string(),
-            Value::String("The absolutepath to current project directory.".to_string()),
-        );
-        properties.insert(
-            "project_absolute_path".to_string(),
-            Value::Object(project_property),
-        );
-
-        let mut search_term_property = JsonObject::new();
-
-        let mut search_term_items = JsonObject::new();
-        search_term_items.insert("type".to_string(), Value::String("string".to_string()));
-
-        search_term_property.insert("items".to_string(), Value::Object(search_term_items));
-        search_term_property.insert("type".to_string(), Value::String("array".to_string()));
-        search_term_property.insert(
-            "description".to_string(),
-            Value::String(
-                "The texts, function names, variable names, or patterns to search for".to_string(),
-            ),
-        );
-        properties.insert(
-            "search_terms".to_string(),
-            Value::Object(search_term_property),
-        );
-
-        let mut limit_property = JsonObject::new();
-        limit_property.insert("type".to_string(), Value::String("number".to_string()));
-        limit_property.insert(
-            "description".to_string(),
-            Value::String("The maximum number of results to return".to_string()),
-        );
-        limit_property.insert("default".to_string(), Value::Number(50.into()));
-        properties.insert("limit".to_string(), Value::Object(limit_property));
-
-        let mut input_schema = JsonObject::new();
-        input_schema.insert("type".to_string(), Value::String("object".to_string()));
-        input_schema.insert("properties".to_string(), Value::Object(properties));
-        input_schema.insert(
-            "required".to_string(),
-            Value::Array(vec![
-                Value::String("search_terms".to_string()),
-                Value::String("project_absolute_path".to_string()),
-            ]),
-        );
+        let input_schema = json!({
+            "type": "object",
+            "properties": json!({
+                "project_absolute_path": {
+                    "type": "string",
+                    "description": "The absolute path to the current project directory."
+                },
+                "search_terms": {
+                    "type": "array",
+                    "description": "The texts, function names, variable names, or patterns to search for",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "number",
+                    "description": "The maximum number of results to return",
+                    "default": 50
+                }
+            }),
+            "required": ["search_terms", "project_absolute_path"],
+        });
 
         Tool {
             name: Cow::Borrowed(SEARCH_CODEBASE_TOOL_NAME),
             description: Some(Cow::Borrowed(SEARCH_CODEBASE_TOOL_DESCRIPTION)),
-            input_schema: Arc::new(input_schema),
+            input_schema: Arc::new(object(input_schema)),
             output_schema: None,
             annotations: None,
         }
@@ -278,7 +250,7 @@ mod tests {
         let (workspace_manager, project_path) = create_test_workspace_manager();
         let tool = SearchCodebaseTool::new(Arc::new(mock_query_service), workspace_manager);
 
-        let mut params = JsonObject::new();
+        let mut params = Map::new();
         params.insert(
             "project_absolute_path".to_string(),
             Value::String(project_path),
@@ -387,7 +359,7 @@ mod tests {
         let (workspace_manager, project_path) = create_test_workspace_manager();
         let tool = SearchCodebaseTool::new(Arc::new(mock_query_service), workspace_manager);
 
-        let mut params = JsonObject::new();
+        let mut params = Map::new();
         params.insert(
             "project_absolute_path".to_string(),
             Value::String(project_path),
@@ -427,7 +399,7 @@ mod tests {
         let (workspace_manager, project_path) = create_test_workspace_manager();
         let tool = SearchCodebaseTool::new(Arc::new(mock_query_service), workspace_manager);
 
-        let mut params = JsonObject::new();
+        let mut params = Map::new();
         params.insert(
             "project_absolute_path".to_string(),
             Value::String(project_path),
@@ -531,7 +503,7 @@ mod tests {
         let (workspace_manager, project_path) = create_test_workspace_manager();
         let tool = SearchCodebaseTool::new(Arc::new(mock_query_service), workspace_manager);
 
-        let mut params = JsonObject::new();
+        let mut params = Map::new();
         params.insert(
             "project_absolute_path".to_string(),
             Value::String(project_path),
