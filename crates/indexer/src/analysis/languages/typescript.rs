@@ -219,6 +219,8 @@ impl TypeScriptAnalyzer {
                             imported_symbol_location: imported_symbol.location.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
                             definition_location: child_def.location.clone(),
+                            // FIXME: add source location for Typescript
+                            source_location: None,
                         },
                     );
                 }

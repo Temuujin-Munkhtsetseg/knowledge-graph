@@ -438,7 +438,7 @@ pub struct DefinitionRelationship {
     pub to_location: SourceLocation,
     /// Type of relationship (e.g., "MODULE_TO_CLASS", "CLASS_TO_METHOD", etc.)
     pub relationship_type: RelationshipType,
-    /// Optional call-site/source location for reference edges (e.g., Calls)
+    /// Optional location where definition is used (e.g., Call edges)
     pub source_location: Option<SourceLocation>,
 }
 
@@ -457,4 +457,6 @@ pub struct DefinitionImportedSymbolRelationship {
     pub relationship_type: RelationshipType,
     /// Definition location (foreign key to DefinitionNode.location)
     pub definition_location: SourceLocation,
+    /// Optional location where imported symbol is used (e.g., Call edges)
+    pub source_location: Option<SourceLocation>,
 }

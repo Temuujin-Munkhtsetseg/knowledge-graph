@@ -213,6 +213,8 @@ impl RustAnalyzer {
                             imported_symbol_location: imported_symbol.location.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
                             definition_location: definition_node.location.clone(),
+                            // FIXME: add source location for Rust
+                            source_location: None,
                         },
                     );
                 }

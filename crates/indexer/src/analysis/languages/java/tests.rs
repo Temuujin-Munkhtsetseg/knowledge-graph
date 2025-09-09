@@ -406,4 +406,36 @@ async fn test_java_call_relationship_has_location() {
         .expect("end_line");
     assert_eq!(start_line, 24);
     assert_eq!(end_line, 24);
+
+    // 3) com.example.app.Main.main -> new ArrayList<String>() (imported symbol java.util.ArrayList) on line 42 (0-based 41)
+    let query = format!(
+        "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:ImportedSymbolNode) \
+         WHERE 
+            source.fqn = 'com.example.app.Main.main' 
+            AND target.import_path = 'java.util' 
+            AND target.name = 'ArrayList' 
+            AND r.type = {} \
+         RETURN r.source_start_line, r.source_end_line",
+        calls_id
+    );
+    let result = conn.query(&query).expect("query ok");
+    let rows: Vec<_> = result.into_iter().collect();
+    assert!(!rows.is_empty(), "Expected ArrayList call row");
+    let row = &rows[0];
+    let start_line = row
+        .first()
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("start_line");
+    let end_line = row
+        .get(1)
+        .and_then(|v| match v {
+            kuzu::Value::Int32(x) => Some(*x),
+            _ => None,
+        })
+        .expect("end_line");
+    assert_eq!(start_line, 41);
+    assert_eq!(end_line, 41);
 }

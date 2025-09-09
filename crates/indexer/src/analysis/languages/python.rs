@@ -5,6 +5,7 @@ use crate::analysis::types::{
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
+use parser_core::python::types::PythonReferenceInfo;
 use parser_core::python::{
     fqn::python_fqn_to_string,
     types::{
@@ -158,6 +159,7 @@ impl PythonAnalyzer {
                             PythonTargetResolution::ImportedSymbol(target_import_info) => {
                                 self.add_imported_symbol_reference_relationship(
                                     &file_path,
+                                    reference,
                                     &source_definition,
                                     target_import_info,
                                     imported_symbol_map,
@@ -189,6 +191,7 @@ impl PythonAnalyzer {
                                 PythonTargetResolution::ImportedSymbol(target_import_info) => {
                                     self.add_imported_symbol_reference_relationship(
                                         &file_path,
+                                        reference,
                                         &source_definition,
                                         target_import_info,
                                         imported_symbol_map,
@@ -234,6 +237,8 @@ impl PythonAnalyzer {
                             imported_symbol_location: imported_symbol.location.clone(),
                             relationship_type: RelationshipType::DefinesImportedSymbol,
                             definition_location: child_def.location.clone(),
+                            // FIXME: add source location for Python imports
+                            source_location: None,
                         },
                     );
                 }
@@ -327,6 +332,7 @@ impl PythonAnalyzer {
     fn add_imported_symbol_reference_relationship(
         &self,
         file_path: &str,
+        reference: &PythonReferenceInfo,
         source_definition: &Option<DefinitionNode>,
         target_imported_symbol_info: &PythonImportedSymbolInfo,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
@@ -378,6 +384,15 @@ impl PythonAnalyzer {
                     RelationshipType::Calls
                 },
                 definition_location: source_definition.location.clone(),
+                source_location: Some(SourceLocation {
+                    file_path: file_path.to_string(),
+                    start_byte: reference.range.byte_offset.0 as i64,
+                    end_byte: reference.range.byte_offset.1 as i64,
+                    start_line: reference.range.start.line as i32,
+                    end_line: reference.range.end.line as i32,
+                    start_col: reference.range.start.column as i32,
+                    end_col: reference.range.end.column as i32,
+                }),
             };
             definition_imported_symbol_relationships.push(relationship);
         }
