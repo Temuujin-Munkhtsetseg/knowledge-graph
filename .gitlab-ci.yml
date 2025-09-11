@@ -6,10 +6,18 @@ stages:
   - prepare-release
   - build-release
   - release
-  
+
 variables:
   KUZU_VERSION: "0.11.1"
   GITLAB_XTASKS_VERSION: "1.3.0"
+  GCLOUD_PROJECT: gitlab-ci-runners-signing
+  SERVICE_ACCOUNT: gitlab-knowledge-graph-signer@gitlab-ci-runners-signing.iam.gserviceaccount.com
+  WI_POOL_PROVIDER: //iam.googleapis.com/projects/8522242139/locations/global/workloadIdentityPools/gitlab-pool-oidc-$CI_PROJECT_ID/providers/gitlab-jwt-$CI_PROJECT_ID
+
+include:
+  - project: "gitlab-com/gl-security/security-operations/infrastructure-security-public/oidc-modules"
+    ref: 3.3.0
+    file: templates/gcp_auth.yaml
 
 .install-gitlab-xtasks: &install-gitlab-xtasks |
     cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v${GITLAB_XTASKS_VERSION} --force
@@ -446,6 +454,28 @@ build:windows-x86_64:
     expire_in: 7 days
   timeout: 2h
 
+build:code-sign:
+  image: ${CI_REGISTRY}/gitlab-com/gl-infra/common-ci-tasks-images/code-signer:1.1.0
+  extends: .google-oidc:auth
+  stage: build-release
+  needs:
+    - build:windows-x86_64
+  script:
+    - |
+      if [[ "$CI_SERVER_HOST" == "gitlab.com" &&
+            "$CI_PROJECT_PATH" == "gitlab-org/rust/knowledge-graph" &&
+            -n "$CI_COMMIT_TAG" ]] || [[ "$FORCE_CODE_SIGN" == "true" ]]; then
+        echo "Signing binaries..."
+        ./scripts/sign-and-repackage.sh ./gkg-windows-x86_64.tar.gz windows
+      else
+        echo "Not signing binaries"
+      fi
+  artifacts:
+    paths:
+      - ./gkg-windows-x86_64.tar.gz
+    expire_in: 7 days
+  timeout: 2h
+
 release:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
   stage: release
@@ -454,7 +484,7 @@ release:
     - build:linux-x86_64-gnu
     - build:darwin-aarch64
     - build:darwin-x86_64
-    - build:windows-x86_64
+    - build:code-sign
     - cargo-update
   before_script:
     # Use the new Cargo.lock from cargo-update step
