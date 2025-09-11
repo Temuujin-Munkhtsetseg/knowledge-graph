@@ -545,4 +545,5 @@ pub struct RelationshipCounts {
     pub directory_relationships: u32,
     pub file_relationships: u32,
     pub definition_relationships: u32,
+    pub imported_symbol_relationships: u32,
 }

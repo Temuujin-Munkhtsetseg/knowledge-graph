@@ -38,20 +38,30 @@ fn handle_statistics_output(
             workspace_stats.total_definitions
         );
         info!(
+            "  - Total Imported Symbols: {}",
+            workspace_stats.total_imported_symbols
+        );
+        info!(
             "  - Total Definition Relationships: {}",
             workspace_stats.total_definition_relationships
+        );
+        info!(
+            "  - Total Imported Symbol Relationships: {}",
+            workspace_stats.total_imported_symbol_relationships
         );
 
         if !workspace_stats.projects.is_empty() {
             info!("Project Timing:");
             for project in &workspace_stats.projects {
                 info!(
-                    "  - {}: {:.2}s ({} files, {} definitions, {} def relationships)",
+                    "  - {}: {:.2}s ({} files, {} definitions, {} imported symbols, {} def relationships, {} imp relationships)",
                     project.project_name,
                     project.indexing_duration_seconds,
                     project.total_files,
                     project.total_definitions,
-                    project.total_definition_relationships
+                    project.total_imported_symbols,
+                    project.total_definition_relationships,
+                    project.total_imported_symbol_relationships
                 );
             }
         }

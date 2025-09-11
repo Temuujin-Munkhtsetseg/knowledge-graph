@@ -5,7 +5,8 @@ pub mod types;
 use crate::analysis::types::{
     DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DirectoryNode,
     DirectoryRelationship, FileDefinitionRelationship, FileImportedSymbolRelationship, FileNode,
-    FqnType, GraphData, ImportedSymbolNode,
+    FqnType, GraphData, ImportedSymbolDefinitionRelationship, ImportedSymbolFileRelationship,
+    ImportedSymbolImportedSymbolRelationship, ImportedSymbolNode, OptimizedFileTree,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
@@ -92,6 +93,14 @@ impl AnalysisService {
         let mut definition_imported_symbol_relationships: Vec<
             DefinitionImportedSymbolRelationship,
         > = Vec::new();
+        let mut imported_symbol_imported_symbol_relationships: Vec<
+            ImportedSymbolImportedSymbolRelationship,
+        > = Vec::new();
+        let mut imported_symbol_definition_relationships: Vec<
+            ImportedSymbolDefinitionRelationship,
+        > = Vec::new();
+        let mut imported_symbol_file_relationships: Vec<ImportedSymbolFileRelationship> =
+            Vec::new();
 
         // TODO: Deprecate these. Can make directory_nodes and directory_relationships HashMaps.
         let mut created_directories = HashSet::new();
@@ -110,6 +119,7 @@ impl AnalysisService {
                     .initialize_resolver(estimated_definitions, estimated_scopes);
             }
 
+            let mut file_paths = Vec::new();
             for file_result in &results {
                 self.extract_file_system_entities(
                     file_result,
@@ -127,6 +137,10 @@ impl AnalysisService {
                     &mut definition_imported_symbol_relationships,
                     &mut file_definition_relationships,
                     &mut file_imported_symbol_relationships,
+                );
+                file_paths.push(
+                    self.filesystem_analyzer
+                        .get_relative_path(&file_result.file_path),
                 );
             }
 
@@ -163,7 +177,17 @@ impl AnalysisService {
                 }
             }
 
-            self.add_relationships(
+            let file_tree = OptimizedFileTree::new(file_paths);
+            self.add_interfile_relationships(
+                language,
+                file_tree,
+                &mut definition_map,
+                &mut imported_symbol_map,
+                &mut imported_symbol_imported_symbol_relationships,
+                &mut imported_symbol_definition_relationships,
+                &mut imported_symbol_file_relationships,
+            );
+            self.add_intrafile_relationships(
                 language,
                 definition_map,
                 imported_symbol_map,
@@ -187,6 +211,9 @@ impl AnalysisService {
                 + file_imported_symbol_relationships.len()
                 + definition_relationships.len()
                 + definition_imported_symbol_relationships.len()
+                + imported_symbol_imported_symbol_relationships.len()
+                + imported_symbol_definition_relationships.len()
+                + imported_symbol_file_relationships.len()
         );
 
         Ok(GraphData {
@@ -199,6 +226,9 @@ impl AnalysisService {
             file_definition_relationships,
             definition_relationships,
             definition_imported_symbol_relationships,
+            imported_symbol_imported_symbol_relationships,
+            imported_symbol_definition_relationships,
+            imported_symbol_file_relationships,
         })
     }
 
@@ -411,7 +441,7 @@ impl AnalysisService {
         );
     }
 
-    fn add_relationships(
+    fn add_intrafile_relationships(
         &self,
         language: SupportedLanguage,
         definition_map: HashMap<(String, String), (DefinitionNode, FqnType)>,
@@ -460,6 +490,34 @@ impl AnalysisService {
                     definition_imported_symbol_relationships,
                 );
             }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_interfile_relationships(
+        &mut self,
+        language: SupportedLanguage,
+        file_tree: OptimizedFileTree,
+        definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        imported_symbol_imported_symbol_relationships: &mut Vec<
+            ImportedSymbolImportedSymbolRelationship,
+        >,
+        imported_symbol_definition_relationships: &mut Vec<ImportedSymbolDefinitionRelationship>,
+        imported_symbol_file_relationships: &mut Vec<ImportedSymbolFileRelationship>,
+    ) {
+        if language == SupportedLanguage::Python {
+            // Finds the origin of each imported symbol, if it's local
+            self.python_analyzer.resolve_imported_symbols(
+                imported_symbol_map,
+                definition_map,
+                &file_tree,
+                imported_symbol_imported_symbol_relationships,
+                imported_symbol_definition_relationships,
+                imported_symbol_file_relationships,
+            );
+
+            // TODO: Handle references to imported symbols
         }
     }
 }

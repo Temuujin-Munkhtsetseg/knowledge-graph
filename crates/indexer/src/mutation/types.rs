@@ -21,4 +21,7 @@ pub struct ConsolidatedRelationships {
     pub file_to_imported_symbol: Vec<ConsolidatedRelationship>,
     pub definition_to_definition: Vec<ConsolidatedRelationship>,
     pub definition_to_imported_symbol: Vec<ConsolidatedRelationship>,
+    pub imported_symbol_to_imported_symbol: Vec<ConsolidatedRelationship>,
+    pub imported_symbol_to_definition: Vec<ConsolidatedRelationship>,
+    pub imported_symbol_to_file: Vec<ConsolidatedRelationship>,
 }

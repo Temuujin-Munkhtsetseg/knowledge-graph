@@ -417,6 +417,11 @@ impl RepositoryIndexer {
                 + graph_data.file_imported_symbol_relationships.len()
                 + graph_data.definition_relationships.len()
                 + graph_data.definition_imported_symbol_relationships.len()
+                + graph_data
+                    .imported_symbol_imported_symbol_relationships
+                    .len()
+                + graph_data.imported_symbol_definition_relationships.len()
+                + graph_data.imported_symbol_file_relationships.len()
         );
 
         let writer_service = WriterService::new(output_directory).map_err(|e| {

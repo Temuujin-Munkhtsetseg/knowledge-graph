@@ -38,6 +38,7 @@ pub struct WriterResult {
     pub total_file_imported_symbol_relationships: usize,
     pub total_definition_relationships: usize,
     pub total_definition_imported_symbol_relationships: usize,
+    pub total_imported_symbol_relationships: usize,
     pub writing_duration: Duration,
 }
 
@@ -236,6 +237,18 @@ impl WriterService {
                     ("DefinitionNode", "ImportedSymbolNode") => {
                         (&relationships.definition_to_imported_symbol, &filename)
                     }
+                    // Write imported-to-imported-symbol relationships
+                    ("ImportedSymbolNode", "ImportedSymbolNode") => {
+                        (&relationships.imported_symbol_to_imported_symbol, &filename)
+                    }
+                    // Write imported-to-definition relationships
+                    ("ImportedSymbolNode", "DefinitionNode") => {
+                        (&relationships.imported_symbol_to_definition, &filename)
+                    }
+                    // Write imported-to-file relationships
+                    ("ImportedSymbolNode", "FileNode") => {
+                        (&relationships.imported_symbol_to_file, &filename)
+                    }
                     _ => (&Vec::new(), &filename),
                 };
 
@@ -280,6 +293,9 @@ impl WriterService {
             total_definition_imported_symbol_relationships: relationships
                 .definition_to_imported_symbol
                 .len(),
+            total_imported_symbol_relationships: relationships.imported_symbol_to_definition.len()
+                + relationships.imported_symbol_to_imported_symbol.len()
+                + relationships.imported_symbol_to_file.len(),
             writing_duration,
         })
     }
@@ -460,8 +476,8 @@ impl WriterResult {
             self.total_definition_relationships
         ));
         result.push_str(&format!(
-            "  • Definition-imported-symbol relationships: {}\n",
-            self.total_definition_imported_symbol_relationships
+            "  • Imported symbol relationships: {}\n",
+            self.total_imported_symbol_relationships
         ));
 
         if !self.files_written.is_empty() {

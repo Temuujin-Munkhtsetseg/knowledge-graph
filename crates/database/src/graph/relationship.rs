@@ -115,6 +115,13 @@ pub enum RelationshipType {
     AmbiguouslyCalls,
     #[strum(serialize = "PROPERTY_REFERENCE")]
     PropertyReference,
+    // Imported symbol relationships
+    #[strum(serialize = "IMPORTED_SYMBOL_TO_IMPORTED_SYMBOL")]
+    ImportedSymbolToImportedSymbol,
+    #[strum(serialize = "IMPORTED_SYMBOL_TO_DEFINITION")]
+    ImportedSymbolToDefinition,
+    #[strum(serialize = "IMPORTED_SYMBOL_TO_FILE")]
+    ImportedSymbolToFile,
 }
 
 impl RelationshipType {

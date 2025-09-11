@@ -79,8 +79,9 @@ pub fn finalize_project_statistics(
         project_path,
         total_files: writer_result.total_files,
         total_definitions: writer_result.total_definitions,
+        total_imported_symbols: writer_result.total_imported_symbols,
         total_definition_relationships: writer_result.total_definition_relationships,
-
+        total_imported_symbol_relationships: writer_result.total_imported_symbol_relationships,
         languages: language_statistics,
         indexing_duration_seconds: duration.as_secs_f64(),
     }
@@ -108,7 +109,9 @@ pub struct ProjectStatistics {
     pub project_path: String,
     pub total_files: usize,
     pub total_definitions: usize,
+    pub total_imported_symbols: usize,
     pub total_definition_relationships: usize,
+    pub total_imported_symbol_relationships: usize,
 
     pub languages: Vec<LanguageStatistics>,
     pub indexing_duration_seconds: f64,
@@ -120,7 +123,9 @@ pub struct WorkspaceStatistics {
     pub total_projects: usize,
     pub total_files: usize,
     pub total_definitions: usize,
+    pub total_imported_symbols: usize,
     pub total_definition_relationships: usize,
+    pub total_imported_symbol_relationships: usize,
 
     pub total_languages: HashMap<String, LanguageSummary>,
     pub projects: Vec<ProjectStatistics>,
@@ -145,7 +150,9 @@ impl WorkspaceStatistics {
             total_projects: 0,
             total_files: 0,
             total_definitions: 0,
+            total_imported_symbols: 0,
             total_definition_relationships: 0,
+            total_imported_symbol_relationships: 0,
 
             total_languages: HashMap::new(),
             projects: Vec::new(),
@@ -155,7 +162,10 @@ impl WorkspaceStatistics {
     pub fn add_project(&mut self, project_stats: ProjectStatistics) {
         self.total_files += project_stats.total_files;
         self.total_definitions += project_stats.total_definitions;
+        self.total_imported_symbols += project_stats.total_imported_symbols;
         self.total_definition_relationships += project_stats.total_definition_relationships;
+        self.total_imported_symbol_relationships +=
+            project_stats.total_imported_symbol_relationships;
 
         for lang_stats in &project_stats.languages {
             let lang_summary = self
