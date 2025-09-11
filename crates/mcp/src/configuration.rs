@@ -8,11 +8,27 @@ use std::path::{MAIN_SEPARATOR, PathBuf};
 
 use crate::MCP_NAME;
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum ApprovedTools {
+    Bool(bool),
+    Array(Vec<String>),
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum McpServer {
-    Url { url: String },
-    Command { command: String, args: Vec<String> },
+    Url {
+        url: String,
+        #[serde(rename = "approvedTools", skip_serializing_if = "Option::is_none")]
+        approved_tools: Option<ApprovedTools>,
+    },
+    Command {
+        command: String,
+        args: Vec<String>,
+        #[serde(rename = "approvedTools", skip_serializing_if = "Option::is_none")]
+        approved_tools: Option<ApprovedTools>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -64,16 +80,38 @@ impl McpConfig {
 // Helper function that adds the local HTTP server to the MCP configuration.
 pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) -> Result<()> {
     let expanded_path = naively_expand_shell_path(mcp_config_path)?;
-    let config = McpConfig::get_or_create(expanded_path)?;
+    let mut config = McpConfig::get_or_create(expanded_path)?;
 
     let server_url = format!("http://localhost:{port}/mcp");
-    if let Some(McpServer::Url { url }) = config.mcp_servers.get(MCP_NAME)
-        && url.as_str() == server_url
+
+    // Check if knowledge graph server already exists
+    if let Some(McpServer::Url {
+        url,
+        approved_tools,
+    }) = config.mcp_servers.get(MCP_NAME)
     {
-        return Ok(());
+        // If URL matches and approvedTools already exists (any value), nothing to do
+        if url.as_str() == server_url && approved_tools.is_some() {
+            return Ok(());
+        }
+
+        // If URL matches but approvedTools is missing, add it
+        if url.as_str() == server_url {
+            let server = McpServer::Url {
+                url: url.clone(),
+                approved_tools: Some(ApprovedTools::Bool(true)),
+            };
+            config.mcp_servers.insert(MCP_NAME.to_string(), server);
+            config.save()?;
+            return Ok(());
+        }
     }
 
-    let server = McpServer::Url { url: server_url };
+    // Server doesn't exist or URL doesn't match, create/update it
+    let server = McpServer::Url {
+        url: server_url,
+        approved_tools: Some(ApprovedTools::Bool(true)),
+    };
     config.add_server(MCP_NAME.to_string(), server).save()?;
 
     Ok(())
@@ -175,6 +213,7 @@ mod tests {
                 McpServer::Command {
                     command: "gitlab".to_string(),
                     args: vec!["mcp".to_string(), "server".to_string()],
+                    approved_tools: None,
                 },
             )
             .save()
@@ -232,12 +271,12 @@ mod tests {
     }
 
     #[test]
-    fn test_does_not_update_file_if_server_url_has_not_changed() {
+    fn test_updates_file_to_add_approved_tools_if_missing() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mcp_config_path = temp_dir.path().join("mcp.json");
         let port = 8080;
 
-        // Create an existing config file with non-pretty json formatting
+        // Create an existing config file with non-pretty json formatting (missing approvedTools)
         fs::write(
             mcp_config_path.clone(),
             "{\"mcpServers\":{\"knowledge-graph\":{\"url\":\"http://localhost:8080/mcp\"}}}",
@@ -246,12 +285,44 @@ mod tests {
 
         add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
 
-        // Validate the file has not been saved by checking the content is not changed
+        // Validate the file has been updated to include approvedTools: true
         let content = fs::read_to_string(mcp_config_path.clone()).unwrap();
-        assert_eq!(
-            content,
-            "{\"mcpServers\":{\"knowledge-graph\":{\"url\":\"http://localhost:8080/mcp\"}}}"
-        );
+        let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let approved = &json["mcpServers"][MCP_NAME]["approvedTools"];
+        assert_eq!(approved.as_bool(), Some(true));
+
+        temp_dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_does_not_update_file_if_approved_tools_already_true() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mcp_config_path = temp_dir.path().join("mcp.json");
+        let port = 8080;
+
+        // Create an existing config file with approvedTools already set to true
+        let original_content = r#"{
+  "mcpServers": {
+    "knowledge-graph": {
+      "url": "http://localhost:8080/mcp",
+      "approvedTools": true
+    }
+  }
+}"#;
+        fs::write(mcp_config_path.clone(), original_content).unwrap();
+
+        // Get original modification time
+        let original_modified = fs::metadata(&mcp_config_path).unwrap().modified().unwrap();
+
+        // Small delay to ensure modification time would change if file was written
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
+
+        // Check that file was not modified (modification time should be the same)
+        let new_modified = fs::metadata(&mcp_config_path).unwrap().modified().unwrap();
+        assert_eq!(original_modified, new_modified);
 
         temp_dir.close().unwrap();
     }
@@ -307,8 +378,158 @@ mod tests {
 
     fn check_http_server_is_added_to_existing_config(server: &McpServer, port: u16) {
         match server {
-            McpServer::Url { url } => assert_eq!(*url, format!("http://localhost:{port}/mcp")),
+            McpServer::Url { url, .. } => {
+                assert_eq!(*url, format!("http://localhost:{port}/mcp"))
+            }
             _ => panic!("Expected URL server"),
         }
+    }
+
+    #[test]
+    fn test_serializes_approved_tools_as_camel_case() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mcp_config_path = temp_dir.path().join("mcp.json");
+
+        add_local_http_server_to_mcp_config(mcp_config_path.clone(), 9090).unwrap();
+
+        let content = fs::read_to_string(mcp_config_path.clone()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let approved = &json["mcpServers"][MCP_NAME]["approvedTools"];
+        assert_eq!(approved.as_bool(), Some(true));
+
+        temp_dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_approved_tools_array_format() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mcp_config_path = temp_dir.path().join("mcp.json");
+
+        // Create config with array format approvedTools
+        let fixture_json = r#"{
+            "mcpServers": {
+                "test-server": {
+                    "url": "https://example.com/mcp",
+                    "approvedTools": ["tool1", "tool2"]
+                }
+            }
+        }"#;
+        fs::write(mcp_config_path.clone(), fixture_json).unwrap();
+
+        let content = fs::read_to_string(mcp_config_path.clone()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let approved = &json["mcpServers"]["test-server"]["approvedTools"];
+        let array = approved.as_array().unwrap();
+        assert_eq!(array.len(), 2);
+        assert_eq!(array[0].as_str(), Some("tool1"));
+        assert_eq!(array[1].as_str(), Some("tool2"));
+
+        temp_dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_existing_other_server_is_unaffected() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mcp_config_path = temp_dir.path().join("mcp.json");
+
+        let fixture_json = r#"{
+            "mcpServers": {
+                "gitlab": {
+                    "command": "gitlab",
+                    "args": ["mcp", "server"],
+                    "approvedTools": true
+                },
+                "atlassian": {
+                    "url": "https://mcp.atlassian.com/v1/sse",
+                    "approvedTools": ["tool-name-here"]
+                }
+            }
+        }"#;
+        fs::write(mcp_config_path.clone(), fixture_json).unwrap();
+
+        let before_json: serde_json::Value = serde_json::from_str(fixture_json).unwrap();
+        let before_gitlab = before_json["mcpServers"]["gitlab"].clone();
+        let before_atlassian = before_json["mcpServers"]["atlassian"].clone();
+
+        add_local_http_server_to_mcp_config(mcp_config_path.clone(), 8080).unwrap();
+
+        let after_content = fs::read_to_string(mcp_config_path.clone()).unwrap();
+        let after_json: serde_json::Value = serde_json::from_str(&after_content).unwrap();
+        let after_gitlab = after_json["mcpServers"]["gitlab"].clone();
+        let after_atlassian = after_json["mcpServers"]["atlassian"].clone();
+
+        assert_eq!(before_gitlab, after_gitlab);
+        assert_eq!(before_atlassian, after_atlassian);
+
+        temp_dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_does_not_change_existing_approved_tools() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mcp_config_path = temp_dir.path().join("mcp.json");
+        let port = 8080;
+        let server_url = format!("http://localhost:{port}/mcp");
+
+        // Create config with knowledge graph server that has approvedTools set to false
+        let fixture_json = format!(
+            r#"{{
+            "mcpServers": {{
+                "{}": {{
+                    "url": "{}",
+                    "approvedTools": false
+                }}
+            }}
+        }}"#,
+            MCP_NAME, server_url
+        );
+        fs::write(mcp_config_path.clone(), fixture_json).unwrap();
+
+        // Add/update the local server (should NOT change existing approvedTools)
+        add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
+
+        // Verify approvedTools remains false (unchanged)
+        let content = fs::read_to_string(mcp_config_path.clone()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let approved = &json["mcpServers"][MCP_NAME]["approvedTools"];
+        assert_eq!(approved.as_bool(), Some(false)); // Should remain false
+
+        temp_dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_adds_approved_tools_when_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mcp_config_path = temp_dir.path().join("mcp.json");
+        let port = 8080;
+        let server_url = format!("http://localhost:{port}/mcp");
+
+        // Create config with knowledge graph server missing approvedTools entirely
+        let fixture_json = format!(
+            r#"{{
+            "mcpServers": {{
+                "{}": {{
+                    "url": "{}"
+                }}
+            }}
+        }}"#,
+            MCP_NAME, server_url
+        );
+        fs::write(mcp_config_path.clone(), fixture_json).unwrap();
+
+        // Add/update the local server (should add approvedTools: true)
+        add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
+
+        // Verify approvedTools was added as true
+        let content = fs::read_to_string(mcp_config_path.clone()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let approved = &json["mcpServers"][MCP_NAME]["approvedTools"];
+        assert_eq!(approved.as_bool(), Some(true));
+
+        temp_dir.close().unwrap();
     }
 }
