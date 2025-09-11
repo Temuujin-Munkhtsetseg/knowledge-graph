@@ -275,9 +275,9 @@ mod tests {
         let schema_manager = SchemaManager::new(&database);
         schema_manager.initialize_schema()?;
         let stats = schema_manager.get_schema_stats().unwrap();
-        assert_eq!(stats.total_tables, 7);
+        assert_eq!(stats.total_tables, 8);
         assert_eq!(stats.node_tables, 4);
-        assert_eq!(stats.relationship_tables, 3);
+        assert_eq!(stats.relationship_tables, 4);
         assert_eq!(stats.total_nodes, 0);
         assert_eq!(stats.total_relationships, 0);
         println!("{}", stats);

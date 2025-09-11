@@ -509,6 +509,118 @@ impl<'a> GraphMapper<'a> {
                 });
         }
 
+        // Process definition-to-imported-symbol relationships
+        for import_rel in &graph_data.imported_symbol_definition_relationships {
+            let Some(source_id) = id_generator.get_imported_symbol_id(&import_rel.source_location)
+            else {
+                debug!(
+                    "(IMPORT_DEFINITION_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
+                    import_rel.source_location
+                );
+                continue;
+            };
+
+            let Some(target_id) = id_generator.get_definition_id(
+                &import_rel.target_location.file_path,
+                &import_rel.target_location.to_range(),
+            ) else {
+                warn!(
+                    "(IMPORT_DEFINITION_RELATIONSHIPS) Target definition ID not found: {:?}",
+                    import_rel.target_location
+                );
+                continue;
+            };
+
+            let relationship_type = relationship_mapping.get_type_id(import_rel.relationship_type);
+
+            relationships
+                .imported_symbol_to_definition
+                .push(ConsolidatedRelationship {
+                    source_id: Some(source_id),
+                    target_id: Some(target_id),
+                    relationship_type,
+                    start_byte: None,
+                    end_byte: None,
+                    start_line: None,
+                    end_line: None,
+                    start_column: None,
+                    end_column: None,
+                });
+        }
+
+        // Process imported-symbol-to-imported-symbol relationships
+        for import_rel in &graph_data.imported_symbol_imported_symbol_relationships {
+            let Some(source_id) = id_generator.get_imported_symbol_id(&import_rel.source_location)
+            else {
+                debug!(
+                    "(IMPORT_IMPORT_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
+                    import_rel.source_location
+                );
+                continue;
+            };
+
+            let Some(target_id) = id_generator.get_imported_symbol_id(&import_rel.target_location)
+            else {
+                warn!(
+                    "(IMPORT_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
+                    import_rel.target_location
+                );
+                continue;
+            };
+
+            let relationship_type = relationship_mapping.get_type_id(import_rel.relationship_type);
+
+            relationships
+                .imported_symbol_to_imported_symbol
+                .push(ConsolidatedRelationship {
+                    source_id: Some(source_id),
+                    target_id: Some(target_id),
+                    relationship_type,
+                    start_byte: None,
+                    end_byte: None,
+                    start_line: None,
+                    end_line: None,
+                    start_column: None,
+                    end_column: None,
+                });
+        }
+
+        // Process imported-symbol-to-file relationships
+        for import_rel in &graph_data.imported_symbol_file_relationships {
+            let Some(source_id) = id_generator.get_imported_symbol_id(&import_rel.source_location)
+            else {
+                debug!(
+                    "(IMPORT_FILE_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
+                    import_rel.source_location
+                );
+                continue;
+            };
+
+            let Some(target_id) = id_generator.get_file_id(&import_rel.target_location) else {
+                warn!(
+                    "(IMPORT_FILE_RELATIONSHIPS) Target file ID not found: {:?}",
+                    import_rel.target_location
+                );
+                continue;
+            };
+
+            let relationship_type = relationship_mapping.get_type_id(import_rel.relationship_type);
+
+            relationships
+                .imported_symbol_to_file
+                .push(ConsolidatedRelationship {
+                    source_id: Some(source_id),
+                    target_id: Some(target_id),
+                    relationship_type,
+                    start_byte: None,
+                    end_byte: None,
+                    start_line: None,
+                    end_line: None,
+                    start_column: None,
+                    end_column: None,
+                });
+        }
+
         info!(
             "Consolidated relationships: dir_not_found: {}, file_not_found: {}, def_not_found: {}, import_not_found: {}",
             dir_not_found, file_not_found, def_not_found, import_not_found

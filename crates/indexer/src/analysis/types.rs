@@ -1,3 +1,8 @@
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
+
 use database::graph::RelationshipType;
 use database::schema::types::NodeFieldAccess;
 use parser_core::{
@@ -35,6 +40,13 @@ pub struct GraphData {
     pub definition_relationships: Vec<DefinitionRelationship>,
     /// Definition-to-imported-symbol relationships to be written to definition_imported_symbol_relationships.parquet
     pub definition_imported_symbol_relationships: Vec<DefinitionImportedSymbolRelationship>,
+    /// Imported symbol-to-imported symbol relationships to be written to imported_symbol_imported_symbol_relationships.parquet
+    pub imported_symbol_imported_symbol_relationships:
+        Vec<ImportedSymbolImportedSymbolRelationship>,
+    /// Imported symbol-to-definition relationships to be written to imported_symbol_definition_relationships.parquet
+    pub imported_symbol_definition_relationships: Vec<ImportedSymbolDefinitionRelationship>,
+    /// Imported symbol-to-file relationships to be written to imported_symbol_file_relationships.parquet
+    pub imported_symbol_file_relationships: Vec<ImportedSymbolFileRelationship>,
 }
 
 /// Represents a directory node in the graph
@@ -459,4 +471,110 @@ pub struct DefinitionImportedSymbolRelationship {
     pub definition_location: SourceLocation,
     /// Optional location where imported symbol is used (e.g., Call edges)
     pub source_location: Option<SourceLocation>,
+}
+
+/// Represents a relationship between an imported symbol and another imported symbol
+/// (i.e. when an imported symbol is imported by another imported symbol,
+/// `from module import foo` -> `from other_module import stuff as foo`)
+#[derive(Debug, Clone)]
+pub struct ImportedSymbolImportedSymbolRelationship {
+    pub source_location: ImportedSymbolLocation,
+    pub target_location: ImportedSymbolLocation,
+    pub relationship_type: RelationshipType,
+}
+
+/// Represents a relationship between an imported symbol and a definition
+/// (i.e. when a definition is imported, `from module import foo` -> `def foo(): ...`)
+#[derive(Debug, Clone)]
+pub struct ImportedSymbolDefinitionRelationship {
+    pub source_location: ImportedSymbolLocation,
+    pub target_location: SourceLocation,
+    pub relationship_type: RelationshipType,
+}
+
+/// Represents a relationship between an imported symbol and a file
+/// (i.e. when a module is imported, `import my.module` -> `File("my/module.py")`)
+#[derive(Debug, Clone)]
+pub struct ImportedSymbolFileRelationship {
+    pub source_location: ImportedSymbolLocation,
+    pub target_location: String,
+    pub relationship_type: RelationshipType,
+}
+
+/// Optimized file tree structure for fast lookups
+#[derive(Debug, Clone)]
+pub struct OptimizedFileTree {
+    /// File paths
+    normalized_files: HashMap<String, String>, // Normalized file path -> Original file path
+    /// Precomputed root directories
+    root_dirs: HashSet<PathBuf>,
+    /// Directory structure for efficient path operations
+    dirs: HashSet<PathBuf>,
+}
+
+impl OptimizedFileTree {
+    pub fn new(files: Vec<String>) -> Self {
+        let mut dirs = HashSet::new();
+        let mut normalized_files = HashMap::new();
+
+        // Precompute normalized files and directory structure
+        for file_path in &files {
+            normalized_files.insert(file_path.to_lowercase(), file_path.clone());
+
+            let path = Path::new(file_path);
+            if let Some(parent) = path.parent() {
+                dirs.insert(parent.to_path_buf());
+            }
+        }
+
+        // Precompute root directories
+        let root_dirs = Self::compute_root_dirs(&normalized_files, &dirs);
+
+        Self {
+            normalized_files,
+            root_dirs,
+            dirs,
+        }
+    }
+
+    fn compute_root_dirs(
+        files: &HashMap<String, String>,
+        dirs: &HashSet<PathBuf>,
+    ) -> HashSet<PathBuf> {
+        let mut root_dirs = HashSet::new();
+
+        // Find the most common root directory (shortest path)
+        if let Some(common_root) = dirs.iter().min_by_key(|p| p.as_os_str().len()) {
+            root_dirs.insert(common_root.clone());
+        }
+
+        // Look for directories that might be package roots (contain __init__.py)
+        for (file_path, norm_file_path) in files {
+            if norm_file_path.ends_with("__init__.py") {
+                let path = Path::new(file_path);
+                if let Some(package_dir) = path.parent()
+                    && let Some(package_parent) = package_dir.parent()
+                {
+                    root_dirs.insert(package_parent.to_path_buf());
+                }
+            }
+        }
+
+        root_dirs
+    }
+
+    /// Get the original file path if it exists (case-insensitive)
+    pub fn get_denormalized_file(&self, norm_file_path: &str) -> Option<&String> {
+        self.normalized_files.get(norm_file_path)
+    }
+
+    /// Get root directories
+    pub fn get_root_dirs(&self) -> &HashSet<PathBuf> {
+        &self.root_dirs
+    }
+
+    /// Get all directories
+    pub fn get_dirs(&self) -> &HashSet<PathBuf> {
+        &self.dirs
+    }
 }

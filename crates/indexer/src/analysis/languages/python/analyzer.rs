@@ -1,10 +1,14 @@
+use crate::analysis::languages::python::interfile::get_possible_symbol_locations;
 use crate::analysis::types::{
     DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DefinitionType,
     FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-    ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
+    ImportType, ImportedSymbolDefinitionRelationship, ImportedSymbolFileRelationship,
+    ImportedSymbolImportedSymbolRelationship, ImportedSymbolLocation, ImportedSymbolNode,
+    OptimizedFileTree, SourceLocation,
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
+use parser_core::python::types::PythonImportType;
 use parser_core::python::types::PythonReferenceInfo;
 use parser_core::python::{
     fqn::python_fqn_to_string,
@@ -210,6 +214,142 @@ impl PythonAnalyzer {
                     ReferenceTarget::Unresolved() => {
                         // Ignoring until we do phase 3
                         continue;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn resolve_imported_symbols(
+        &self,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        file_tree: &OptimizedFileTree,
+        imported_symbol_imported_symbol_relationships: &mut Vec<
+            ImportedSymbolImportedSymbolRelationship,
+        >,
+        imported_symbol_definition_relationships: &mut Vec<ImportedSymbolDefinitionRelationship>,
+        imported_symbol_file_relationships: &mut Vec<ImportedSymbolFileRelationship>,
+    ) {
+        for ((_imported_symbol_fqn_string, _imported_symbol_file_path), imported_symbol_nodes) in
+            imported_symbol_map
+        {
+            for imported_symbol_node in imported_symbol_nodes {
+                if let ImportType::Python(import_type) = imported_symbol_node.import_type {
+                    let possible_files = get_possible_symbol_locations(
+                        imported_symbol_node,
+                        file_tree,
+                        definition_map,
+                    );
+
+                    match import_type {
+                        PythonImportType::FutureImport | PythonImportType::AliasedFutureImport => {}
+                        PythonImportType::Import | PythonImportType::AliasedImport => {
+                            // NOTE: For now, we are ignoring other possible files because it's very unlikely that there will
+                            // be more than one
+                            if let Some(possible_file) = possible_files.first() {
+                                let relationship = ImportedSymbolFileRelationship {
+                                    source_location: imported_symbol_node.location.clone(),
+                                    target_location: possible_file.clone(),
+                                    relationship_type: RelationshipType::ImportedSymbolToFile,
+                                };
+                                imported_symbol_file_relationships.push(relationship);
+                            }
+                        }
+                        PythonImportType::WildcardImport
+                        | PythonImportType::RelativeWildcardImport => {
+                            // TODO: We should preserve all *possible* relationships instead of only the first. When we attempt to resolve
+                            // unresolved or partial resolutions, we will need to explore all possible files for a symbol.
+                            let first_possible_file = possible_files.first();
+                            if let Some(first_possible_file) = first_possible_file {
+                                let relationship = ImportedSymbolFileRelationship {
+                                    source_location: imported_symbol_node.location.clone(),
+                                    target_location: first_possible_file.clone(),
+                                    relationship_type: RelationshipType::ImportedSymbolToFile,
+                                };
+                                imported_symbol_file_relationships.push(relationship);
+                            }
+                        }
+                        // From imports (`from A import B`, `from A import B as C`, `from . import A`, `from . import *`)
+                        _ => {
+                            if let Some(name) = imported_symbol_node
+                                .identifier
+                                .as_ref()
+                                .map(|identifier| identifier.name.clone())
+                            {
+                                for possible_file in possible_files {
+                                    // Get matching definition and imported symbol (if either exist)
+                                    let matched_definition_node = definition_map
+                                        .get(&(name.clone(), possible_file.clone()))
+                                        .map(|(definition_node, _)| definition_node.clone());
+                                    let matched_imported_symbol_node =
+                                        if let Some(imported_symbol_nodes) = imported_symbol_map
+                                            .get(&("".to_string(), possible_file.clone()))
+                                        {
+                                            imported_symbol_nodes
+                                                .iter()
+                                                .filter(|node| {
+                                                    if let Some(identifier) = &node.identifier {
+                                                        if let Some(alias) = &identifier.alias {
+                                                            alias == &name
+                                                        } else {
+                                                            identifier.name == name
+                                                        }
+                                                    } else {
+                                                        false
+                                                    }
+                                                })
+                                                .max_by_key(|node| node.location.start_byte)
+                                        } else {
+                                            None
+                                        };
+
+                                    // Prefer the most recent symbol: imported symbol if it exists and is more recent, otherwise definition, otherwise imported symbol
+                                    match (matched_definition_node, matched_imported_symbol_node) {
+                                        (Some(def_node), Some(imp_node)) => {
+                                            if imp_node.location.start_byte
+                                                > def_node.location.start_byte
+                                            {
+                                                imported_symbol_imported_symbol_relationships.push(
+                                                    ImportedSymbolImportedSymbolRelationship {
+                                                        source_location: imported_symbol_node.location.clone(),
+                                                        target_location: imp_node.location.clone(),
+                                                        relationship_type: RelationshipType::ImportedSymbolToImportedSymbol,
+                                                    }
+                                                );
+                                            } else {
+                                                imported_symbol_definition_relationships.push(
+                                                    ImportedSymbolDefinitionRelationship {
+                                                        source_location: imported_symbol_node.location.clone(),
+                                                        target_location: def_node.location.clone(),
+                                                        relationship_type: RelationshipType::ImportedSymbolToDefinition,
+                                                    }
+                                                );
+                                            }
+                                        }
+                                        (Some(def_node), None) => {
+                                            imported_symbol_definition_relationships.push(
+                                                ImportedSymbolDefinitionRelationship {
+                                                    source_location: imported_symbol_node.location.clone(),
+                                                    target_location: def_node.location.clone(),
+                                                    relationship_type: RelationshipType::ImportedSymbolToDefinition,
+                                                }
+                                            );
+                                        }
+                                        (None, Some(imp_node)) => {
+                                            imported_symbol_imported_symbol_relationships.push(
+                                                ImportedSymbolImportedSymbolRelationship {
+                                                    source_location: imported_symbol_node.location.clone(),
+                                                    target_location: imp_node.location.clone(),
+                                                    relationship_type: RelationshipType::ImportedSymbolToImportedSymbol,
+                                                }
+                                            );
+                                        }
+                                        (None, None) => {}
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

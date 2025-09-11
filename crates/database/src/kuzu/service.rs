@@ -236,12 +236,18 @@ impl<'a> NodeDatabaseService<'a> {
             Ok(result) => {
                 match self.get_scalar_query_results(
                     result,
-                    vec!["dir_rel_count", "file_rel_count", "def_rel_count"],
+                    vec![
+                        "dir_rel_count",
+                        "file_rel_count",
+                        "def_rel_count",
+                        "imp_rel_count",
+                    ],
                 ) {
                     Some(counts) => Ok(RelationshipCounts {
                         directory_relationships: counts["dir_rel_count"] as u32,
                         file_relationships: counts["file_rel_count"] as u32,
                         definition_relationships: counts["def_rel_count"] as u32,
+                        imported_symbol_relationships: counts["imp_rel_count"] as u32,
                     }),
                     None => Err(Error::msg("No relationship counts found")),
                 }

@@ -144,10 +144,37 @@ pub static DEFINITION_RELATIONSHIPS: LazyLock<RelationshipTable> =
         ],
     });
 
+// Imported symbol relationships (IMPORTED_SYMBOL_TO_IMPORTED_SYMBOL, IMPORTED_SYMBOL_TO_DEFINITION, IMPORTED_SYMBOL_TO_FILE)
+// Note: Kuzu automatically handles FROM-TO connections, we only need custom properties
+pub static IMPORTED_SYMBOL_RELATIONSHIPS: LazyLock<RelationshipTable> =
+    LazyLock::new(|| RelationshipTable {
+        name: "IMPORTED_SYMBOL_RELATIONSHIPS",
+        columns: vec![
+            ColumnDefinition::new("type").uint8(),
+            // Optional source location fields
+            ColumnDefinition::new("source_start_byte")
+                .int64()
+                .nullable(),
+            ColumnDefinition::new("source_end_byte").int64().nullable(),
+            ColumnDefinition::new("source_start_line")
+                .int32()
+                .nullable(),
+            ColumnDefinition::new("source_end_line").int32().nullable(),
+            ColumnDefinition::new("source_start_col").int32().nullable(),
+            ColumnDefinition::new("source_end_col").int32().nullable(),
+        ],
+        from_to_pairs: vec![
+            (&IMPORTED_SYMBOL_TABLE, &IMPORTED_SYMBOL_TABLE),
+            (&IMPORTED_SYMBOL_TABLE, &DEFINITION_TABLE),
+            (&IMPORTED_SYMBOL_TABLE, &FILE_TABLE),
+        ],
+    });
+
 pub static RELATIONSHIP_TABLES: LazyLock<Vec<RelationshipTable>> = LazyLock::new(|| {
     vec![
         DIRECTORY_RELATIONSHIPS.clone(),
         FILE_RELATIONSHIPS.clone(),
         DEFINITION_RELATIONSHIPS.clone(),
+        IMPORTED_SYMBOL_RELATIONSHIPS.clone(),
     ]
 });
