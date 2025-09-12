@@ -6,6 +6,8 @@ use std::{
 use rmcp::model::ErrorCode;
 use workspace_manager::WorkspaceManager;
 
+// File management utils
+
 pub fn resolve_paths(
     workspace_manager: &WorkspaceManager,
     input_file_path: &str,

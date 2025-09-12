@@ -16,8 +16,6 @@ pub struct Query {
 #[derive(Debug, Clone)]
 pub struct QueryParameter {
     pub name: &'static str,
-    pub description: &'static str,
-    pub required: bool,
     pub definition: QueryParameterDefinition,
 }
 
@@ -54,8 +52,6 @@ impl QueryLibrary {
                     "fqn",
                     QueryParameter {
                         name: "fqn",
-                        description: "The FQN of the definition to get relationships for.",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
@@ -63,8 +59,6 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of relationships to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
@@ -100,8 +94,6 @@ impl QueryLibrary {
                     "file_path",
                     QueryParameter {
                         name: "file_path",
-                        description: "The path of the file to get definitions for.",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
@@ -109,8 +101,6 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of definitions to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
@@ -143,8 +133,6 @@ impl QueryLibrary {
                     "file_path",
                     QueryParameter {
                         name: "file_path",
-                        description: "The path of the file to get imports for.",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
@@ -152,8 +140,6 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of imports to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
@@ -187,8 +173,6 @@ impl QueryLibrary {
                     "search_string",
                     QueryParameter {
                         name: "search_string",
-                        description: "The string to search for within FQNs (case insensitive).",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
@@ -196,8 +180,6 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of matches to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
@@ -467,8 +449,6 @@ impl QueryLibrary {
                     "directory_limit",
                     QueryParameter {
                         name: "directory_limit",
-                        description: "The maximum number of directory relationships to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(50)),
                     },
                 ),
@@ -476,8 +456,6 @@ impl QueryLibrary {
                     "file_limit",
                     QueryParameter {
                         name: "file_limit",
-                        description: "The maximum number of file relationships to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
@@ -485,8 +463,6 @@ impl QueryLibrary {
                     "definition_limit",
                     QueryParameter {
                         name: "definition_limit",
-                        description: "The maximum number of definition relationships to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(200)),
                     },
                 ),
@@ -494,8 +470,6 @@ impl QueryLibrary {
                     "imported_symbol_limit",
                     QueryParameter {
                         name: "imported_symbol_limit",
-                        description: "The maximum number of imported symbol relationships to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(50)),
                     },
                 ),
@@ -732,8 +706,6 @@ impl QueryLibrary {
                     "node_id",
                     QueryParameter {
                         name: "node_id",
-                        description: "The ID of the node to get neighbors for.",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
@@ -741,8 +713,6 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of neighbors to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
@@ -882,8 +852,6 @@ impl QueryLibrary {
                     "search_term",
                     QueryParameter {
                         name: "search_term",
-                        description: "The search term to match against node names, paths, or FQNs (case insensitive).",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
@@ -891,8 +859,6 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of search results to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(100)),
                     },
                 ),
@@ -941,8 +907,6 @@ impl QueryLibrary {
                     "search_terms",
                     QueryParameter {
                         name: "search_terms",
-                        description: "The search terms to match against node names or FQNs (case insensitive).",
-                        required: true,
                         definition: QueryParameterDefinition::Array(None),
                     },
                 ),
@@ -950,8 +914,6 @@ impl QueryLibrary {
                     "limit",
                     QueryParameter {
                         name: "limit",
-                        description: "The maximum number of search results to return.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(10)),
                     },
                 ),
@@ -959,8 +921,6 @@ impl QueryLibrary {
                     "skip",
                     QueryParameter {
                         name: "skip",
-                        description: "The number of search results to skip.",
-                        required: false,
                         definition: QueryParameterDefinition::Int(Some(0)),
                     },
                 ),
@@ -999,8 +959,6 @@ impl QueryLibrary {
                     "file_path",
                     QueryParameter {
                         name: "file_path",
-                        description: "The path of the file to get the node for.",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
@@ -1008,8 +966,6 @@ impl QueryLibrary {
                     "name_or_fqn",
                     QueryParameter {
                         name: "name_or_fqn",
-                        description: "The name or FQN of the node to get.",
-                        required: true,
                         definition: QueryParameterDefinition::String(None),
                     },
                 ),
