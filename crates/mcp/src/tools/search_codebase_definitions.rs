@@ -2,6 +2,7 @@ use std::{borrow::Cow, cmp::min, path::Path, sync::Arc};
 
 use database::querying::QueryLibrary;
 use rmcp::model::{CallToolResult, Content, ErrorCode, Tool, object};
+use serde::Serialize;
 use serde_json::{Map, Value, json};
 use tokio::time::{Duration, timeout};
 
@@ -13,22 +14,46 @@ use crate::tools::{
 use workspace_manager::WorkspaceManager;
 
 pub const SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME: &str = "search_codebase_definitions";
-const SEARCH_CODEBASE_DEFINITIONS_TOOL_DESCRIPTION: &str = "
-Searches for functions, classes, methods, constants, and interfaces in the codebase. Returns definition signatures and optionally full implementations. Supports exact/partial matching and case-sensitive search.
+const SEARCH_CODEBASE_DEFINITIONS_TOOL_DESCRIPTION: &str = r#"Searches for functions, classes, methods, constants, and interfaces in the codebase.
 
-Best practice: First search for signatures only to get an overview, then request full implementations for specific items as needed.
+Behavior:
+- Finds multiple code definitions using the search terms across all files in the specified project.
+- Supports exact and partial matching.
+- Returns signatures, locations and the definition type of the matching definitions.
+- Large result sets are paginated with the `page` parameter.
 
-Use for: Finding definitions, understanding code structure, debugging, locating usages, and refactoring.
-";
+Requirements:
+- Provide one or multiple search terms to locate the definitions.
+- Specify the absolute filesystem path to the project root directory.
 
-#[derive(Debug, Clone)]
+Use cases:
+- Finding function, class, method, constant, interface definitions across the codebase
+- Understanding code structure and architecture
+- Getting overview of available APIs and interfaces
+
+Example:
+Searching for multiple definitions in a React project:
+Search terms: ["useState", "ComponentProps", "handleSubmit"]
+Project: "/home/user/my-react-app"
+Page: 1 (first page)
+
+Call:
+{
+  "search_terms": ["useState", "ComponentProps", "handleSubmit"],
+  "project": "/home/user/my-react-app",
+  "page": 1
+}
+
+This will find all definitions matching those names throughout the codebase, returning their signatures and locations.
+Tip: Use this tool in combination with get_references tool - first locate definitions with this tool, then use get_references tool to see where they're used throughout the codebase."#;
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ResultItem {
     pub name: String,
     pub fqn: String,
     pub definition_type: String,
     pub location: String,
     pub context: Option<String>,
-    pub body: Option<String>,
 }
 
 #[derive(Debug)]
@@ -60,12 +85,40 @@ impl From<SearchError> for rmcp::ErrorData {
 // Configuration constants
 const DEFAULT_PAGE: u64 = 1;
 const PAGE_SIZE: u64 = 50;
-const DEFAULT_INCLUDE_FULL_BODY: bool = false;
 const MIN_PAGE: u64 = 1;
 
 const CONTEXT_DEFINITION_LINES: usize = 3;
 
 const FILE_READ_TIMEOUT_SECONDS: u64 = 10;
+
+#[derive(Serialize)]
+pub struct SearchCodebaseDefinitionsToolOutput {
+    pub definitions: Vec<ResultItem>,
+    pub next_page: Option<u64>,
+    pub system_message: String,
+}
+
+impl SearchCodebaseDefinitionsToolOutput {
+    pub fn empty(system_message: String) -> Self {
+        Self {
+            definitions: Vec::new(),
+            next_page: None,
+            system_message,
+        }
+    }
+
+    pub fn new(
+        definitions: Vec<ResultItem>,
+        next_page: Option<u64>,
+        system_message: String,
+    ) -> Self {
+        Self {
+            definitions,
+            next_page,
+            system_message,
+        }
+    }
+}
 
 pub struct SearchCodebaseDefinitionsTool {
     pub query_service: Arc<dyn database::querying::QueryingService>,
@@ -90,8 +143,7 @@ impl SearchCodebaseDefinitionsTool {
         database_path: &Path,
         search_terms: &[String],
         page: u64,
-        include_full_body: bool,
-    ) -> Result<Vec<ResultItem>, SearchError> {
+    ) -> Result<SearchCodebaseDefinitionsToolOutput, SearchError> {
         // Execute a single database query for all search terms
         let query = QueryLibrary::get_search_definitions_query();
         let mut query_params = Map::new();
@@ -140,19 +192,22 @@ impl SearchCodebaseDefinitionsTool {
         }
 
         if query_results.is_empty() {
-            return Ok(Vec::new());
+            let system_message = self.get_system_message(
+                search_terms,
+                project_absolute_path,
+                Vec::new(),
+                query_results.len(),
+                None,
+            );
+            return Ok(SearchCodebaseDefinitionsToolOutput::empty(system_message));
         }
 
         // Prepare file chunks to read (with deduplication)
         let file_chunks: Vec<(String, usize, usize)> = query_results
             .iter()
             .map(|(_, _, _, file_path, start_line, end_line)| {
-                if include_full_body {
-                    (file_path.clone(), *start_line, *end_line)
-                } else {
-                    let context_end = min(*start_line + CONTEXT_DEFINITION_LINES, *end_line);
-                    (file_path.clone(), *start_line, context_end)
-                }
+                let context_end = min(*start_line + CONTEXT_DEFINITION_LINES, *end_line);
+                (file_path.clone(), *start_line, context_end)
             })
             .collect();
 
@@ -171,6 +226,7 @@ impl SearchCodebaseDefinitionsTool {
             source: None,
         })?;
 
+        let mut file_read_errors = Vec::new();
         // Build final results with content
         let results: Vec<ResultItem> = query_results
             .into_iter()
@@ -180,28 +236,104 @@ impl SearchCodebaseDefinitionsTool {
                     (name, fqn, definition_type, file_path, start_line, end_line),
                     content_result,
                 )| {
-                    let file_content = content_result.ok().map(|c| c.trim().to_string());
+                    let context = match content_result {
+                        Ok(content) => Some(content.trim().to_string()),
+                        Err(_) => {
+                            file_read_errors.push(file_path.clone());
+                            None
+                        }
+                    };
+
                     ResultItem {
                         name,
                         fqn,
                         definition_type,
                         location: format!("{}:L{}-{}", file_path, start_line, end_line),
-                        context: if include_full_body {
-                            None
-                        } else {
-                            file_content.clone()
-                        },
-                        body: if include_full_body {
-                            file_content
-                        } else {
-                            None
-                        },
+                        context,
                     }
                 },
             )
             .collect();
 
-        Ok(results)
+        let next_page = if results.len() == PAGE_SIZE as usize {
+            Some(page + 1)
+        } else {
+            None
+        };
+        let system_message = self.get_system_message(
+            search_terms,
+            project_absolute_path,
+            file_read_errors,
+            results.len(),
+            next_page,
+        );
+
+        Ok(SearchCodebaseDefinitionsToolOutput {
+            definitions: results,
+            next_page,
+            system_message,
+        })
+    }
+
+    fn get_system_message(
+        &self,
+        search_terms: &[String],
+        project_absolute_path: &str,
+        file_read_errors: Vec<String>,
+        results_count: usize,
+        next_page: Option<u64>,
+    ) -> String {
+        let mut message = String::new();
+
+        for (index, file_read_error) in file_read_errors.iter().enumerate() {
+            if index == 0 {
+                message.push_str("Failed to read some some files:");
+            }
+            message.push_str(&format!("\n- {}.", file_read_error));
+            if index == file_read_errors.len() - 1 {
+                message.push_str(
+                    "\nPerhaps some files were deleted, moved or changed since the last indexing.",
+                );
+                message.push_str(&format!("\nIf the missing context is important, use the `index_project` tool to re-index the project {} and try again.\n", project_absolute_path));
+            }
+        }
+
+        if results_count > 0 {
+            message.push_str(&format!(
+                "Found a total of {} definitions for the search terms ({}) in the project {}.\n",
+                results_count,
+                search_terms.join(", "),
+                project_absolute_path
+            ));
+
+            message.push_str(r#"
+                Decision Framework:
+                - If sufficient context for your current task is provided in the results, you can stop here.
+                - If you've found a definition you want to examine further, use the `get_references` tool to examine the references to the relevant symbol.
+                - If the results revealed a new relevant symbol, use the `search_codebase_definitions` tool again with different search terms to explore further.
+            "#);
+        } else if results_count == 0 {
+            message.push_str(&format!(
+                "No indexed definitions found for the search terms ({}) in the project {}.\n",
+                search_terms.join(", "),
+                project_absolute_path
+            ));
+
+            message.push_str(r#"
+                Decision Framework:
+                - If you know for sure that definitions exists for the search terms, you can use the `index_project` tool to re-index the project and try again.
+                - If you know for sure that definitions exists for the search terms, and the indexing is up to date, you can stop using the Knowledge Graph for getting definitions for the requested search terms.
+            "#);
+        }
+
+        if let Some(next_page) = next_page {
+            message.push_str(&format!(
+                "There are more results on page {} if more context is needed for the current task.",
+                next_page
+            ));
+        }
+
+        message
     }
 }
 
@@ -228,11 +360,6 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
                     "items": {
                         "type": "string"
                     }
-                },
-                "include_full_body": {
-                    "type": "boolean",
-                    "description": "If true, returns implementations of each definition. If false, returns only the definition signatures. Best practice: Use false to get a broad overview, then use true to examine a definition more closely.",
-                    "default": DEFAULT_INCLUDE_FULL_BODY
                 },
                 "project": {
                     "type": "string",
@@ -267,62 +394,23 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
         // Extract and validate parameters with better error messages
         let search_terms = input.get_string_array("search_terms")?;
         let project_absolute_path = input.get_string("project")?;
-
         let page = input.get_u64("page").unwrap_or(DEFAULT_PAGE).max(MIN_PAGE);
-
-        let include_full_body = input
-            .get_boolean("include_full_body")
-            .unwrap_or(DEFAULT_INCLUDE_FULL_BODY);
 
         let database_path = get_database_path(&self.workspace_manager, project_absolute_path)?;
 
-        let results = tokio::task::block_in_place(|| {
+        let output = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.search_and_populate_content(
                 project_absolute_path,
                 &database_path,
                 &search_terms,
                 page,
-                include_full_body,
             ))
         })
         .map_err(rmcp::ErrorData::from)?;
 
-        // Convert results to JSON content
-        let mut content = Vec::with_capacity(results.len());
-        for item in results {
-            let json_value = json!({
-                "name": item.name,
-                "fqn": item.fqn,
-                "definition_type": item.definition_type,
-                "location": item.location,
-                "context": item.context,
-                "body": item.body
-            });
-
-            content.push(Content::json(json_value).map_err(|e| {
-                rmcp::ErrorData::new(
-                    ErrorCode::INTERNAL_ERROR,
-                    format!("Failed to serialize result to JSON: {}.", e),
-                    None,
-                )
-            })?);
-        }
-
-        let has_next_page = content.len() == PAGE_SIZE as usize;
-        content.push(
-            Content::json(json!({
-                "next_page": if has_next_page { json!(page + 1) } else { json!(null) },
-            }))
-            .map_err(|e| {
-                rmcp::ErrorData::new(
-                    ErrorCode::INTERNAL_ERROR,
-                    format!("Failed to serialize result to JSON: {}.", e),
-                    None,
-                )
-            })?,
-        );
-
-        Ok(CallToolResult::success(content))
+        Ok(CallToolResult::success(vec![
+            Content::json(serde_json::to_value(output).unwrap()).unwrap(),
+        ]))
     }
 }
 
@@ -358,34 +446,46 @@ mod tests {
             .call(object(json!({
                 "project": project.project_path.clone(),
                 "search_terms": ["main"],
-                "include_full_body": false,
                 "page": 1,
             })))
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
-        assert!(!content.is_empty(), "Expected non-empty content");
+        assert_eq!(content.len(), 1, "Expected single JSON object in response");
 
-        for content_item in &content {
-            let rmcp::model::Annotated { raw, .. } = content_item;
-            let json_str = match raw {
-                rmcp::model::RawContent::Text(text_content) => &text_content.text,
-                _ => continue,
-            };
+        let content_item = &content[0];
+        let rmcp::model::Annotated { raw, .. } = content_item;
+        let json_str = match raw {
+            rmcp::model::RawContent::Text(text_content) => &text_content.text,
+            _ => panic!("Expected text content"),
+        };
 
-            let parsed: serde_json::Value =
-                serde_json::from_str(json_str).expect("Expected valid JSON in content");
+        let parsed: serde_json::Value =
+            serde_json::from_str(json_str).expect("Expected valid JSON in content");
 
-            if let Some(next_page) = parsed.get("next_page") {
-                assert_eq!(next_page, &json!(null));
-                continue;
-            }
+        assert!(
+            parsed.get("definitions").is_some(),
+            "Expected 'definitions' field"
+        );
+        assert!(
+            parsed.get("system_message").is_some(),
+            "Expected 'system_message' field"
+        );
+        assert_eq!(
+            parsed["next_page"],
+            json!(null),
+            "Expected 'next_page' to be null"
+        );
 
-            let name = parsed["name"].as_str().unwrap();
-            let fqn = parsed["fqn"].as_str().unwrap();
-            let definition_type = parsed["definition_type"].as_str().unwrap();
-            let location = parsed["location"].as_str().unwrap();
-            let context = parsed["context"].as_str().unwrap();
+        let definitions = parsed["definitions"].as_array().unwrap();
+        assert!(!definitions.is_empty(), "Expected non-empty definitions");
+
+        for definition in definitions {
+            let name = definition["name"].as_str().unwrap();
+            let fqn = definition["fqn"].as_str().unwrap();
+            let definition_type = definition["definition_type"].as_str().unwrap();
+            let location = definition["location"].as_str().unwrap();
+            let context = definition["context"].as_str().unwrap();
 
             match (name, definition_type) {
                 ("Main", "Constructor") => {
@@ -418,107 +518,7 @@ mod tests {
                     panic!("Unexpected result: {:?}", (name, definition_type));
                 }
             }
-
-            assert!(
-                parsed["body"].is_null(),
-                "Expected 'body' to be null when include_full_body is false"
-            );
         }
-
-        setup.cleanup();
-    }
-
-    #[tracing_test::traced_test]
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_search_codebase_definitions_full_body_inclusion() {
-        let database = Arc::new(KuzuDatabase::new());
-        let setup = setup_java_reference_pipeline(&database).await;
-
-        database
-            .get_or_create_database(&setup.database_path, None)
-            .expect("Failed to create database");
-
-        let tool: &dyn KnowledgeGraphTool = &SearchCodebaseDefinitionsTool::new(
-            Arc::new(DatabaseQueryingService::new(database)),
-            Arc::new(setup.workspace_manager.clone()),
-        );
-
-        let project = &setup.workspace_manager.clone().list_all_projects()[0];
-
-        let result = tool
-            .call(object(json!({
-                "project": project.project_path.clone(),
-                "search_terms": ["Foo"],
-                "include_full_body": true,
-                "page": 1,
-            })))
-            .unwrap();
-
-        let content = result.content.expect("Expected content in result");
-
-        let code_content_item = content[0].clone();
-        let rmcp::model::Annotated { raw, .. } = code_content_item;
-        let json_str = match raw {
-            rmcp::model::RawContent::Text(text_content) => &text_content.text.clone(),
-            _ => panic!("Expected text content"),
-        };
-
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
-        let name = parsed["name"].as_str().unwrap();
-        let fqn = parsed["fqn"].as_str().unwrap();
-        let definition_type = parsed["definition_type"].as_str().unwrap();
-        let location = parsed["location"].as_str().unwrap();
-        let body = parsed["body"].as_str().unwrap();
-
-        match (name, definition_type) {
-            ("Foo", "Class") => {
-                assert_eq!(fqn, "com.example.app.Foo");
-                assert!(location.contains("Foo.java:L3-9"));
-
-                assert!(
-                    body.contains("public class Foo {"),
-                    "Expected class declaration"
-                );
-                assert!(
-                    body.contains("public Executor executor = new Executor();"),
-                    "Expected executor field"
-                );
-                assert!(
-                    body.contains("public Bar bar() {"),
-                    "Expected bar method declaration"
-                );
-                assert!(
-                    body.contains("return new Bar();"),
-                    "Expected bar method implementation"
-                );
-                assert!(body.contains("}"), "Expected closing brace");
-
-                assert!(
-                    parsed["context"].is_null(),
-                    "Expected 'context' to be null when include_full_body is true"
-                );
-            }
-            _ => {
-                // allow other results (like executor field) but don't require them
-            }
-        }
-
-        let has_next_page = content[1].clone();
-        let rmcp::model::Annotated { raw, .. } = has_next_page;
-        let json_str = match raw {
-            rmcp::model::RawContent::Text(text_content) => &text_content.text.clone(),
-            _ => panic!("Expected text content"),
-        };
-
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
-        assert!(
-            parsed["next_page"].is_null(),
-            "Expected 'next_page' to be null"
-        );
 
         setup.cleanup();
     }
@@ -544,7 +544,6 @@ mod tests {
             .call(object(json!({
                 "project": project.project_path.clone(),
                 "search_terms": ["repeatedMethod"],
-                "include_full_body": false,
                 "page": 1,
             })))
             .unwrap();
@@ -552,17 +551,33 @@ mod tests {
         let content = first_page_result
             .content
             .expect("Expected content in result");
-        assert_eq!(content.len(), 51); // 60 repeatedMethod definitions, 50 per page, this is the first page
+        assert_eq!(content.len(), 1, "Expected single JSON object in response");
 
-        let has_next_page = content.last().unwrap().clone();
-        let rmcp::model::Annotated { raw, .. } = has_next_page;
+        let content_item = &content[0];
+        let rmcp::model::Annotated { raw, .. } = content_item;
         let json_str = match raw {
-            rmcp::model::RawContent::Text(text_content) => &text_content.text.clone(),
+            rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
         let parsed: serde_json::Value =
             serde_json::from_str(json_str).expect("Expected valid JSON in content");
+
+        assert!(
+            parsed.get("definitions").is_some(),
+            "Expected 'definitions' field"
+        );
+        assert!(
+            parsed.get("system_message").is_some(),
+            "Expected 'system_message' field"
+        );
+
+        let definitions = parsed["definitions"].as_array().unwrap();
+        assert_eq!(
+            definitions.len(),
+            50,
+            "Expected 50 definitions on first page"
+        ); // 60 repeatedMethod definitions, 50 per page
 
         let next_page = parsed["next_page"].as_u64().unwrap();
         assert_eq!(next_page, 2);
@@ -571,7 +586,6 @@ mod tests {
             .call(object(json!({
                 "project": project.project_path.clone(),
                 "search_terms": ["repeatedMethod"],
-                "include_full_body": false,
                 "page": 2,
             })))
             .unwrap();
@@ -579,21 +593,28 @@ mod tests {
         let content = second_page_result
             .content
             .expect("Expected content in result");
-        assert_eq!(content.len(), 11); // 60 repeatedMethod definitions, 50 per page, this is the last page
+        assert_eq!(content.len(), 1, "Expected single JSON object in response");
 
-        let has_next_page = content.last().unwrap().clone();
-        let rmcp::model::Annotated { raw, .. } = has_next_page;
+        let content_item = &content[0];
+        let rmcp::model::Annotated { raw, .. } = content_item;
         let json_str = match raw {
-            rmcp::model::RawContent::Text(text_content) => &text_content.text.clone(),
+            rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
         let parsed: serde_json::Value =
             serde_json::from_str(json_str).expect("Expected valid JSON in content");
 
+        let definitions = parsed["definitions"].as_array().unwrap();
+        assert_eq!(
+            definitions.len(),
+            10,
+            "Expected 10 definitions on second page"
+        ); // 60 total, 50 on first page, 10 remaining
+
         assert!(
             parsed["next_page"].is_null(),
-            "Expected 'next_page' to be null"
+            "Expected 'next_page' to be null on last page"
         );
 
         setup.cleanup();
