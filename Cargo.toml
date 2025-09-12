@@ -5,7 +5,7 @@ members = [
   "crates/indexer-c-bindings",
   "crates/xtask",
   "crates/workspace-manager",
-  "crates/http-server",
+  "crates/http-server-desktop",
   "crates/mcp",
   "crates/logging",
   "crates/database",

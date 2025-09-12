@@ -8,7 +8,7 @@ use std::net::TcpStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
-const GKG_HTTP_SERVER: &str = "gkg-http-server";
+const GKG_HTTP_SERVER: &str = "gkg-http-server-desktop";
 
 pub fn get_gkg_dir() -> Result<PathBuf> {
     let home = home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;

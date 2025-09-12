@@ -1,7 +1,7 @@
 use anyhow::Result;
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
-use http_server::{find_unused_port, run};
+use http_server_desktop::{find_unused_port, run};
 use logging::{LogMode, init};
 use std::env;
 use std::sync::Arc;
