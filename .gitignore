@@ -55,7 +55,6 @@ packages/gkg-evals/data/fixtures
 
 # Summarization
 git_diff_full.txt
-packages/gkg-evals/harness/
 
 # Gemini
 /.gemini

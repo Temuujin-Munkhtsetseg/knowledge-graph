@@ -1,7 +1,7 @@
 [pipeline]
 # Pipeline execution settings
 skip_download = false  # Skips only if repos directory already exists
-skip_gkg_index = true  # Skip GKG indexing step (TODO: add verification against gkg)
+skip_gkg_index = false  # Skip GKG indexing step (TODO: add verification against gkg)
 batch_size = 1 # Batch size for processing fixtures
 fixture_timeout = 240 # Timeout for processing a fixture in seconds
 gkg_path = "../../../target/release/gkg"

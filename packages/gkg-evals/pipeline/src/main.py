@@ -3,11 +3,11 @@ import sys
 from pathlib import Path
 
 from src.utils import load_toml_config
-# from src.steps.download import download
-# from src.steps.gkg_index import index_worktrees
-# from src.steps.agent import run_agent
-# from src.steps.evals import run_evals_swebench
-# from src.steps.report import generate_report
+from src.steps.download import download
+from src.steps.gkg_index import index_worktrees
+from src.steps.agent import run_agent
+from src.steps.evals import run_evals_swebench
+from src.steps.report import generate_report
 
 from src.constants import FIXTURES_METADATA_PATH, BASE_DIR_SWEBENCH
 
@@ -40,7 +40,7 @@ class GkgEvalsPipeline:
         """Run the download phase"""
         if not self.config.pipeline.skip_download or not self.check_repos_cache():
             print("Running download phase...")
-            # download(self.config)
+            download(self.config)
             print("✓ Download phase completed successfully!")
             print("Repositories have been cloned to ./repos/ directory")
             print("Fixture metadata saved to ./fixtures_metadata.json")
@@ -49,7 +49,7 @@ class GkgEvalsPipeline:
         """Run GKG indexing phase"""
         if not self.config.pipeline.skip_gkg_index:
             print("Indexing worktrees...")
-            # index_worktrees(self.config)
+            index_worktrees(self.config)
             print("✓ Worktrees indexed successfully!")
         else:
             print("⚠ Skipping GKG indexing (skip_gkg_index flag set)")
@@ -57,19 +57,19 @@ class GkgEvalsPipeline:
     def run_evals_phase(self):
         """Run the evaluation phase"""
         print("Running evals phase...")
-        # run_evals_swebench(self.config)
+        run_evals_swebench(self.config)
         print("Evals completed successfully!")
 
     def run_agent_phase(self):
         """Run the agent phase"""
         print("Running agent phase...")
-        # run_agent(self.config)
+        run_agent(self.config)
         print("Agent completed successfully!")
 
     def run_report_phase(self):
         """Run the report phase"""
         print("Running report phase...")
-        # generate_report(self.config)
+        generate_report(self.config)
         print("Report completed successfully!")
     
     def run_phase(self, phase: str):
