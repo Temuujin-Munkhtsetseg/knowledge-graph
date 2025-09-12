@@ -12,7 +12,6 @@ use crate::tools::get_references::GET_REFERENCES_TOOL_NAME;
 use crate::tools::get_references::tool::GetReferencesTool;
 use crate::tools::index_project::IndexProjectTool;
 use crate::tools::types::KnowledgeGraphTool;
-use crate::tools::workspace_tools::get_list_projects_tool;
 use database::kuzu::database::KuzuDatabase;
 use database::querying::QueryingService;
 use event_bus::EventBus;
@@ -33,13 +32,6 @@ impl AvailableToolsService {
         event_bus: Arc<EventBus>,
     ) -> Self {
         let mut tools: HashMap<String, Box<dyn KnowledgeGraphTool>> = HashMap::new();
-
-        let list_projects_tool = get_list_projects_tool(workspace_manager.clone());
-
-        tools.insert(
-            list_projects_tool.name().to_string(),
-            Box::new(list_projects_tool),
-        );
 
         tools.insert(
             SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME.to_string(),
