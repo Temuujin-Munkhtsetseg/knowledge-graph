@@ -3,7 +3,7 @@ import tomllib
 from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed 
 
-from src.constants import SWEBENCH_REPORT_DIR, SWEBENCH_PATCHES_PATH, GKG_PATH
+from src.constants import SWEBENCH_REPORT_DIR, SWEBENCH_PATCHES_PATH, GKG_PATH_DEBUG
 
 def run_threaded(func, items: list, max_workers: int = 10):
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -19,7 +19,7 @@ class TomlPipelineConfig:
     skip_gkg_index: bool = False
     batch_size: int = 1
     fixture_timeout: int = 240
-    gkg_path: str = GKG_PATH
+    gkg_path: str = GKG_PATH_DEBUG
     opencode_logs_stdout: bool = True
 
 @dataclass

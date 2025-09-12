@@ -29,7 +29,8 @@ SWEBENCH_PATCHES_PATH = Path("./../data/swebench_patches.jsonl").absolute().reso
 SWEBENCH_REPORT_DIR = Path("./../data/swebench_report").absolute().resolve()
 
 # Executables, relative to the gkg-evals subdirectory
-GKG_PATH = Path("./../../../target/release/gkg").absolute()
+GKG_PATH_RELEASE = Path("./../../../target/release/gkg").absolute()
+GKG_PATH_DEBUG = Path("./../../../target/debug/gkg").absolute()
 
 # OpenCode
 OPENCODE_BASE_PATH = Path("~/.local/share/opencode").expanduser().absolute()

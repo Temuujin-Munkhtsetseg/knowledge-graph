@@ -6,6 +6,17 @@
 
 set -e  # Exit on any error
 
+compile_gkg() {
+    echo "Compiling gkg..."
+    cd $PROJECT_ROOT
+    echo "Current directory: $(pwd)"
+    echo "Compiling gkg in debug mode..."
+    cargo build -p gkg
+    echo "Compiling gkg in release mode..."
+    cargo build --release -p gkg
+    cd $SCRIPT_DIR
+}
+
 # Function to stop GKG server
 stop_gkg_server() {
     if [ -n "$GKG_PID" ]; then
@@ -75,7 +86,15 @@ verify_docker() {
     fi
 }
 
-git_lfs_verify_and_pull() {
+git_verify() {
+    # Very if git is installed
+    if ! command_exists git; then
+        echo "Error: git is not found in PATH."
+        echo "Please install it globally with: brew install git"
+        exit 1
+    fi
+    echo "✓ git found in PATH"
+    
     echo "Installing git lfs..."
     git lfs install
     echo "Verifying and pulling git lfs files..."
@@ -212,6 +231,7 @@ run_local() {
     local local_mode="$3"
     local config_abs_path=$(realpath "$config_path")
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$SCRIPT_DIR/../../"
 
     echo "Running locally..."
     if [ "$local_mode" = "1" ]; then
@@ -220,8 +240,11 @@ run_local() {
 
     cd "$SCRIPT_DIR"
 
+    # Compile both debug and release builds of gkg
+    compile_gkg
+
     # In case we have remote fixtures, pull them in
-    git_lfs_verify_and_pull
+    git_verify
 
     # Check for mise & opencode - setup mise env, setup uv
     check_for_dependencies_and_setup
@@ -231,6 +254,7 @@ run_local() {
     verify_docker
 
     cd "$SCRIPT_DIR"
+    mkdir -p data
     
     # Handle different phases
     case "$phase" in
@@ -267,11 +291,10 @@ start_gkg_server() {
     # Remember current directory and go to knowledge-graph root
     local original_dir=$(pwd)
     cd ../../
-    cargo build -p gkg
     
     # Start server in background and capture PID
     echo "Starting gkg server on port 27495..."
-    cargo run --bin gkg server start &
+    cargo run --bin gkg server start --detached
     GKG_PID=$!
 
     # Wait for server to be fully ready
