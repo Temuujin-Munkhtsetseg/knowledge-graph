@@ -22,7 +22,7 @@ Efficiently searches the codebase for functions, classes, methods, constants, in
 
 Input:
 
-- `project_absolute_path` (string): Absolute filesystem path to the project root directory where code definitions should be searched. Must be a valid directory path.
+- `project` (string): Absolute filesystem path to the project root directory where code definitions should be searched. Must be a valid directory path.
 - `search_terms` (string[]): List of code identifiers to search for definitions. Can include function names, class names, method names, constants, etc.
 - `include_full_body` (boolean, optional) (default: false): Use false when requesting an overview of multiple definitions. Switch to true to see how full implementation of specific definitions. Start with false, then switch to true for the items you want to examine closely.
 - `page` (integer, optional) (default: 1): Page number for pagination, starting from 1.
@@ -42,34 +42,29 @@ Output: An object containing:
 - `status` (string): "ok" when indexing completes successfully
 - `stats` (object): Project indexing statistics including total files processed and project path
 
-### get_symbol_references
+### get_references
 
-Finds all locations where a symbol is referenced throughout the codebase to assess change impact. This tool is helpful for:
-
-- Planning to modify, rename, or delete a function, class, variable, or other symbol
-- Need to understand the blast radius of a potential change before implementing it
-- Investigating which parts of the codebase depend on a specific symbol
-- Performing impact analysis for refactoring or deprecation decisions
-- Tracing usage patterns to understand how a symbol is being used across the project
+Find all references to a code definition (function, class, constant, etc.) across the entire codebase. Given a definition name and its file location, this tool identifies all call sites of a function, class, etc. Ideal for impact analysis, dependency mapping, and ensuring safe, confident refactoring. Use in tandem with search_codebase_definitions: first find the definition, then discover where it's used.
 
 Input:
 
-- `absolute_file_path` (string): The absolute path to the file containing the symbol
-- `symbol_name` (string): The name of the symbol to find references for
-- `depth` (integer, optional) (default: 1, maximum: 3): Maximum depth to traverse for finding references
-- `limit` (integer, optional) (default: 50, maximum: 100): The maximum number of results to return
+- `definition_name` (string): The exact identifier name to search for (e.g., 'myFunction', 'MyClass'). Must match the symbol name exactly as it appears in code, without namespace prefixes or file extensions.
+- `file_path` (string): Absolute or relative filesystem path to the file where the definition is declared.
+- `page` (integer, optional) (default: 1): Page number for pagination, starting from 1.
 
 Output: An object containing:
 
-- `references` (array): Array of symbol references, each containing:
-  - `name` (string): The name of the symbol
-  - `location` (string): File path and line number where the symbol is defined (format: "file:line")
-  - `fqn` (string): Fully qualified name of the symbol
-  - `referenced_by` (array): Array of references that call this symbol, each containing:
-    - `name` (string): Name of the calling symbol
-    - `location` (string): File path and line number where the call occurs
-    - `fqn` (string): Fully qualified name of the calling symbol
-    - `referenced_by` (array): Recursive references (up to the specified depth)
+- `definitions` (array): Array of definitions that reference the target symbol, each containing:
+  - `name` (string): Name of the definition that contains references to the target.
+  - `location` (string): File path and line number where the referencing definition is declared.
+  - `definition_type` (string): The type of the referencing definition (e.g., "Method", "Constructor", "Class").
+  - `fqn` (string): Fully qualified name of the referencing definition.
+  - `references` (array): Array of specific reference instances within this definition, each containing:
+    - `reference_type` (string): The type of reference (e.g., "CALLS", "PropertyReference").
+    - `location` (string): File path and line number where the reference occurs.
+    - `context` (string): The lines of code surrounding the reference.
+- `next_page` (integer, optional): The next page number for pagination. If this field is absent, you have reached the last page of results.
+- `system_message` (string): Additional information about the search results and suggestions for next steps.
 
 ### get_definition
 

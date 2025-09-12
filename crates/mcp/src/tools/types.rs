@@ -74,4 +74,33 @@ impl KnowledgeGraphToolInput {
                 None,
             ))
     }
+
+    // Optional parameter methods that return None if the parameter is missing
+    pub fn get_u64_optional(&self, key: &str) -> Option<u64> {
+        self.params.get(key).and_then(|v| v.as_u64())
+    }
+
+    pub fn get_usize_optional(&self, key: &str) -> Option<usize> {
+        self.params
+            .get(key)
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+    }
+
+    pub fn get_boolean_optional(&self, key: &str) -> Option<bool> {
+        self.params.get(key).and_then(|v| v.as_bool())
+    }
+
+    pub fn get_string_array_optional(&self, key: &str) -> Option<Vec<String>> {
+        self.params
+            .get(key)
+            .and_then(|v| v.as_array())
+            .map(|array| {
+                array
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect()
+            })
+    }
 }
