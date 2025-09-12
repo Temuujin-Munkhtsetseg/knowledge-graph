@@ -18,16 +18,24 @@ Output: An array of file entries containing all their definitions and imports.
 
 ### search_codebase_definitions
 
-Efficiently searches the codebase for functions, classes, methods, constants, interfaces that contain one or more search terms. Start your search with an overview of the signatures, then drill down into the full implementation bodies if needed. Returns the definition signatures with optional full implementation bodies. Supports exact matches, partial matches, and case-sensitive/insensitive search modes. Use this tool for code exploration, refactoring, debugging, and understanding code structure.
+Efficiently searches the codebase for functions, classes, methods, constants, interfaces that contain one or more search terms. Returns the definition information for definitions matching the search terms. Supports exact matches, partial matches, and case-sensitive/insensitive search modes. Use this tool for code exploration, refactoring, debugging, and understanding code structure.
 
 Input:
 
-- `project` (string): Absolute filesystem path to the project root directory where code definitions should be searched. Must be a valid directory path.
-- `search_terms` (string[]): List of code identifiers to search for definitions. Can include function names, class names, method names, constants, etc.
-- `include_full_body` (boolean, optional) (default: false): Use false when requesting an overview of multiple definitions. Switch to true to see how full implementation of specific definitions. Start with false, then switch to true for the items you want to examine closely.
-- `page` (integer, optional) (default: 1): Page number for pagination, starting from 1.
+- `project` (string): Absolute filesystem path to the project root directory where code definitions should be searched.
+- `search_terms` (string[]): List of definition names to search for. Can be names of functions, classes, constants, etc.
+- `page` (integer, optional) (default: 1): Page number starting from 1. If the response's next_page field is greater than 1, more results are available at that page. You can use this to retrieve more results if more context is needed.
 
-Output: An array containing the code entries matching any of the search terms.
+Output: An object containing:
+
+- `definitions` (array): Array of matching code definitions, each containing:
+  - `name` (string): The name of the definition
+  - `fqn` (string): Fully qualified name of the definition
+  - `definition_type` (string): Type of definition (e.g., "Function", "Class", "Method", "Constant")
+  - `location` (string): File path and line range where the definition is located (format: "file:LstartLine-endLine")
+  - `context` (string, optional): Code snippet showing the definition signature and a few lines of context
+- `next_page` (integer, optional): Next page number if more results are available, null if this is the last page
+- `system_message` (string): Informational message about the search results and suggested next steps
 
 ### index_project
 
