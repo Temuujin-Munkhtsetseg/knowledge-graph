@@ -47,3 +47,9 @@ packages/gkg-evals/data/repos
 packages/gkg-evals/pipeline/pnpm-lock.yaml
 packages/gkg-evals/data/opencode_logs.txt
 packages/gkg-evals/harness/
+
+# Gemini
+/.gemini
+/.gemini-clipboard
+# Ignore pipeline failure logs
+pipline fail/
