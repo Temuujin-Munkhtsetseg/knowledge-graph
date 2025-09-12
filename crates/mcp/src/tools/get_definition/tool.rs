@@ -1,0 +1,74 @@
+use std::borrow::Cow;
+use std::sync::Arc;
+
+use database::kuzu::database::KuzuDatabase;
+use rmcp::model::{CallToolResult, Content, JsonObject, Tool, object};
+use serde_json::json;
+use workspace_manager::WorkspaceManager;
+
+use super::constants::{GET_DEFINITION_TOOL_DESCRIPTION, GET_DEFINITION_TOOL_NAME};
+use super::input::GetDefinitionInput;
+use super::service::GetDefinitionService;
+use crate::tools::types::KnowledgeGraphTool;
+
+pub struct GetDefinitionTool {
+    service: GetDefinitionService,
+}
+
+impl GetDefinitionTool {
+    pub fn new(database: Arc<KuzuDatabase>, workspace_manager: Arc<WorkspaceManager>) -> Self {
+        Self {
+            service: GetDefinitionService::new(database, workspace_manager),
+        }
+    }
+}
+
+impl KnowledgeGraphTool for GetDefinitionTool {
+    fn name(&self) -> &str {
+        GET_DEFINITION_TOOL_NAME
+    }
+
+    fn to_mcp_tool(&self) -> Tool {
+        let input_schema = json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Absolute or project-relative path to the file that contains the symbol usage. Example: src/main/java/com/example/User.java"
+                },
+                "line": {
+                    "type": "string",
+                    "description": "Exact line of code copied from the file (whitespace must match). Example: var name = user.getFirstName() + user.getLastName();"
+                },
+                "symbol_name": {
+                    "type": "string",
+                    "description": "Callable symbol to resolve (method/function name). Example: getFirstName"
+                }
+            },
+            "required": ["file_path", "line", "symbol_name"]
+        });
+
+        Tool {
+            name: Cow::Borrowed(GET_DEFINITION_TOOL_NAME),
+            description: Some(Cow::Borrowed(GET_DEFINITION_TOOL_DESCRIPTION)),
+            input_schema: Arc::new(object(input_schema)),
+            output_schema: None,
+            annotations: None,
+        }
+    }
+
+    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+        let input = GetDefinitionInput::try_from(params)?;
+        let result = self.service.get_definition(input)?;
+        let json_result = serde_json::to_value(result).map_err(|e| {
+            rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Failed to serialize result: {}", e),
+                None,
+            )
+        })?;
+        Ok(CallToolResult::success(vec![
+            Content::json(json_result).unwrap(),
+        ]))
+    }
+}

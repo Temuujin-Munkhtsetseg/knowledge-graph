@@ -7,6 +7,8 @@ use crate::tools::INDEX_PROJECT_TOOL_NAME;
 use crate::tools::SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME;
 use crate::tools::SearchCodebaseDefinitionsTool;
 use crate::tools::analyze_code_files::AnalyzeCodeFilesTool;
+use crate::tools::get_definition::GetDefinitionTool;
+use crate::tools::get_definition::constants::GET_DEFINITION_TOOL_NAME;
 use crate::tools::get_symbol_references::GetSymbolReferencesTool;
 use crate::tools::index_project::IndexProjectTool;
 use crate::tools::types::KnowledgeGraphTool;
@@ -69,6 +71,14 @@ impl AvailableToolsService {
             Box::new(GetSymbolReferencesTool::new(
                 database.clone(),
                 query_service.clone(),
+                workspace_manager.clone(),
+            )),
+        );
+
+        tools.insert(
+            GET_DEFINITION_TOOL_NAME.to_string(),
+            Box::new(GetDefinitionTool::new(
+                database.clone(),
                 workspace_manager.clone(),
             )),
         );
