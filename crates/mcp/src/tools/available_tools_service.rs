@@ -4,11 +4,11 @@ use std::sync::Arc;
 use crate::tools::ANALYZE_CODE_FILES_TOOL_NAME;
 use crate::tools::GET_SYMBOL_REFERENCES_TOOL_NAME;
 use crate::tools::INDEX_PROJECT_TOOL_NAME;
-use crate::tools::SEARCH_CODEBASE_TOOL_NAME;
+use crate::tools::SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME;
+use crate::tools::SearchCodebaseDefinitionsTool;
 use crate::tools::analyze_code_files::AnalyzeCodeFilesTool;
 use crate::tools::get_symbol_references::GetSymbolReferencesTool;
 use crate::tools::index_project::IndexProjectTool;
-use crate::tools::search_codebase::SearchCodebaseTool;
 use crate::tools::types::KnowledgeGraphTool;
 use crate::tools::workspace_tools::get_list_projects_tool;
 use database::kuzu::database::KuzuDatabase;
@@ -40,8 +40,8 @@ impl AvailableToolsService {
         );
 
         tools.insert(
-            SEARCH_CODEBASE_TOOL_NAME.to_string(),
-            Box::new(SearchCodebaseTool::new(
+            SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME.to_string(),
+            Box::new(SearchCodebaseDefinitionsTool::new(
                 query_service.clone(),
                 workspace_manager.clone(),
             )),
@@ -80,7 +80,7 @@ impl AvailableToolsService {
         self.tools.values().map(|tool| tool.to_mcp_tool()).collect()
     }
 
-    pub fn call_tool(
+    pub async fn call_tool(
         &self,
         tool_name: &str,
         params: JsonObject,

@@ -69,5 +69,6 @@ impl ServerHandler for DefaultMcpService {
     ) -> Result<rmcp::model::CallToolResult, ErrorData> {
         self.available_tools_service
             .call_tool(request.name.as_ref(), request.arguments.unwrap_or_default())
+            .await
     }
 }

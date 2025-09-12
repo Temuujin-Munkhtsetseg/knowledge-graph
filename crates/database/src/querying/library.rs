@@ -27,6 +27,7 @@ pub enum QueryParameterDefinition {
     Int(Option<i64>),
     Float(Option<f64>),
     Boolean(Option<bool>),
+    Array(Option<Vec<String>>),
 }
 
 // TODO: Handle new ID for definitions (file_path + fqn)
@@ -914,6 +915,63 @@ impl QueryLibrary {
                 ("import_type", STRING_MAPPER),
                 ("import_path", STRING_MAPPER),
                 ("import_alias", STRING_MAPPER),
+            ]),
+        }
+    }
+
+    pub fn get_search_definitions_query() -> Query {
+        Query {
+            query: r#"
+                MATCH (d:DefinitionNode)
+                WHERE ANY(term IN $search_terms WHERE toLower(d.name) CONTAINS term)
+                RETURN 
+                    d.name as name,
+                    d.fqn as fqn,
+                    d.definition_type as definition_type,
+                    d.primary_file_path as file_path,
+                    d.start_line as start_line,
+                    d.end_line as end_line
+                ORDER BY d.name
+                SKIP $skip
+                LIMIT $limit
+            "#
+            .to_string(),
+            parameters: HashMap::from([
+                (
+                    "search_terms",
+                    QueryParameter {
+                        name: "search_terms",
+                        description: "The search terms to match against node names or FQNs (case insensitive).",
+                        required: true,
+                        definition: QueryParameterDefinition::Array(None),
+                    },
+                ),
+                (
+                    "limit",
+                    QueryParameter {
+                        name: "limit",
+                        description: "The maximum number of search results to return.",
+                        required: false,
+                        definition: QueryParameterDefinition::Int(Some(10)),
+                    },
+                ),
+                (
+                    "skip",
+                    QueryParameter {
+                        name: "skip",
+                        description: "The number of search results to skip.",
+                        required: false,
+                        definition: QueryParameterDefinition::Int(Some(0)),
+                    },
+                ),
+            ]),
+            result: HashMap::from([
+                ("id", STRING_MAPPER),
+                ("name", STRING_MAPPER),
+                ("fqn", STRING_MAPPER),
+                ("file_path", STRING_MAPPER),
+                ("start_line", INT_MAPPER),
+                ("end_line", INT_MAPPER),
             ]),
         }
     }
