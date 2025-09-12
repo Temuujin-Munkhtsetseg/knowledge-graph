@@ -3005,7 +3005,10 @@ dependencies = [
  "tempfile",
  "testing",
  "tokio",
+ "tokio-test",
  "tokio-util",
+ "tracing",
+ "tracing-test",
  "workspace-manager",
 ]
 

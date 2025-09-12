@@ -16,15 +16,16 @@ Input:
 
 Output: An array of file entries containing all their definitions and imports.
 
-### search_codebase
+### search_codebase_definitions
 
-Search for specific terms accross the indexed content and get contextual results.
+Efficiently searches the codebase for functions, classes, methods, constants, interfaces that contain one or more search terms. Start your search with an overview of the signatures, then drill down into the full implementation bodies if needed. Returns the definition signatures with optional full implementation bodies. Supports exact matches, partial matches, and case-sensitive/insensitive search modes. Use this tool for code exploration, refactoring, debugging, and understanding code structure.
 
 Input:
 
-- `project_absolute_path` (string): The absolute path to an indexed project.
-- `search_terms` (string[]): One or more terms to search accross the code base.
-- `limit` (int, optional) (default: 50): The maximum amount of results to include in the response.
+- `project_absolute_path` (string): Absolute filesystem path to the project root directory where code definitions should be searched. Must be a valid directory path.
+- `search_terms` (string[]): List of code identifiers to search for definitions. Can include function names, class names, method names, constants, etc.
+- `include_full_body` (boolean, optional) (default: false): Use false when requesting an overview of multiple definitions. Switch to true to see how full implementation of specific definitions. Start with false, then switch to true for the items you want to examine closely.
+- `page` (integer, optional) (default: 1): Page number for pagination, starting from 1.
 
 Output: An array containing the code entries matching any of the search terms.
 

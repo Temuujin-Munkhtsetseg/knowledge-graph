@@ -20,6 +20,10 @@ futures = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]
+indexer = { path = "../indexer", features = ["test-utils"] }
 tempfile = { workspace = true }
 database = { path = "../database", features = ["test-utils"] }
 testing = { path = "../testing" }
+tracing = { workspace = true }
+tracing-test = { workspace = true }
+tokio-test = { workspace = true }

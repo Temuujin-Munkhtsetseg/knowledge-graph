@@ -6,6 +6,9 @@ edition = "2024"
 [lib]
 path = "src/lib.rs"
 
+[features]
+test-utils = []
+
 [dependencies]
 parser-core = { workspace = true }
 gitalisk-core = { workspace = true }
