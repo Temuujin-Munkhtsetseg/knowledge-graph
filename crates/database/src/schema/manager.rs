@@ -4,6 +4,7 @@ use crate::kuzu::types::QueryNoop;
 use crate::querying::query_builder::QueryBuilder;
 use crate::schema::init::{NODE_TABLES, RELATIONSHIP_TABLES};
 use crate::schema::types::{NodeTable, RelationshipTable, SchemaStats};
+use dunce;
 use kuzu::Database;
 use tracing::{info, warn};
 
@@ -173,9 +174,20 @@ impl<'a> SchemaManager<'a> {
         for table in NODE_TABLES.iter() {
             let file_path = std::path::Path::new(parquet_dir).join(table.parquet_filename);
             if file_path.exists() {
-                info!("Importing {} from {}", table.name, file_path.display());
+                // On Windows, `std::fs::canonicalize` can return a UNC path that is not
+                // well-handled by some programs. `dunce::canonicalize` is a drop-in
+                // replacement that avoids this issue. On other platforms, it's an
+                // alias for `std::fs::canonicalize`.
+                let canonical_path = dunce::canonicalize(&file_path).map_err(|e| {
+                    DatabaseError::Io(std::io::Error::other(format!(
+                        "Failed to canonicalize path {}: {}",
+                        file_path.display(),
+                        e
+                    )))
+                })?;
+                info!("Importing {} from {}", table.name, canonical_path.display());
                 transaction_conn
-                    .copy_nodes_from_parquet(table.name, file_path.to_str().unwrap())
+                    .copy_nodes_from_parquet(table.name, canonical_path.to_str().unwrap())
                     .map_err(|e| {
                         warn!("Failed to import {}: {}", table.name, e);
                         e
@@ -202,9 +214,20 @@ impl<'a> SchemaManager<'a> {
                 let (from, to) = from_to_pair;
                 let file_path = std::path::Path::new(parquet_dir).join(filename);
                 if file_path.exists() {
+                    // On Windows, `std::fs::canonicalize` can return a UNC path that is not
+                    // well-handled by some programs. `dunce::canonicalize` is a drop-in
+                    // replacement that avoids this issue. On other platforms, it's an
+                    // alias for `std::fs::canonicalize`.
+                    let canonical_path = dunce::canonicalize(&file_path).map_err(|e| {
+                        DatabaseError::Io(std::io::Error::other(format!(
+                            "Failed to canonicalize path {}: {}",
+                            file_path.display(),
+                            e
+                        )))
+                    })?;
                     match transaction_conn.copy_relationships_from_parquet(
                         table.name,
-                        file_path.to_str().unwrap(),
+                        canonical_path.to_str().unwrap(),
                         from.name,
                         to.name,
                     ) {

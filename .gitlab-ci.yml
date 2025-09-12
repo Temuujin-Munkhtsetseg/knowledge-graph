@@ -20,7 +20,7 @@ include:
     file: templates/gcp_auth.yaml
 
 .install-gitlab-xtasks: &install-gitlab-xtasks |
-    cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v${GITLAB_XTASKS_VERSION} --force
+  cargo install --git https://gitlab.com/gitlab-org/rust/gitlab-xtasks --tag v${GITLAB_XTASKS_VERSION} --force
 
 .rust-job-template:
   tags:
@@ -59,7 +59,7 @@ rust-lint-check:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   script:
-    - cargo clippy --all-targets --all-features --features no-frontend -- -D warnings  
+    - cargo clippy --all-targets --all-features --features no-frontend -- -D warnings
   extends: .rust-job-template
 
 xtasks-verify-newlines:
@@ -101,7 +101,7 @@ build-bindings:
   variables:
     PLATFORM: Linux
     ARCH: x86_64
-    CARGO_PARAMS: '--release'
+    CARGO_PARAMS: "--release"
   artifacts:
     paths:
       - ./gkg-linux-${ARCH}.tar.gz
@@ -158,24 +158,24 @@ docs-comment:
     - |
       # Construct the docs URL based on the branch
       DOCS_URL="${CI_PAGES_URL}/${PAGES_PREFIX}"
-      
+
       # Create markdown comment content
       cat > docs-ready-comment.md << EOF
       ## 📚 Documentation Preview Ready
-      
+
       The documentation for this merge request has been built and deployed.
-      
+
       **📖 View Documentation:** [${DOCS_URL}](${DOCS_URL})
-      
+
       This preview will be available until the merge request is closed or merged.
       EOF
-      
+
       # Post the comment
       gitlab-xtasks comment post \
         --type add-or-edit \
         --unique-id "docs-preview-comment" \
         --file-path docs-ready-comment.md
-      
+
       echo "Documentation preview comment posted successfully"
       echo "Documentation available at: ${DOCS_URL}"
   extends: .rust-job-template
@@ -228,7 +228,7 @@ go-tests:
       # Debug: Show where gitlab-xtasks was installed
       which gitlab-xtasks || echo "gitlab-xtasks not found in PATH"
       echo "Current PATH: $PATH"
-      
+
       # Platform-specific setup
       if [[ "$RUNNER_OS" == "macOS" ]]; then
         # rustup will automatically use the version from rust-toolchain.toml
@@ -254,7 +254,7 @@ go-tests:
 
 # Linux GKG benchmark execution
 gkg-benchmark-linux:
-  extends: 
+  extends:
     - .rust-job-template
     - .gkg-benchmark-template
   variables:
@@ -283,7 +283,7 @@ gkg-benchmark-macos:
 # Collect and analyze all GKG benchmark results
 gkg-benchmark-analyze:
   stage: benchmark
-  needs: 
+  needs:
     - gkg-benchmark-linux
     - gkg-benchmark-macos
   rules:
@@ -300,7 +300,7 @@ gkg-benchmark-analyze:
         --job-url "$CI_JOB_URL" \
         --branch "$CI_COMMIT_REF_NAME" \
         --output-file gkg-benchmark-results.md
-      
+
       # Generate JSON report with metadata  
       gitlab-xtasks benchmark analyze \
         --pattern "gkg-benchmark-*.json" \
@@ -309,11 +309,11 @@ gkg-benchmark-analyze:
         --job-url "$CI_JOB_URL" \
         --branch "$CI_COMMIT_REF_NAME" \
         --output-file gkg-benchmark-results.json
-      
+
       echo "Generated GKG benchmark reports:"
       echo "- Markdown: gkg-benchmark-results.md"
       echo "- JSON: gkg-benchmark-results.json"
-      
+
       # Post benchmark results as MR comment using add-or-edit strategy
       if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
         echo "Posting GKG benchmark results to MR !$CI_MERGE_REQUEST_IID..."
