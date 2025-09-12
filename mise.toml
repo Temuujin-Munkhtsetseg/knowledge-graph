@@ -1,6 +1,8 @@
 [tools]
 node = "22"
+python = "3.12"
 rust = "stable"
+uv = "latest"
 
 # compiles cli and static library for release
 [tasks.build]
@@ -94,3 +96,7 @@ run = "npm run lint --workspace=docs -- --write"
 # runs gitlab-xtasks to check for newlines
 [tasks.newlines-fix]
 run = "gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs --directory . --fix"
+
+# runs basic evaluation script
+[tasks.gkg-evals]
+run = "./packages/gkg-evals/run.sh"

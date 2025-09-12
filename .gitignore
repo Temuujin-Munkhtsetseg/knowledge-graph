@@ -34,6 +34,7 @@ lib/
 # Python
 __pycache__/
 .venv/
+.ruff_cache/
 
 # Environment variables
 .env
@@ -42,14 +43,23 @@ __pycache__/
 packages/gkg-evals/data/patches.jsonl
 packages/gkg-evals/data/fixtures_metadata.json
 packages/gkg-evals/data/opencode_config.json
-packages/gkg-evals/data/metrics.jsonl
+packages/gkg-evals/data/session_data.jsonl
 packages/gkg-evals/data/repos
 packages/gkg-evals/pipeline/pnpm-lock.yaml
 packages/gkg-evals/data/opencode_logs.txt
+packages/gkg-evals/harness
+packages/gkg-evals/data/multiswebench_config.json
+packages/gkg-evals/data/multiswebench_output/
+packages/gkg-evals/data/evals_workdir/
+packages/gkg-evals/data/fixtures
+
+# Summarization
+git_diff_full.txt
 packages/gkg-evals/harness/
 
 # Gemini
 /.gemini
 /.gemini-clipboard
+
 # Ignore pipeline failure logs
 pipline fail/
