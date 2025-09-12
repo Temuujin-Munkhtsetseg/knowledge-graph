@@ -294,7 +294,7 @@ start_gkg_server() {
     
     # Start server in background and capture PID
     echo "Starting gkg server on port 27495..."
-    cargo run --bin gkg server start --detached
+    cargo run --bin gkg server start &
     GKG_PID=$!
 
     # Wait for server to be fully ready
