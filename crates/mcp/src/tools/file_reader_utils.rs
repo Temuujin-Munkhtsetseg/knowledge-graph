@@ -1,7 +1,46 @@
 use futures::future::join_all;
+use std::fs::File as StdFile;
 use std::io::{self};
+use std::io::{BufRead, BufReader as StdBufReader};
 use tokio::fs::File as AsyncFile;
 use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
+
+/// Returns 1-indexed line numbers in the file whose trimmed content equals the given trimmed line.
+/// Leading and trailing whitespace is ignored for comparison.
+pub async fn find_matching_line_numbers(path: &str, line: &str) -> io::Result<Vec<usize>> {
+    let trimmed = line.trim();
+    let file = AsyncFile::open(path).await?;
+    let reader = AsyncBufReader::new(file);
+    let mut lines = reader.lines();
+
+    let mut matches = Vec::new();
+    let mut index: usize = 0;
+    while let Some(l) = lines.next_line().await? {
+        index += 1;
+        if l.trim() == trimmed {
+            matches.push(index);
+        }
+    }
+
+    Ok(matches)
+}
+
+/// Synchronous variant of find_matching_line_numbers
+pub fn find_matching_line_numbers_sync(path: &str, line: &str) -> io::Result<Vec<usize>> {
+    let trimmed = line.trim();
+    let file = StdFile::open(path)?;
+    let reader = StdBufReader::new(file);
+
+    let mut matches = Vec::new();
+    for (idx, line_res) in reader.lines().enumerate() {
+        let l = line_res?;
+        if l.trim() == trimmed {
+            matches.push(idx + 1);
+        }
+    }
+
+    Ok(matches)
+}
 
 /// Reads multiple line ranges from files concurrently and returns per-chunk results in input order.
 ///
@@ -217,5 +256,23 @@ mod tests {
         assert_eq!(results[0].as_ref().unwrap(), "A\n");
         assert!(results[1].is_err());
         assert_eq!(results[2].as_ref().unwrap(), "Y\nZ\n");
+    }
+
+    #[tokio::test]
+    async fn finds_matching_line_numbers_ignoring_whitespace() {
+        let file = write_temp_file("  foo\nbar\n  foo \n   baz\n");
+        let path = file.path().to_string_lossy().to_string();
+
+        let result = find_matching_line_numbers(&path, "foo").await.unwrap();
+        assert_eq!(result, vec![1, 3]);
+    }
+
+    #[test]
+    fn finds_matching_line_numbers_sync_ignoring_whitespace() {
+        let file = write_temp_file("  foo\nbar\n  foo \n   baz\n");
+        let path = file.path().to_string_lossy().to_string();
+
+        let result = find_matching_line_numbers_sync(&path, "foo").unwrap();
+        assert_eq!(result, vec![1, 3]);
     }
 }

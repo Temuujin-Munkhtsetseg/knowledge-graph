@@ -70,3 +70,34 @@ Output: An object containing:
     - `location` (string): File path and line number where the call occurs
     - `fqn` (string): Fully qualified name of the calling symbol
     - `referenced_by` (array): Recursive references (up to the specified depth)
+
+### get_definition
+
+Navigates directly to the definition of a function or method call on a specific line. This tool is useful for:
+
+- Quickly understanding what a specific function or method does without manual searching.
+- Verifying the implementation details of a symbol encountered in the code.
+- Efficiently exploring the codebase by jumping from usage to definition.
+
+Input:
+
+- `file_path` (string): Absolute or project-relative path to the file containing the symbol usage.
+- `line` (string): The exact line of code containing the symbol (whitespace must be preserved).
+- `symbol_name` (string): The name of the callable symbol (method/function) to resolve.
+
+Output: An object containing:
+
+- `definitions` (array): A list of definitions found for the symbol. Each entry can be one of two types:
+  - **Definition**: For symbols defined within the workspace.
+  - **ImportedSymbol**: For symbols imported from external dependencies.
+- Both types include the following fields:
+  - `type` (string): The type of the definition ("Definition" or "ImportedSymbol").
+  - `name` (string): The name of the symbol.
+  - `fqn` (string): The fully qualified name of the symbol.
+  - `primary_file_path` (string): The project-relative file path where the symbol is defined or imported.
+  - `absolute_file_path` (string): The absolute file path.
+  - `start_line` (integer): The starting line number of the definition.
+  - `end_line` (integer): The ending line number of the definition.
+  - `code` (string): A snippet of the code for the definition.
+  - `is_ambiguous` (boolean): A flag indicating if the found reference is ambiguous.
+- `system_message` (string, optional): A message provided if multiple lines or symbol occurrences were found, which may affect the results.
