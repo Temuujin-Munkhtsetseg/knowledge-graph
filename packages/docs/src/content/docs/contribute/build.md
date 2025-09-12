@@ -9,12 +9,12 @@ sidebar:
 
 GitLab Knowledge Graph has two parts: a backend (Rust workspace crates) and a frontend (Node workspace packages).
 
-- **Backend (Rust crates)**: define the data model, API, and services (e.g., `crates/http-server`, `crates/database`, `crates/indexer`).
+- **Backend (Rust crates)**: define the data model, API, and services (e.g., `crates/http-server-desktop`, `crates/database`, `crates/indexer`).
 - **Frontend (Node workspace packages)**:
   - `@gitlab-org/gkg` (`packages/gkg/src`): TypeScript bindings generated from Rust via [`ts-rs`](https://crates.io/crates/ts-rs).
   - `@gitlab-org/gkg-frontend` (`packages/frontend`): Vue + Vite UI that depends on `@gitlab-org/gkg`.
 
-The `http-server` crate [embeds](https://crates.io/crates/rust-embed) the frontend `dist` into the final `gkg` binary. Docs (`packages/docs`) build separately.
+The `http-server-desktop` crate [embeds](https://crates.io/crates/rust-embed) the frontend `dist` into the final `gkg` binary. Docs (`packages/docs`) build separately.
 
 ## Build order
 
@@ -26,7 +26,7 @@ mise run bindings-gen
 cargo test export_bindings --features no-frontend
 ```
 
-We commit generated bindings to git; rebuild them whenever you change the Rust types that drive the API (primarily in `crates/http-server`).
+We commit generated bindings to git; rebuild them whenever you change the Rust types that drive the API (primarily in `crates/http-server-desktop`).
 
 2. Build the frontend packages.
 
@@ -35,7 +35,7 @@ npm ci
 npm run build --workspace=@gitlab-org/gkg-frontend
 ```
 
-The Rust HTTP server (`crates/http-server`) embeds `packages/frontend/dist` into the binary. Without `--features no-frontend`, the binary requires these assets to exist.
+The Rust HTTP server (`crates/http-server-desktop`) embeds `packages/frontend/dist` into the binary. Without `--features no-frontend`, the binary requires these assets to exist.
 
 3. Build the main binary (`gkg`).
 

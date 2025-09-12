@@ -60,7 +60,7 @@ pub async fn start(
         }
 
         // Preselect a port and create lock file before forking
-        let port = port_override.unwrap_or(http_server::find_unused_port()?);
+        let port = port_override.unwrap_or(http_server_desktop::find_unused_port()?);
         // Write a provisional lock (no pid yet) so other invocations can discover the port
         write_lock_info(&ServerLockInfo { port, pid: None })?;
         print_server_info(port)?;
@@ -112,7 +112,7 @@ pub async fn start(
 
     let instance = get_single_instance()?;
     if instance.is_single() {
-        let port = port_override.unwrap_or(http_server::find_unused_port()?);
+        let port = port_override.unwrap_or(http_server_desktop::find_unused_port()?);
         let lock = ServerLockInfo {
             port,
             pid: Some(process::id()),
@@ -132,7 +132,7 @@ pub async fn start(
             process::exit(0);
         })?;
 
-        http_server::run(
+        http_server_desktop::run(
             port,
             enable_reindexing,
             Arc::clone(&database),
