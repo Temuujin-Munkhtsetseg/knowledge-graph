@@ -35,12 +35,12 @@ Creates new or rebuilds the Knowledge Graph index for a project to reflect recen
 
 Input:
 
-- `project_absolute_path` (string): The absolute path to the current project directory to index synchronously.
+- `project` (string): The absolute path to the project root directory to index.
 
 Output: An object containing:
 
-- `status` (string): "ok" when indexing completes successfully
-- `stats` (object): Project indexing statistics including total files processed and project path
+- `stats` (object): Detailed statistics about the indexing process, including file counts, definition counts, relationships, and language-specific information.
+- `system_message` (string, optional): A message indicating if there were any issues during indexing, for example if no definitions were found.
 
 ### get_references
 

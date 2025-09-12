@@ -7,10 +7,8 @@ pub mod index_project;
 pub mod search_codebase_definitions;
 pub mod types;
 pub mod utils;
-pub mod workspace_tools;
 
 pub use analyze_code_files::*;
 pub use available_tools_service::*;
 pub use index_project::*;
 pub use search_codebase_definitions::*;
-pub use workspace_tools::*;

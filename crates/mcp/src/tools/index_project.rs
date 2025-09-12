@@ -1,23 +1,89 @@
-use std::borrow::Cow;
 use std::sync::Arc;
 use std::thread;
+use std::{borrow::Cow, collections::HashMap};
 
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use indexer::execution::{config::IndexingConfigBuilder, executor::IndexingExecutor};
+use indexer::stats::ProjectStatistics;
 use rmcp::model::{CallToolResult, Content, ErrorCode, JsonObject, Tool, object};
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::json;
 use tokio::runtime::Builder;
 use workspace_manager::WorkspaceManager;
 
-use crate::tools::types::KnowledgeGraphTool;
+use crate::tools::types::{KnowledgeGraphTool, KnowledgeGraphToolInput};
 
 pub const INDEX_PROJECT_TOOL_NAME: &str = "index_project";
-const INDEX_PROJECT_TOOL_DESCRIPTION: &str = "Rebuilds the Knowledge Graph index for a project to reflect recent changes. Use this tool when: \
-- You have made substantial modifications to project files, structure, or content \
-- The Knowledge Graph seems outdated or missing recent changes \
-- Search results are not reflecting recent updates to the project \
-- After bulk operations like file imports, deletions, or major refactoring";
+const INDEX_PROJECT_TOOL_DESCRIPTION: &str = r#"Rebuild the Knowledge Graph index to reflect recent changes in the project.
+
+Behavior:
+- Scans the entire project and regenerates the Knowledge Graph from scratch.
+- Updates all file relationships, dependencies, and cross-references.
+
+Requirements:
+- Specify the absolute filesystem path to the project root directory.
+
+When to use:
+- After substantial file modifications, additions, or deletions.
+- When the Knowledge Graph appears stale or incomplete.
+
+Example:
+Call:
+{ "project": "/path/to/project" }
+"#;
+
+#[derive(Serialize)]
+pub struct IndexProjectToolOutput {
+    pub stats: IndexProjectToolStatsOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_message: Option<String>,
+}
+
+impl From<ProjectStatistics> for IndexProjectToolStatsOutput {
+    fn from(project_statistics: ProjectStatistics) -> Self {
+        Self {
+            project_path: project_statistics.project_path,
+            total_files: project_statistics.total_files,
+            total_definitions: project_statistics.total_definitions,
+            total_imported_symbols: project_statistics.total_imported_symbols,
+            total_definition_relationships: project_statistics.total_definition_relationships,
+            total_imported_symbol_relationships: project_statistics
+                .total_imported_symbol_relationships,
+            languages: project_statistics
+                .languages
+                .into_iter()
+                .map(|language| IndexProjectToolLanguageStatsOutput {
+                    language: language.language,
+                    file_count: language.file_count,
+                    definition_count: language.definitions_count,
+                    definition_type_counts: language.definition_type_counts,
+                })
+                .collect(),
+            indexing_duration_seconds: project_statistics.indexing_duration_seconds,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct IndexProjectToolStatsOutput {
+    pub project_path: String,
+    pub total_files: usize,
+    pub total_definitions: usize,
+    pub total_imported_symbols: usize,
+    pub total_definition_relationships: usize,
+    pub total_imported_symbol_relationships: usize,
+    pub languages: Vec<IndexProjectToolLanguageStatsOutput>,
+    pub indexing_duration_seconds: f64,
+}
+
+#[derive(Serialize)]
+pub struct IndexProjectToolLanguageStatsOutput {
+    pub language: String,
+    pub file_count: usize,
+    pub definition_count: usize,
+    pub definition_type_counts: HashMap<String, usize>,
+}
 
 pub struct IndexProjectTool {
     database: Arc<KuzuDatabase>,
@@ -37,6 +103,20 @@ impl IndexProjectTool {
             event_bus,
         }
     }
+
+    fn get_system_message(&self, project_stats: &ProjectStatistics) -> Option<String> {
+        if project_stats.total_definitions == 0 {
+            return Some(format!(
+                r#"
+            The Knowledge Graph failed to index any definitions in the project {}.
+            This means that the Knowledge Graph is unable to provide useful information for this project and using its tools will not be useful for your current task.
+            "#,
+                project_stats.project_path
+            ));
+        }
+
+        None
+    }
 }
 
 impl KnowledgeGraphTool for IndexProjectTool {
@@ -45,15 +125,24 @@ impl KnowledgeGraphTool for IndexProjectTool {
     }
 
     fn to_mcp_tool(&self) -> Tool {
+        let all_projects_paths = self
+            .workspace_manager
+            .list_all_projects()
+            .iter()
+            .map(|project| project.project_path.clone())
+            .collect::<Vec<_>>()
+            .join(",");
+
         let input_schema = json!({
             "type": "object",
             "properties": {
-                "project_absolute_path": {
+                "project": {
                     "type": "string",
-                    "description": "The absolute path to the current project directory to re-index synchronously."
+                    "description": "Absolute filesystem path to the project root directory to re-index.",
+                    "enum": [all_projects_paths]
                 }
             },
-            "required": ["project_absolute_path"]
+            "required": ["project"]
         });
 
         Tool {
@@ -66,16 +155,9 @@ impl KnowledgeGraphTool for IndexProjectTool {
     }
 
     fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
-        let project_absolute_path = params
-            .get("project_absolute_path")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                rmcp::ErrorData::new(
-                    ErrorCode::INVALID_REQUEST,
-                    "Missing project_absolute_path".to_string(),
-                    None,
-                )
-            })?;
+        let input = KnowledgeGraphToolInput { params };
+
+        let project_absolute_path = input.get_string("project")?;
 
         // Resolve workspace for the project
         let project_info = self
@@ -134,21 +216,14 @@ impl KnowledgeGraphTool for IndexProjectTool {
             )
         })??;
 
-        let mut result = JsonObject::new();
-        result.insert("status".to_string(), Value::String("ok".to_string()));
-        result.insert(
-            "stats".to_string(),
-            serde_json::to_value(project_stats).map_err(|e| {
-                rmcp::ErrorData::new(
-                    ErrorCode::INTERNAL_ERROR,
-                    format!("Failed to serialize stats: {e}"),
-                    None,
-                )
-            })?,
-        );
+        let system_message = self.get_system_message(&project_stats);
+        let output = IndexProjectToolOutput {
+            stats: project_stats.into(),
+            system_message,
+        };
 
         Ok(CallToolResult::success(vec![
-            Content::json(result).unwrap(),
+            Content::json(serde_json::to_value(output).unwrap()).unwrap(),
         ]))
     }
 }
@@ -195,10 +270,7 @@ mod tests {
         );
 
         let mut params = JsonObject::new();
-        params.insert(
-            "project_absolute_path".to_string(),
-            Value::String(project_path.clone()),
-        );
+        params.insert("project".to_string(), Value::String(project_path.clone()));
 
         let result = tool.call(params).expect("tool call should succeed");
         let text = result.content.unwrap()[0]
@@ -209,7 +281,6 @@ mod tests {
             .clone();
 
         let obj: Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(obj.get("status").and_then(|v| v.as_str()).unwrap(), "ok");
 
         let stats = obj
             .get("stats")
