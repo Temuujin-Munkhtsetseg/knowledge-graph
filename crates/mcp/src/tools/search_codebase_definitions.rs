@@ -310,6 +310,7 @@ impl SearchCodebaseDefinitionsTool {
                 Decision Framework:
                 - If sufficient context for your current task is provided in the results, you can stop here.
                 - If you've found a definition you want to examine further, use the `get_references` tool to examine the references to the relevant symbol.
+                - If you've found a definition you want to read the implementation of, use the `read_definitions` tool to read the implementation.
                 - If the results revealed a new relevant symbol, use the `search_codebase_definitions` tool again with different search terms to explore further.
             "#);
         } else if results_count == 0 {

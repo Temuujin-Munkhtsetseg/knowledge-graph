@@ -74,6 +74,26 @@ Output: An object containing:
 - `next_page` (integer, optional): The next page number for pagination. If this field is absent, you have reached the last page of results.
 - `system_message` (string): Additional information about the search results and suggestions for next steps.
 
+### read_definitions
+
+Read the definition bodies for multiple definitions across the codebase. Optimizes token usage by allowing multiple definition names per file.
+
+Input:
+
+- `definitions` (array): Array of definition requests with names array and file path. Each object in the array has two required fields:
+  - `names` (array): Array of exact identifier names to read from the same file. Must match symbol names exactly as they appear in code, without namespace prefixes or file extensions. Example: ['myFunction', 'MyClass'].
+  - `file_path` (string): Absolute or project-relative path to the file that contains the definitions. Example: src/main/java/com/example/User.java
+
+Output: An object containing:
+
+- `definitions` (array): Array of matching code definitions, each containing:
+  - `name` (string): The name of the definition.
+  - `fqn` (string): The fully qualified name of the definition.
+  - `definition_type` (string): The type of definition (e.g., "Method", "Class").
+  - `location` (string): File path and line range where the definition is located.
+  - `definition_body` (string): The full code of the definition's body.
+- `system_message` (string): An informational message, for example if some definitions were not found.
+
 ### get_definition
 
 Navigates directly to the definition of a function or method call on a specific line. This tool is useful for:
