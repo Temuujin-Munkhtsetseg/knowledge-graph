@@ -28,9 +28,7 @@ If you built gkg from source or downloaded it manually, add its location to your
 
 ### IDE setup
 
-❗ In the GitLab extension settings, enable **"Skip integrity checks"**. This is temporary and will be removed in future releases.
-
-Restart your IDE.
+After installing `gkg` and verifying that you can run `gkg` command, please restart your IDE.
 
 You should see a new "Knowledge Graph" panel in your IDE. If you don't:
 
