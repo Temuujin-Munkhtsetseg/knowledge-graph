@@ -11,6 +11,8 @@ use crate::tools::get_definition::constants::GET_DEFINITION_TOOL_NAME;
 use crate::tools::get_references::GET_REFERENCES_TOOL_NAME;
 use crate::tools::get_references::tool::GetReferencesTool;
 use crate::tools::index_project::IndexProjectTool;
+use crate::tools::read_definitions::READ_DEFINITIONS_TOOL_NAME;
+use crate::tools::read_definitions::tool::ReadDefinitionsTool;
 use crate::tools::types::KnowledgeGraphTool;
 use database::kuzu::database::KuzuDatabase;
 use database::querying::QueryingService;
@@ -70,6 +72,14 @@ impl AvailableToolsService {
             GET_DEFINITION_TOOL_NAME.to_string(),
             Box::new(GetDefinitionTool::new(
                 database.clone(),
+                workspace_manager.clone(),
+            )),
+        );
+
+        tools.insert(
+            READ_DEFINITIONS_TOOL_NAME.to_string(),
+            Box::new(ReadDefinitionsTool::new(
+                query_service.clone(),
                 workspace_manager.clone(),
             )),
         );
