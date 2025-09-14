@@ -17,6 +17,7 @@ use crate::{
             graph_search::{GraphSearchEndpoint, graph_search_handler},
             graph_stats::{GraphStatsEndpoint, graph_stats_handler},
         },
+        health::health_handler,
         info::{InfoEndpoint, info_handler},
         workspace_delete::{WorkspaceDeleteEndpoint, delete_handler},
         workspace_index::{WorkspaceIndexEndpoint, index_handler},
@@ -145,6 +146,7 @@ pub async fn run(
         .with_state(state);
 
     let app = Router::new()
+        .route("/health", get(health_handler))
         .nest("/api", api_router)
         .nest_service("/mcp", mcp_http_router)
         .nest_service("/mcp/sse", mcp_sse_router)
