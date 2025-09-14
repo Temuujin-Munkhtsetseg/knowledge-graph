@@ -112,4 +112,8 @@ pub struct ServerStartArgs {
     /// Internal: specify port to bind (used by detached launcher)
     #[arg(long, hide = true)]
     pub port: Option<u16>,
+
+    /// Path to MCP configuration file (example: ~/.gkg/mcp.settings.json)
+    #[arg(long)]
+    pub mcp_configuration_path: Option<PathBuf>,
 }

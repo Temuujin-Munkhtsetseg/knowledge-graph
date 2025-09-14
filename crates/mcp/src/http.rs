@@ -1,4 +1,4 @@
-use crate::service::DefaultMcpService;
+use crate::{configuration::McpConfiguration, service::DefaultMcpService};
 use database::kuzu::database::KuzuDatabase;
 use database::querying::types::QueryingService;
 use event_bus::EventBus;
@@ -13,6 +13,7 @@ pub fn mcp_http_service(
     workspace_manager: Arc<WorkspaceManager>,
     database: Arc<KuzuDatabase>,
     event_bus: Arc<EventBus>,
+    configuration: Arc<McpConfiguration>,
 ) -> StreamableHttpService<DefaultMcpService> {
     StreamableHttpService::new(
         move || {
@@ -21,6 +22,7 @@ pub fn mcp_http_service(
                 Arc::clone(&workspace_manager),
                 Arc::clone(&database),
                 Arc::clone(&event_bus),
+                Arc::clone(&configuration),
             ))
         },
         Arc::new(LocalSessionManager::default()),

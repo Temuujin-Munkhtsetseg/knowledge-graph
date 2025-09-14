@@ -1,3 +1,4 @@
+use crate::configuration::McpConfiguration;
 use crate::tools::AvailableToolsService;
 use database::kuzu::database::KuzuDatabase;
 use database::querying::types::QueryingService;
@@ -20,6 +21,7 @@ impl DefaultMcpService {
         workspace_manager: Arc<WorkspaceManager>,
         database: Arc<KuzuDatabase>,
         event_bus: Arc<EventBus>,
+        configuration: Arc<McpConfiguration>,
     ) -> Self {
         Self {
             available_tools_service: AvailableToolsService::new(
@@ -27,6 +29,7 @@ impl DefaultMcpService {
                 workspace_manager,
                 database,
                 event_bus,
+                configuration,
             ),
         }
     }

@@ -1,3 +1,4 @@
+pub mod configuration;
 pub mod duo_configuration;
 pub mod http;
 pub mod service;

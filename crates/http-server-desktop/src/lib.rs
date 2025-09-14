@@ -37,7 +37,7 @@ use axum_embed::ServeEmbed;
 use database::querying::service::DatabaseQueryingService;
 use database::{kuzu::database::KuzuDatabase, querying::QueryingService};
 use event_bus::EventBus;
-use mcp::{http::mcp_http_service, sse::mcp_sse_router};
+use mcp::{configuration::McpConfiguration, http::mcp_http_service, sse::mcp_sse_router};
 use rust_embed::Embed;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
@@ -73,6 +73,7 @@ pub async fn run(
     database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
+    mcp_configuration: Arc<McpConfiguration>,
 ) -> Result<()> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
@@ -118,6 +119,7 @@ pub async fn run(
         Arc::clone(&workspace_manager),
         Arc::clone(&database),
         Arc::clone(&event_bus),
+        Arc::clone(&mcp_configuration),
     );
     let (mcp_sse_router, mcp_sse_cancellation_token) = mcp_sse_router(
         addr,
@@ -125,6 +127,7 @@ pub async fn run(
         Arc::clone(&workspace_manager),
         Arc::clone(&database),
         Arc::clone(&event_bus),
+        Arc::clone(&mcp_configuration),
     );
 
     let api_router = Router::new()

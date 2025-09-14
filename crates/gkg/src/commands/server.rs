@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use mcp::configuration::get_or_create_mcp_configuration;
 use mcp::duo_configuration::add_local_http_server_to_mcp_config;
 use serde_json;
 use std::env;
@@ -33,11 +34,13 @@ pub fn print_server_info(port: u16) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start(
-    register_mcp: Option<std::path::PathBuf>,
+    register_duo_mcp: Option<std::path::PathBuf>,
     enable_reindexing: bool,
     detached: bool,
     port_override: Option<u16>,
+    mcp_configuration_path: Option<std::path::PathBuf>,
     database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
     event_bus: Arc<EventBus>,
@@ -46,7 +49,7 @@ pub async fn start(
         let instance = get_single_instance()?;
         if !instance.is_single() {
             if let Some(existing_port) = is_server_running()? {
-                if let Some(mcp_config_path) = register_mcp {
+                if let Some(mcp_config_path) = register_duo_mcp {
                     add_local_http_server_to_mcp_config(mcp_config_path, existing_port)?;
                 }
                 print_server_info(existing_port)?;
@@ -71,7 +74,7 @@ pub async fn start(
         {
             let current_exe = env::current_exe()?;
             let mut args: Vec<String> = vec!["server".to_string(), "start".to_string()];
-            if let Some(path) = register_mcp.as_ref() {
+            if let Some(path) = register_duo_mcp.as_ref() {
                 args.push("--register-mcp".to_string());
                 args.push(path.display().to_string());
             }
@@ -121,10 +124,15 @@ pub async fn start(
         // print server info to stdout for caller to allow connection
         print_server_info(port)?;
 
-        if let Some(mcp_config_path) = register_mcp {
+        if let Some(mcp_config_path) = register_duo_mcp {
             // TODO: Add logging when this happens
             add_local_http_server_to_mcp_config(mcp_config_path, port)?;
         }
+
+        let mcp_configuration = match mcp_configuration_path {
+            Some(path) => Arc::new(mcp::configuration::read_mcp_configuration(path)),
+            None => Arc::new(get_or_create_mcp_configuration(workspace_manager.clone())),
+        };
 
         let l_file = get_lock_file_path()?;
         ctrlc::set_handler(move || {
@@ -138,10 +146,11 @@ pub async fn start(
             Arc::clone(&database),
             Arc::clone(&workspace_manager),
             Arc::clone(&event_bus),
+            Arc::clone(&mcp_configuration),
         )
         .await
     } else if let Some(port) = is_server_running()? {
-        if let Some(mcp_config_path) = register_mcp {
+        if let Some(mcp_config_path) = register_duo_mcp {
             add_local_http_server_to_mcp_config(mcp_config_path, port)?;
         }
         // print server info to stdout for caller to allow connection

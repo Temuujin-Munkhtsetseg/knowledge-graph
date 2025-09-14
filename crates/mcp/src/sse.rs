@@ -1,4 +1,4 @@
-use crate::service::DefaultMcpService;
+use crate::{configuration::McpConfiguration, service::DefaultMcpService};
 use axum::Router;
 use database::kuzu::database::KuzuDatabase;
 use database::querying::types::QueryingService;
@@ -14,6 +14,7 @@ pub fn mcp_sse_router(
     workspace_manager: Arc<WorkspaceManager>,
     database: Arc<KuzuDatabase>,
     event_bus: Arc<EventBus>,
+    configuration: Arc<McpConfiguration>,
 ) -> (Router, CancellationToken) {
     let (sse_server, router) = SseServer::new(SseServerConfig {
         bind,
@@ -31,6 +32,7 @@ pub fn mcp_sse_router(
             Arc::clone(&workspace_manager),
             Arc::clone(&database),
             Arc::clone(&event_bus),
+            Arc::clone(&configuration),
         )
     });
 
