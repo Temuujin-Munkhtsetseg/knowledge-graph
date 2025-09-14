@@ -366,10 +366,17 @@ impl WorkspaceManager {
     }
 
     pub fn get_project_for_path(&self, project_path: &str) -> Option<ProjectInfo> {
+        // Normalize the incoming path by trimming trailing separators, but preserve root paths
+        let sanitized: &str = if project_path.len() > 1 {
+            project_path.trim_end_matches(std::path::MAIN_SEPARATOR)
+        } else {
+            project_path
+        };
+
         if let Some((workspace_folder_path, _project_metadata)) =
-            self.state_service.find_project(project_path)
+            self.state_service.find_project(sanitized)
         {
-            self.get_project_info(&workspace_folder_path, project_path)
+            self.get_project_info(&workspace_folder_path, sanitized)
         } else {
             None
         }
@@ -1219,5 +1226,45 @@ mod tests {
         let project_info = manager.get_project_for_file(file_path);
 
         assert!(project_info.is_none());
+    }
+
+    #[test]
+    fn test_get_project_for_path_trailing_separator() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_folder_path = temp_dir.path().join("test_workspace");
+        fs::create_dir_all(&workspace_folder_path).unwrap();
+
+        let repo_path = workspace_folder_path.join("test_repo");
+        create_test_git_repo(&repo_path);
+
+        let data_dir = TempDir::new().unwrap();
+        let manager = WorkspaceManager::new_with_directory(data_dir.path().to_path_buf()).unwrap();
+
+        let result = manager
+            .register_workspace_folder(&workspace_folder_path)
+            .unwrap();
+
+        let projects = manager.list_projects_in_workspace(&result.workspace_folder_path);
+        assert_eq!(projects.len(), 1);
+        let project_path = projects[0].project_path.clone();
+
+        // Build paths with trailing separators (single and multiple)
+        let sep = std::path::MAIN_SEPARATOR;
+        let with_one_trailing = format!("{}{}", &project_path, sep);
+        let with_two_trailing = format!("{}{}{}", &project_path, sep, sep);
+
+        let info_one = manager.get_project_for_path(&with_one_trailing);
+        assert!(
+            info_one.is_some(),
+            "Expected project lookup to succeed with one trailing separator"
+        );
+        assert_eq!(info_one.unwrap().project_path, project_path);
+
+        let info_two = manager.get_project_for_path(&with_two_trailing);
+        assert!(
+            info_two.is_some(),
+            "Expected project lookup to succeed with two trailing separators"
+        );
+        assert_eq!(info_two.unwrap().project_path, project_path);
     }
 }
