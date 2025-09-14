@@ -1,4 +1,3 @@
-pub mod analyze_code_files;
 pub mod available_tools_service;
 pub mod file_reader_utils;
 pub mod get_definition;
@@ -11,7 +10,6 @@ pub mod types;
 pub mod utils;
 pub mod xml;
 
-pub use analyze_code_files::*;
 pub use available_tools_service::*;
 pub use index_project::*;
 pub use repo_map::*;

@@ -5,17 +5,6 @@ sidebar:
   order: 2
 ---
 
-### analyze_code_files
-
-List the imports and definitions for a one or multiple code files.
-
-Input:
-
-- `project_absolute_path` (string): The absolute path to an indexed project.
-- `files` (string[]): One or more file absolute path to search accross the code base.
-
-Output: An array of file entries containing all their definitions and imports.
-
 ### search_codebase_definitions
 
 Efficiently searches the codebase for functions, classes, methods, constants, interfaces that contain one or more search terms. Returns the definition information for definitions matching the search terms. Supports exact matches, partial matches, and case-sensitive/insensitive search modes. Use this tool for code exploration, refactoring, debugging, and understanding code structure.

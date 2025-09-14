@@ -2,11 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::configuration::McpConfiguration;
-use crate::tools::ANALYZE_CODE_FILES_TOOL_NAME;
 use crate::tools::INDEX_PROJECT_TOOL_NAME;
 use crate::tools::SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME;
 use crate::tools::SearchCodebaseDefinitionsTool;
-use crate::tools::analyze_code_files::AnalyzeCodeFilesTool;
 use crate::tools::get_definition::GetDefinitionTool;
 use crate::tools::get_definition::constants::GET_DEFINITION_TOOL_NAME;
 use crate::tools::get_references::GET_REFERENCES_TOOL_NAME;
@@ -42,16 +40,6 @@ impl AvailableToolsService {
             tools.insert(
                 SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME.to_string(),
                 Box::new(SearchCodebaseDefinitionsTool::new(
-                    query_service.clone(),
-                    workspace_manager.clone(),
-                )),
-            );
-        }
-
-        if configuration.is_tool_enabled(ANALYZE_CODE_FILES_TOOL_NAME) {
-            tools.insert(
-                ANALYZE_CODE_FILES_TOOL_NAME.to_string(),
-                Box::new(AnalyzeCodeFilesTool::new(
                     query_service.clone(),
                     workspace_manager.clone(),
                 )),
