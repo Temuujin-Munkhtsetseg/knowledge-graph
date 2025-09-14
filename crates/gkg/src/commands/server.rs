@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use mcp::configuration::add_local_http_server_to_mcp_config;
+use mcp::duo_configuration::add_local_http_server_to_mcp_config;
 use serde_json;
 use std::env;
 use std::io::Write;
