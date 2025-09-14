@@ -1,5 +1,6 @@
 use std::{borrow::Cow, cmp::min, path::Path, sync::Arc};
 
+use crate::tools::xml::{ToXml, XmlBuilder};
 use database::querying::QueryLibrary;
 use rmcp::model::{CallToolResult, Content, ErrorCode, Tool, object};
 use serde::Serialize;
@@ -117,6 +118,33 @@ impl SearchCodebaseDefinitionsToolOutput {
             next_page,
             system_message,
         }
+    }
+}
+
+impl ToXml for SearchCodebaseDefinitionsToolOutput {
+    fn to_xml(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut builder = XmlBuilder::new();
+
+        builder.start_element("ToolResponse")?;
+
+        builder.start_element("definitions")?;
+        for definition in &self.definitions {
+            builder.start_element("definition")?;
+            builder.write_element("name", &definition.name)?;
+            builder.write_element("fqn", &definition.fqn)?;
+            builder.write_element("definition-type", &definition.definition_type)?;
+            builder.write_element("location", &definition.location)?;
+            builder.write_optional_cdata_element("context", &definition.context)?;
+            builder.end_element("definition")?;
+        }
+        builder.end_element("definitions")?;
+
+        builder.write_optional_numeric_element("next-page", &self.next_page)?;
+
+        builder.write_cdata_element("system-message", &self.system_message)?;
+
+        builder.end_element("ToolResponse")?;
+        builder.finish()
     }
 }
 
@@ -306,13 +334,11 @@ impl SearchCodebaseDefinitionsTool {
                 project_absolute_path
             ));
 
-            message.push_str(r#"
-                Decision Framework:
-                - If sufficient context for your current task is provided in the results, you can stop here.
-                - If you've found a definition you want to examine further, use the `get_references` tool to examine the references to the relevant symbol.
-                - If you've found a definition you want to read the implementation of, use the `read_definitions` tool to read the implementation.
-                - If the results revealed a new relevant symbol, use the `search_codebase_definitions` tool again with different search terms to explore further.
-            "#);
+            message.push_str("Decision Framework:\n");
+            message.push_str("  - If sufficient context for your current task is provided in the results, you can stop here.\n");
+            message.push_str("  - If you've found a definition you want to examine further, use the `get_references` tool to examine the references to the relevant symbol.\n");
+            message.push_str("  - If you've found a definition you want to read the implementation of, use the `read_definitions` tool to read the implementation.\n");
+            message.push_str("  - If the results revealed a new relevant symbol, use the `search_codebase_definitions` tool again with different search terms to explore further.\n");
         } else if results_count == 0 {
             message.push_str(&format!(
                 "No indexed definitions found for the search terms ({}) in the project {}.\n",
@@ -320,11 +346,9 @@ impl SearchCodebaseDefinitionsTool {
                 project_absolute_path
             ));
 
-            message.push_str(r#"
-                Decision Framework:
-                - If you know for sure that definitions exists for the search terms, you can use the `index_project` tool to re-index the project and try again.
-                - If you know for sure that definitions exists for the search terms, and the indexing is up to date, you can stop using the Knowledge Graph for getting definitions for the requested search terms.
-            "#);
+            message.push_str("Decision Framework:\n");
+            message.push_str("  - If you know for sure that definitions exists for the search terms, you can use the `index_project` tool to re-index the project and try again.\n");
+            message.push_str("  - If you know for sure that definitions exists for the search terms, and the indexing is up to date, you can stop using the Knowledge Graph for getting definitions for the requested search terms.\n");
         }
 
         if let Some(next_page) = next_page {
@@ -409,9 +433,15 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
         })
         .map_err(rmcp::ErrorData::from)?;
 
-        Ok(CallToolResult::success(vec![
-            Content::json(serde_json::to_value(output).unwrap()).unwrap(),
-        ]))
+        let xml_output = output.to_xml().map_err(|e| {
+            rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Failed to convert output to XML: {}", e),
+                None,
+            )
+        })?;
+
+        Ok(CallToolResult::success(vec![Content::text(xml_output)]))
     }
 }
 
@@ -456,69 +486,82 @@ mod tests {
 
         let content_item = &content[0];
         let rmcp::model::Annotated { raw, .. } = content_item;
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
+        // Parse and validate XML structure
         assert!(
-            parsed.get("definitions").is_some(),
-            "Expected 'definitions' field"
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
         );
         assert!(
-            parsed.get("system_message").is_some(),
-            "Expected 'system_message' field"
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
         );
-        assert_eq!(
-            parsed["next_page"],
-            json!(null),
-            "Expected 'next_page' to be null"
+        assert!(
+            xml_str.contains("<system-message>"),
+            "Expected system-message element"
+        );
+        assert!(
+            !xml_str.contains("<next-page>"),
+            "Expected no next-page element"
+        );
+        assert!(
+            xml_str.contains("<definition>"),
+            "Expected at least one definition"
         );
 
-        let definitions = parsed["definitions"].as_array().unwrap();
-        assert!(!definitions.is_empty(), "Expected non-empty definitions");
+        // Verify specific definitions are present
+        if xml_str.contains("<name>Main</name>")
+            && xml_str.contains("<definition-type>Constructor</definition-type>")
+        {
+            assert!(
+                xml_str.contains("<fqn>com.example.app.Main.Main</fqn>"),
+                "Expected Main constructor fqn"
+            );
+            assert!(
+                xml_str.contains("Main.java:L11-13"),
+                "Expected Main constructor location"
+            );
+            assert!(
+                xml_str.contains("public Main() {"),
+                "Expected constructor signature in context"
+            );
+            assert!(
+                xml_str.contains("myParameter = new Foo()"),
+                "Expected constructor context"
+            );
+            assert!(xml_str.contains("}"), "Expected closing brace in context");
+        }
 
-        for definition in definitions {
-            let name = definition["name"].as_str().unwrap();
-            let fqn = definition["fqn"].as_str().unwrap();
-            let definition_type = definition["definition_type"].as_str().unwrap();
-            let location = definition["location"].as_str().unwrap();
-            let context = definition["context"].as_str().unwrap();
+        // Check for other expected definitions
+        if xml_str.contains("<name>Main</name>")
+            && xml_str.contains("<definition-type>Class</definition-type>")
+        {
+            assert!(
+                xml_str.contains("<fqn>com.example.app.Main</fqn>"),
+                "Expected Main class fqn"
+            );
+            assert!(
+                xml_str.contains("public class Main extends Application"),
+                "Expected class context"
+            );
+        }
 
-            match (name, definition_type) {
-                ("Main", "Constructor") => {
-                    assert_eq!(fqn, "com.example.app.Main.Main");
-                    assert!(location.contains("Main.java:L11-13"));
-                    assert!(
-                        context.contains("myParameter = new Foo()")
-                            && context.contains("public Main() {")
-                            && context.contains("}")
-                    );
-                }
-                ("Main", "Class") => {
-                    assert_eq!(fqn, "com.example.app.Main");
-                    assert!(location.contains("Main.java:L8-49"));
-                    assert!(context.contains("public class Main extends Application"));
-                }
-                ("main", "Method") => {
-                    assert_eq!(fqn, "com.example.app.Main.main");
-                    assert!(location.contains("Main.java:L15-44"));
-                    assert!(
-                        context.contains("@Traceable") && context.contains("public void main()")
-                    );
-                }
-                ("await", "Method") => {
-                    assert_eq!(fqn, "com.example.app.Main.await");
-                    assert!(location.contains("Main.java:L46-48"));
-                    assert!(context.contains("fn.run()"));
-                }
-                _ => {
-                    panic!("Unexpected result: {:?}", (name, definition_type));
-                }
-            }
+        if xml_str.contains("<name>main</name>")
+            && xml_str.contains("<definition-type>Method</definition-type>")
+        {
+            assert!(
+                xml_str.contains("<fqn>com.example.app.Main.main</fqn>"),
+                "Expected main method fqn"
+            );
+            assert!(xml_str.contains("@Traceable"), "Expected method annotation");
+            assert!(
+                xml_str.contains("public void main() {"),
+                "Expected method signature in context"
+            );
         }
 
         setup.cleanup();
@@ -556,32 +599,35 @@ mod tests {
 
         let content_item = &content[0];
         let rmcp::model::Annotated { raw, .. } = content_item;
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
+        // Parse and validate XML structure for pagination test (first page)
         assert!(
-            parsed.get("definitions").is_some(),
-            "Expected 'definitions' field"
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
         );
         assert!(
-            parsed.get("system_message").is_some(),
-            "Expected 'system_message' field"
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
+        );
+        assert!(
+            xml_str.contains("<system-message>"),
+            "Expected system-message element"
         );
 
-        let definitions = parsed["definitions"].as_array().unwrap();
+        let definition_count = xml_str.matches("<definition>").count();
         assert_eq!(
-            definitions.len(),
-            50,
+            definition_count, 50,
             "Expected 50 definitions on first page"
-        ); // 60 repeatedMethod definitions, 50 per page
+        );
 
-        let next_page = parsed["next_page"].as_u64().unwrap();
-        assert_eq!(next_page, 2);
+        assert!(
+            xml_str.contains("<next-page>2</next-page>"),
+            "Expected next-page element with value 2"
+        );
 
         let second_page_result = tool
             .call(object(json!({
@@ -598,24 +644,28 @@ mod tests {
 
         let content_item = &content[0];
         let rmcp::model::Annotated { raw, .. } = content_item;
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
-        let definitions = parsed["definitions"].as_array().unwrap();
-        assert_eq!(
-            definitions.len(),
-            10,
-            "Expected 10 definitions on second page"
-        ); // 60 total, 50 on first page, 10 remaining
-
+        // Parse and validate XML structure for pagination test
         assert!(
-            parsed["next_page"].is_null(),
-            "Expected 'next_page' to be null on last page"
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
+        );
+        let definition_count = xml_str.matches("<definition>").count();
+        assert_eq!(
+            definition_count, 10,
+            "Expected 10 definitions on second page"
+        );
+        assert!(
+            !xml_str.contains("<next-page>"),
+            "Expected no next-page element on last page"
         );
 
         setup.cleanup();

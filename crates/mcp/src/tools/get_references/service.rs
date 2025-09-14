@@ -220,23 +220,19 @@ impl GetReferencesService {
                 total_results, input.definition_name, input.relative_file_path
             ));
 
-            message.push_str(r#"
-                Decision Framework:
-                - If your current task is to find all references to a definition, you can stop here.
-                - If you're analyzing how a change might affect the codebase, use the `get_references` tool again to examine what references the symbols that point to your target definition.
-                - If you need more background about a definition that references your target symbol, use the `search_codebase_definitions` tool to explore further.
-            "#);
+            message.push_str("\nDecision Framework:\n");
+            message.push_str("  - If your current task is to find all references to a definition, you can stop here.\n");
+            message.push_str("  - If you're analyzing how a change might affect the codebase, use the `get_references` tool again to examine what references the symbols that point to your target definition.\n");
+            message.push_str("  - If you need more background about a definition that references your target symbol, use the `search_codebase_definitions` tool to explore further.\n");
         } else {
             message.push_str(&format!(
                 "No indexed references found for the definition {} in the file {}.\n",
                 input.definition_name, input.relative_file_path
             ));
 
-            message.push_str(r#"
-                Decision Framework:
-                - If you know for sure that the definition is referenced somewhere, you can use the `index_project` tool to re-index the project and try again.
-                - If you know for sure that the definition is referenced somewhere, and the indexing is up to date, you can stop using the Knowledge Graph for getting references for the requested symbol.
-            "#);
+            message.push_str("\nDecision Framework:\n");
+            message.push_str("  - If you know for sure that the definition is referenced somewhere, you can use the `index_project` tool to re-index the project and try again.\n");
+            message.push_str("  - If you know for sure that the definition is referenced somewhere, and the indexing is up to date, you can stop using the Knowledge Graph for getting references for the requested symbol.\n");
         }
 
         message

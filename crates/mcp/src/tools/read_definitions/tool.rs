@@ -11,7 +11,9 @@ use crate::tools::read_definitions::constants::{
     READ_DEFINITIONS_TOOL_NAME,
 };
 use crate::tools::read_definitions::input::ReadDefinitionsToolInput;
-use crate::tools::{read_definitions::service::ReadDefinitionsService, types::KnowledgeGraphTool};
+use crate::tools::{
+    read_definitions::service::ReadDefinitionsService, types::KnowledgeGraphTool, xml::ToXml,
+};
 
 pub struct ReadDefinitionsTool {
     workspace_manager: Arc<WorkspaceManager>,
@@ -81,9 +83,15 @@ impl KnowledgeGraphTool for ReadDefinitionsTool {
 
         let output = self.service.read_definitions(input)?;
 
-        Ok(CallToolResult::success(vec![
-            Content::json(serde_json::to_value(output).unwrap()).unwrap(),
-        ]))
+        let xml_output = output.to_xml().map_err(|e| {
+            rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Failed to convert output to XML: {}", e),
+                None,
+            )
+        })?;
+
+        Ok(CallToolResult::success(vec![Content::text(xml_output)]))
     }
 }
 
@@ -127,41 +135,71 @@ mod tests {
 
         let content = result.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content[0];
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
-        // Check the definitions
-        let definitions = parsed["definitions"].as_array().unwrap();
-        assert_eq!(definitions.len(), 1, "Expected exactly one definition");
-
-        let definition = &definitions[0];
-        assert_eq!(definition["name"].as_str().unwrap(), "bar");
-        assert_eq!(
-            definition["fqn"].as_str().unwrap(),
-            "com.example.app.Foo.bar"
-        );
-        assert_eq!(definition["definition_type"].as_str().unwrap(), "Method");
-
-        // Check that definition body is present
+        // Parse and validate XML structure
         assert!(
-            definition["definition_body"].is_string(),
-            "Expected definition body to be present"
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
         );
-        let body = definition["definition_body"].as_str().unwrap();
         assert!(
-            body.contains("return new Bar()"),
-            "Expected method body content"
+            xml_str.contains("</ToolResponse>"),
+            "Expected closing ToolResponse element"
+        );
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
+        );
+        assert!(
+            xml_str.contains("</definitions>"),
+            "Expected closing definitions element"
+        );
+        assert!(
+            xml_str.contains("<definition>"),
+            "Expected definition element"
+        );
+        assert!(
+            xml_str.contains("</definition>"),
+            "Expected closing definition element"
+        );
+        assert!(
+            xml_str.contains("<name>bar</name>"),
+            "Expected name element with 'bar'"
+        );
+        assert!(
+            xml_str.contains("<fqn>com.example.app.Foo.bar</fqn>"),
+            "Expected fqn element"
+        );
+        assert!(
+            xml_str.contains("<definition-type>Method</definition-type>"),
+            "Expected definition-type element"
         );
 
-        // Check that there's no error
+        // Check that definition body is present in CDATA
         assert!(
-            definition["definition_body_error"].is_null(),
-            "Expected no definition body error"
+            xml_str.contains("<definition-body>"),
+            "Expected definition-body element"
+        );
+        assert!(
+            xml_str.contains("</definition-body>"),
+            "Expected closing definition-body element"
+        );
+        assert!(
+            xml_str.contains("return new Bar()"),
+            "Expected method body content in CDATA"
+        );
+
+        // Check that system message is present
+        assert!(
+            xml_str.contains("<system-message>"),
+            "Expected system-message element"
+        );
+        assert!(
+            xml_str.contains("</system-message>"),
+            "Expected closing system-message element"
         );
 
         setup.cleanup();
@@ -200,47 +238,43 @@ mod tests {
 
         let content = result.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content[0];
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
+        // Parse and validate XML structure for multiple definitions
+        assert!(
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
+        );
 
-        let definitions = parsed["definitions"].as_array().unwrap();
-        assert_eq!(definitions.len(), 2, "Expected exactly two definitions");
+        // Check that we have two definition elements
+        let definition_count = xml_str.matches("<definition>").count();
+        assert_eq!(definition_count, 2, "Expected exactly two definitions");
 
         // Check first definition (bar method)
-        let bar_def = definitions
-            .iter()
-            .find(|def| def["name"].as_str().unwrap() == "bar")
-            .expect("Should find bar method definition");
-
         assert!(
-            bar_def["definition_body"].is_string(),
-            "Expected bar definition body"
+            xml_str.contains("<name>bar</name>"),
+            "Expected bar method definition"
         );
-        let bar_body = bar_def["definition_body"].as_str().unwrap();
         assert!(
-            bar_body.contains("return new Bar()"),
+            xml_str.contains("return new Bar()"),
             "Expected bar method body content"
         );
 
-        // Check second definition (main method)
-        let main_def = definitions
-            .iter()
-            .find(|def| def["name"].as_str().unwrap() == "main")
-            .expect("Should find main method definition");
-
+        // Check second definition (baz method)
         assert!(
-            main_def["definition_body"].is_string(),
-            "Expected main definition body"
+            xml_str.contains("<name>main</name>"),
+            "Expected main method definition"
         );
-        let main_body = main_def["definition_body"].as_str().unwrap();
         assert!(
-            main_body.contains("this.myParameter.bar()"),
-            "Expected main method body content"
+            xml_str.contains("this.myParameter.bar()"),
+            "Expected method body content referencing bar()"
         );
 
         setup.cleanup();
@@ -275,31 +309,34 @@ mod tests {
 
         let content = result.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content[0];
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
+        // Parse and validate XML structure
+        assert!(
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
+        );
 
-        let definitions = parsed["definitions"].as_array().unwrap();
-        // Should find at least one definition (the bar method)
-        assert!(!definitions.is_empty(), "Expected at least one definition");
+        // Should find at least one definition element
+        assert!(
+            xml_str.contains("<definition>"),
+            "Expected at least one definition"
+        );
 
         // Check that we have the bar method
-        let bar_def = definitions
-            .iter()
-            .find(|def| def["name"].as_str().unwrap() == "bar")
-            .expect("Should find bar method definition");
-
         assert!(
-            bar_def["definition_body"].is_string(),
-            "Expected bar definition body"
+            xml_str.contains("<name>bar</name>"),
+            "Expected bar method definition"
         );
-        let bar_body = bar_def["definition_body"].as_str().unwrap();
         assert!(
-            bar_body.contains("return new Bar()"),
+            xml_str.contains("return new Bar()"),
             "Expected bar method body content"
         );
 
@@ -335,24 +372,38 @@ mod tests {
 
         let content = result.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content[0];
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
+        // Parse and validate XML structure for empty result
+        assert!(
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
+        );
+        assert!(
+            xml_str.contains("</definitions>"),
+            "Expected closing definitions element"
+        );
 
-        let definitions = parsed["definitions"].as_array().unwrap();
-        assert_eq!(
-            definitions.len(),
-            0,
+        // Should have no definition elements
+        assert!(
+            !xml_str.contains("<definition>"),
             "Expected no definitions for non-existent method"
         );
 
-        let system_message = parsed["system_message"].as_str().unwrap();
+        // Check system message
         assert!(
-            system_message.contains("No definitions were found"),
+            xml_str.contains("<system-message>"),
+            "Expected system-message element"
+        );
+        assert!(
+            xml_str.contains("No definitions were found"),
             "Expected appropriate system message"
         );
 
