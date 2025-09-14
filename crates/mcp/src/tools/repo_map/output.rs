@@ -1,4 +1,4 @@
-use crate::tools::xml::XmlBuilder;
+use crate::tools::xml::{XmlBuilder, remove_cdata_sections};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 #[derive(Clone, Debug)]
@@ -143,7 +143,8 @@ pub fn build_repo_map_xml(
     builder.write_cdata_element("system-message", &system_message)?;
 
     builder.end_element("ToolResponse")?;
-    builder.finish()
+    let xml = builder.finish()?;
+    remove_cdata_sections(&xml)
 }
 
 #[cfg(test)]

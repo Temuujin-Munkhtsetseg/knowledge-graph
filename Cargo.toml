@@ -86,6 +86,7 @@ rustc-hash = "2.1.1"
 smallvec = "1.15.1"
 tokio-rayon = "2.1.0"
 quick-xml = "0.38.3"
+regex = "1.11.1"
 
 # Test dependencies
 axum-test = "17.3.0"

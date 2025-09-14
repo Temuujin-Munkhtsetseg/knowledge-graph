@@ -3002,6 +3002,7 @@ dependencies = [
  "log",
  "num_cpus",
  "quick-xml",
+ "regex",
  "rmcp",
  "serde",
  "serde_json",

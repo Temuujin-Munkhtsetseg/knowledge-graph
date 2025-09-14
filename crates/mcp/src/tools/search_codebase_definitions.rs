@@ -433,7 +433,7 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
         })
         .map_err(rmcp::ErrorData::from)?;
 
-        let xml_output = output.to_xml().map_err(|e| {
+        let xml_output = output.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("Failed to convert output to XML: {}", e),
