@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import uuid
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -8,8 +9,6 @@ from dataclasses import dataclass, field
 from utils import TomlConfig
 
 import datasets
-
-from src.constants import SWEBENCH_LOCATION, SWEBENCH_PATCHES_PATH, SWEBENCH_FIXTURES_DIR_PATH, SWEBENCH_REPORT_DIR
 
 @dataclass
 class SweBenchFixtureMetadata:
@@ -74,9 +73,10 @@ class SweBenchPatch:
             model_patch=d.get("model_patch"),
         )
 
-def get_swebench_lite_dataset(split: str = "dev"):
-    os.makedirs(SWEBENCH_FIXTURES_DIR_PATH, exist_ok=True)
-    ds = datasets.load_dataset("SWE-bench/SWE-bench_Lite", cache_dir=SWEBENCH_FIXTURES_DIR_PATH)
+def get_swebench_lite_dataset(toml_config: TomlConfig, split: str = "dev"):
+    swe_bench_fixtures_dir_path = toml_config.pipeline.session_paths.swe_bench_fixtures_dir_path
+    os.makedirs(swe_bench_fixtures_dir_path, exist_ok=True)
+    ds = datasets.load_dataset("SWE-bench/SWE-bench_Lite", cache_dir=swe_bench_fixtures_dir_path)
     ds = ds[split]
     return ds
 
@@ -84,15 +84,16 @@ def get_swebench_lite_dataset(split: str = "dev"):
 @dataclass
 class SweBenchConfig:
     dataset_name: str = "princeton-nlp/SWE-bench_Lite"
-    predictions_path: str = SWEBENCH_PATCHES_PATH
+    predictions_path: str = field(default_factory=lambda: None)
     max_workers: int = 8
     run_id: str = "my_evaluation_run"
     split: str = "dev"
     namespace: str = "none"
     force_rebuild: bool = False
-    report_dir: str = SWEBENCH_REPORT_DIR.absolute().resolve().__str__()
+    report_dir: str = field(default_factory=lambda: None)
 
-    def to_subprocess_args(self):
+    def to_subprocess_args(self, rand_run_id: bool = True):
+        run_id = self.run_id if not rand_run_id else str(uuid.uuid4())
         return [
             "--dataset_name", self.dataset_name,
             "--predictions_path", self.predictions_path,
@@ -100,13 +101,41 @@ class SweBenchConfig:
             "--namespace", self.namespace,
             "--force_rebuild", str(self.force_rebuild),
             "--max_workers", str(self.max_workers),
-            "--run_id", self.run_id,
+            "--run_id", run_id,
             "--report_dir", self.report_dir,
         ]
 
+def prepare_swebench_images(swebench_config: SweBenchConfig, toml_config: TomlConfig):
+    cwd = toml_config.pipeline.session_paths.swe_bench_harness_location_dir.absolute().resolve().__str__()
+    # TODO:Latest tag is the default tag, but might eventually be problematic for reproducibility reasons
+    args = [
+        "--dataset_name", swebench_config.dataset_name,
+        "--split", swebench_config.split,
+        "--max_workers", str(swebench_config.max_workers),
+        "--tag", "latest",
+    ]
+    command = [sys.executable, "-m", "swebench.harness.prepare_images", *args]
+    print(f"Running swebench prepare images command: {' '.join(command)}")
+    print(f"This will take a while... but you should only need to do this once per dataset + split")
+    subprocess.run(command, cwd=cwd)
+
+def clone_swebench_repository(toml_config: TomlConfig):
+    cwd = toml_config.pipeline.session_paths.swe_bench_harness_location_dir.absolute().resolve().__str__()
+    if Path(cwd).exists():
+        print(f"✓ SWE-bench already exists in {cwd} - skipping clone")
+        return
+    
+    print(f"Cloning SWE-bench repository to {cwd}")
+    subprocess.run(["git", "clone", "https://github.com/princeton-nlp/SWE-bench.git", cwd], check=True)
+    subprocess.run(["git", "checkout", "c7c22a916c9215e709722bc5ab18df4062dc6248"], cwd=cwd)
+    subprocess.run(["rm", "-rf", ".git"], cwd=cwd)
+    subprocess.run(["pip", "install", "-e", "."], cwd=cwd)
+    print(f"✓ SWE-bench setup completed successfully!")
+    print("Note: SWE-bench dependencies are managed through uv/pyproject.toml")
+
 def run_swebench(config: SweBenchConfig, toml_config: TomlConfig):
     # https://github.com/SWE-bench/SWE-bench?tab=readme-ov-file#-usage
-    cwd = SWEBENCH_LOCATION.absolute().resolve().__str__()
+    cwd = toml_config.pipeline.session_paths.swe_bench_harness_location_dir.absolute().resolve().__str__()
     command = [sys.executable, "-m", "swebench.harness.run_evaluation", *config.to_subprocess_args()]
     print(f"Running swebench evaluation command: {' '.join(command)}")
     subprocess.run(command, cwd=cwd)

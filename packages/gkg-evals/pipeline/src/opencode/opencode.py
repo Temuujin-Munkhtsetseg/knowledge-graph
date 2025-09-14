@@ -3,7 +3,7 @@ import re
 import time
 import subprocess
 import json
-from typing import List
+from typing import List, TextIO
 from dataclasses import dataclass
 
 from src.harness.swe_bench import SweBenchFixtureMetadata, SweBenchPatch
@@ -12,8 +12,8 @@ from src.opencode.models import SessionData, MessageOrPart
 from src.opencode.models import parse_message_or_part
 from src.utils import TomlConfig, TomlOpencodeConfig
 
-from src.opencode.constants import OPENCODE_MAX_TIME, OPENCODE_TIME_ELAPSED_DEBOUNCE, OPENCODE_MUTATING_TOOLS, OPENCODE_ALL_DEFAULT_TOOLS, OPENCODE_VERSION
-from src.constants import OPENCODE_AUTH_PATH, OPENCODE_CONFIG_PATH, OPENCODE_LOGS_PATH, OPENCODE_MESSAGES_PATH, OPENCODE_MESSAGE_PARTS_PATH
+from src.opencode.constants import OPENCODE_TIME_ELAPSED_DEBOUNCE, OPENCODE_MUTATING_TOOLS, OPENCODE_ALL_DEFAULT_TOOLS, OPENCODE_VERSION
+from src.constants import OPENCODE_LOGS_PATH, OPENCODE_MESSAGES_PATH, OPENCODE_MESSAGE_PARTS_PATH
 
 # MultiSweBench
 # from harness.multi_swe_bench import MultiSweBenchPatch, MultiSweBenchFixtureMetadata
@@ -24,6 +24,7 @@ def opencode_config_to_json(config: TomlOpencodeConfig):
     tool_dict = {tool: True for tool in set(config.tools)} | mcp_tools
     disabled_tools = OPENCODE_ALL_DEFAULT_TOOLS - set(config.tools)
     tool_dict = tool_dict | {tool: False for tool in disabled_tools}
+    tool_dict = tool_dict | {"task": False} # Task tool is a distraction in evals
     permission_dict = {tool: "allow" for tool in set(config.tools) if tool in OPENCODE_MUTATING_TOOLS and tool not in disabled_tools}
     permission_dict = permission_dict | {tool: "deny" for tool in disabled_tools if tool in OPENCODE_MUTATING_TOOLS}
     return json.dumps(
@@ -37,7 +38,7 @@ def opencode_config_to_json(config: TomlOpencodeConfig):
                     "prompt": config.agent_prompt,
                     "tools": tool_dict,
                     "max_tokens": config.max_tokens,
-                }
+                },
             },
             "permission": permission_dict,
             "mcp": config.mcp.to_dict(config.mcp.server_name),
@@ -95,7 +96,6 @@ class OpencodeRunSessionData:
 @dataclass
 class OpencodeRunSubprocessResult:
     session_id: str
-    captured_output: list[str]
     killed: bool
     killed_reason: str
 
@@ -105,27 +105,14 @@ class Opencode:
         self.toml_config = toml_config
         self.setup_opencode_executable()
         self.setup_config()
-        self.setup_auth()
 
     def setup_config(self):
         opencode_config = opencode_config_to_json(self.toml_config.opencode)
-        with open(OPENCODE_CONFIG_PATH, "w") as f:
-            print(f"Writing config to {OPENCODE_CONFIG_PATH}")
+        opencode_config_path = self.toml_config.pipeline.session_paths.opencode_config_path
+        with open(opencode_config_path, "w") as f:
+            print(f"Writing config to {opencode_config_path}")
             print(opencode_config)
             f.write(opencode_config)
-
-    def setup_auth(self):
-        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-        if anthropic_api_key is None:
-            raise ValueError("anthropic_api_key is not set")
-        with open(OPENCODE_AUTH_PATH, "w") as f:
-            auth_data = {
-                "anthropic" : {
-                    "type": "api",
-                    "key": anthropic_api_key
-                }
-            }
-            json.dump(auth_data, f)
 
     def setup_opencode_executable(self):
         opencode_version = f"opencode-ai@{OPENCODE_VERSION}"
@@ -150,10 +137,12 @@ class Opencode:
             return match.group(1).strip()
         return None
 
-    def run_subprocess(self, fixture: SweBenchFixtureMetadata, user_prompt: str) -> OpencodeRunSubprocessResult:
+    def run_subprocess(self, fixture: SweBenchFixtureMetadata, user_prompt: str, logs_fd: TextIO) -> OpencodeRunSubprocessResult:
         # Make sure opencode uses the correct config file + run the agent
+        # Note: auth here is setup implicitly bc it's in os.environ
         opencode_env = os.environ.copy()
-        opencode_env["OPENCODE_CONFIG"] = str(OPENCODE_CONFIG_PATH)
+        opencode_config_path = self.toml_config.pipeline.session_paths.opencode_config_path
+        opencode_env["OPENCODE_CONFIG"] = str(opencode_config_path)
         
         print(f"Running OpenCode with command: opencode run --print-logs --log-level INFO '{user_prompt}'")
         print(f"Working directory: {fixture.worktree_path}")
@@ -185,14 +174,13 @@ class Opencode:
             bufsize=1,  # Line buffered
             universal_newlines=True
         ) as process:
-            captured_output = []
             # Stream output line by line
             for line in iter(process.stdout.readline, ''):
                 time_elapsed = time.time() - start_time
                 if not session_id:
                     session_id = self.capture_session_id(line)
                     if session_id:
-                        print(f"Captured Session ID: {session_id}")
+                        print(f"Captured Opencode Session ID: {session_id}")
                 
                 # Print elapsed time every 5 seconds
                 if time_elapsed - last_time_print >= OPENCODE_TIME_ELAPSED_DEBOUNCE and self.logs_stdout:
@@ -203,12 +191,12 @@ class Opencode:
                     continue
                 if self.logs_stdout:
                     print(line, end='')  # Print to stdout in real-time
-                if time_elapsed > OPENCODE_MAX_TIME:
+                if time_elapsed > self.toml_config.pipeline.fixture_timeout:
                     process.kill()
                     print(f"OpenCode killed after {time_elapsed} seconds, due to timeout")
                     killed_by_timeout = True
                     break
-                captured_output.append(line)
+                logs_fd.write(line)
             
             # Wait for process to complete
             process.wait()
@@ -225,7 +213,6 @@ class Opencode:
 
         return OpencodeRunSubprocessResult(
             session_id=session_id,
-            captured_output=captured_output,
             killed=killed,
             killed_reason=killed_reason
         )
@@ -259,11 +246,17 @@ class Opencode:
         print(f"Running opencode for {fixture.org}/{fixture.repo}#{fixture.base_commit}")
         print(f"Working directory: {fixture.worktree_path}")
         print(f"Command: opencode run '{user_prompt[:100]}...'")
+
+        # Setup logs dir
+        opencode_logs_dir = self.toml_config.pipeline.session_dir / "agent_logs" / fixture.instance_id
+        opencode_logs_dir.mkdir(parents=True, exist_ok=True)
+        opencode_logs_path = opencode_logs_dir / OPENCODE_LOGS_PATH
+        logs_fd = open(opencode_logs_path, "w")
         
-        run_result = self.run_subprocess(fixture, user_prompt)
-        # Write captured output to log file
-        with open(OPENCODE_LOGS_PATH, "w") as f:
-            f.write("".join(run_result.captured_output))
+        # Run the opencode agent, stream logs to the file descriptor
+        run_result = self.run_subprocess(fixture, user_prompt, logs_fd)
+        logs_fd.flush()
+        logs_fd.close()
 
         # get git diff from the worktree directory
         git_diff = subprocess.run(["git", "diff", "HEAD"], cwd=fixture.worktree_path, capture_output=True)

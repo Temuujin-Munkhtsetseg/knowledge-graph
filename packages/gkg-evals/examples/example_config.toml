@@ -3,15 +3,15 @@
 skip_download = false  # Skips only if repos directory already exists
 skip_gkg_index = false  # Skip GKG indexing step (TODO: add verification against gkg)
 batch_size = 15 # Batch size for processing fixtures
-break_after_first_batch = false # Useful for debugging the agent portion of the pipeline
+break_after_first_batch = true # Useful for debugging the agent portion of the pipeline
 fixture_timeout = 300 # Timeout for processing a fixture in seconds (5 minutes)
 gkg_path = "../../../target/release/gkg"
 opencode_logs_stdout = false # Set to true if you are running with a batch size of 1
-session_name = "baseline_pipeline_run" # This is used to identify multiple runs with different configs
+session_name = "example_pipeline_run" # This is used to identify multiple runs with different configs
 
 [opencode]
 model = "anthropic/claude-sonnet-4-20250514"
-tools = ["edit", "read", "grep", "glob", "todowrite", "todoread"] # These are built-in tools
+tools = ["edit", "read", "grep", "glob"] # These are built-in tools
 lsp = [
     { language = "typescript", disabled = true },
     { language = "eslint", disabled = true },
@@ -97,7 +97,7 @@ agent_prompt = """
 max_tokens = 8192
 
 [opencode.mcp]
-enabled = false
+enabled = true
 tools = ["knowledge-graph*"]
 url = "http://localhost:27495/mcp"
 server_name = "knowledge-graph"

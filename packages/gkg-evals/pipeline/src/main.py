@@ -3,13 +3,30 @@ import sys
 from pathlib import Path
 
 from src.utils import load_toml_config
+from src.harness.swe_bench import clone_swebench_repository
+
+from src.steps.noop import noop
 from src.steps.download import download
-from src.steps.gkg_index import index_worktrees
+from src.steps.gkg import index_worktrees, stop_gkg_server
 from src.steps.agent import run_agent
 from src.steps.evals import run_evals_swebench
 from src.steps.report import generate_report
 
-from src.constants import FIXTURES_METADATA_PATH, BASE_DIR_SWEBENCH
+from dotenv import load_dotenv
+
+from src.constants import (
+    ENV_PATH, 
+    RUNS_DIR, 
+    FIXTURES_METADATA_PATH, 
+    FIXTURES_DIR_PATH, 
+    SESSION_DATA_PATH, 
+    OPENCODE_CONFIG_PATH,
+    BASE_REPOS_DIR_SWEBENCH,
+    SWEBENCH_FIXTURES_DIR_PATH,
+    SWEBENCH_PATCHES_PATH,
+    SWEBENCH_REPORT_DIR,
+    SWEBENCH_HARNESS_LOCATION_DIR,
+)
 
 # MULTISWEBENCH
 # from src.constants import BASE_DIR_MULTISWEBENCH
@@ -26,15 +43,66 @@ class GkgEvalsPipeline:
         # Set PYTHONPATH
         current_dir = Path.cwd()
         os.environ["PYTHONPATH"] = str(current_dir)
+
+        # Validate .env file
+        if not ENV_PATH.exists():
+            print("Error: .env file not found")
+            print(f"Expected path: {ENV_PATH}")
+            sys.exit(1)
+        
+        # Load .env file
+        load_dotenv()
+
+        # Check if env contains ANTHROPIC_API_KEY
+        if os.environ.get("ANTHROPIC_API_KEY") is None:
+            print(f"Expected path of env file: {ENV_PATH}")
+            print("Error: ANTHROPIC_API_KEY not found in .env file")
+            sys.exit(1)
+
+        self.session_dir = self.create_pipeline_session_dir()
+        self.config.pipeline.session_dir = self.session_dir
+        self.create_session_paths()
+        clone_swebench_repository(self.config)
+
+        # Stop old versions of the gkg server
+        stop_gkg_server(self.config.pipeline.gkg_path)
+
+    def create_pipeline_session_dir(self):
+        """Create a session directory for the pipeline"""
+        session_dir = RUNS_DIR / f"session_{self.config.pipeline.session_name}"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        return session_dir
+
+    def create_session_paths(self):
+        """Create session paths for the pipeline"""
+        self.config.pipeline.session_paths.fixtures_metadata_path = self.session_dir / FIXTURES_METADATA_PATH
+        self.config.pipeline.session_paths.fixtures_dir_path = self.session_dir / FIXTURES_DIR_PATH
+        self.config.pipeline.session_paths.session_data_path = self.session_dir / SESSION_DATA_PATH
+        self.config.pipeline.session_paths.opencode_config_path = self.session_dir / OPENCODE_CONFIG_PATH
+        self.config.pipeline.session_paths.swe_bench_repos_dir = self.session_dir / BASE_REPOS_DIR_SWEBENCH
+        self.config.pipeline.session_paths.swe_bench_fixtures_dir_path = self.session_dir / SWEBENCH_FIXTURES_DIR_PATH
+        self.config.pipeline.session_paths.swe_bench_patches_path = self.session_dir / SWEBENCH_PATCHES_PATH
+        self.config.pipeline.session_paths.swe_bench_report_dir = self.session_dir / SWEBENCH_REPORT_DIR
+        self.config.pipeline.session_paths.swe_bench_harness_location_dir = self.session_dir / SWEBENCH_HARNESS_LOCATION_DIR
+        self.config.pipeline.session_paths.pprint()
     
     def check_repos_cache(self) -> bool:
         """Check if repos directory already exists (cached)"""
-        if BASE_DIR_SWEBENCH.exists() and FIXTURES_METADATA_PATH.exists():
+        swe_bench_dir = self.config.pipeline.session_paths.swe_bench_repos_dir
+        fixtures_metadata_path = self.config.pipeline.session_paths.fixtures_metadata_path
+        if swe_bench_dir.exists() and fixtures_metadata_path.exists():
             print("✓ repos/ directory already exists - skipping download phase (using cache)")
             print("Repositories are available in ./repos/ directory")
             print("Fixture metadata available in ./fixtures_metadata.json")
+            print(f"Session directory: {self.session_dir}")
             return True
         return False
+
+    def run_noop_phase(self):
+        """Run the noop phase"""
+        print("Running noop phase...")
+        noop(self.config)
+        print("Noop completed successfully!")
     
     def run_download_phase(self):
         """Run the download phase"""
@@ -74,7 +142,9 @@ class GkgEvalsPipeline:
     
     def run_phase(self, phase: str):
         """Run a specific phase of the pipeline"""
-        if phase == "download":
+        if phase == "noop":
+            self.run_noop_phase()
+        elif phase == "download":
             self.run_download_phase()
         elif phase == "index":
             self.run_gkg_indexing()
@@ -98,6 +168,7 @@ if __name__ == "__main__":
     if len(sys.argv) not in [2, 3]:
         print("Usage: python main.py <config_path> [phase]")
         print("Phases: download, index, agent, evals, report, all (default: all)")
+        print("Dev-only phases: noop (use this to test in-progress work or new features)")
         sys.exit(1)
     
     config_path = sys.argv[1]
