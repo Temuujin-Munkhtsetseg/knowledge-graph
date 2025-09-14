@@ -1749,6 +1749,7 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.6.0"
+source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.6.0#cb15b81ce168483cc74bd83302f95fc144cff9dd"
 dependencies = [
  "ignore",
  "serde",
@@ -2999,6 +3000,7 @@ dependencies = [
  "indexer",
  "log",
  "num_cpus",
+ "quick-xml",
  "rmcp",
  "serde",
  "serde_json",
@@ -3480,6 +3482,7 @@ dependencies = [
 [[package]]
 name = "parser-core"
 version = "0.17.0"
+source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.17.0#b491154dd1adfad4ece52e33390d47a2ec4e5b43"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
@@ -3765,6 +3768,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e944464ec8536cd1beb0bbfd96987eb5e3b72f2ecdafdc5c769a37f1fa2ae1f"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.38.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42a232e7487fc2ef313d96dde7948e7a3c05101870d8985e4fd8d26aedd27b89"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

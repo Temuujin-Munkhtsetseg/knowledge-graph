@@ -12,7 +12,9 @@ use crate::tools::get_references::constants::{
     GET_REFERENCES_TOOL_NAME, PAGE_FIELD,
 };
 use crate::tools::get_references::input::GetReferencesToolInput;
-use crate::tools::{get_references::service::GetReferencesService, types::KnowledgeGraphTool};
+use crate::tools::{
+    get_references::service::GetReferencesService, types::KnowledgeGraphTool, xml::ToXml,
+};
 
 pub struct GetReferencesTool {
     workspace_manager: Arc<WorkspaceManager>,
@@ -73,9 +75,15 @@ impl KnowledgeGraphTool for GetReferencesTool {
 
         let output = self.service.get_references(input)?;
 
-        Ok(CallToolResult::success(vec![
-            Content::json(serde_json::to_value(output).unwrap()).unwrap(),
-        ]))
+        let xml_output = output.to_xml().map_err(|e| {
+            rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Failed to convert output to XML: {}", e),
+                None,
+            )
+        })?;
+
+        Ok(CallToolResult::success(vec![Content::text(xml_output)]))
     }
 }
 
@@ -118,51 +126,89 @@ mod tests {
 
         let content = result.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content[0];
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
-        // Check the definitions and summary
-        let definitions = parsed["definitions"].as_array().unwrap();
-        let next_page = &parsed["next_page"];
-        assert!(next_page.is_null());
-
-        // Find the definition that contains the reference we're looking for
-        let main_definition = definitions
-            .iter()
-            .find(|def| def["fqn"].as_str().unwrap() == "com.example.app.Main.main")
-            .expect("Should find main method definition");
-
-        // Check definition-level information
-        assert_eq!(main_definition["name"].as_str().unwrap(), "main");
-        assert_eq!(
-            main_definition["location"].as_str().unwrap(),
-            project.project_path.clone() + "/main/src/com/example/app/Main.java:L15-44"
+        // Parse and validate XML structure
+        assert!(
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
         );
-        assert_eq!(
-            main_definition["definition_type"].as_str().unwrap(),
-            "Method"
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
         );
-        assert_eq!(
-            main_definition["fqn"].as_str().unwrap(),
-            "com.example.app.Main.main"
+        assert!(
+            xml_str.contains("<definition>"),
+            "Expected at least one definition"
+        );
+
+        // Check that next_page is not present (should be empty/null)
+        assert!(
+            !xml_str.contains("<next-page>"),
+            "Expected no next-page element"
+        );
+
+        // Check for main method definition
+        assert!(
+            xml_str.contains("<fqn>com.example.app.Main.main</fqn>"),
+            "Expected main method definition"
+        );
+        assert!(
+            xml_str.contains("<name>main</name>"),
+            "Expected main method name"
+        );
+        assert!(
+            xml_str.contains(&format!(
+                "<location>{}/main/src/com/example/app/Main.java:L15-44</location>",
+                project.project_path
+            )),
+            "Expected location element"
+        );
+        assert!(
+            xml_str.contains("<definition-type>Method</definition-type>"),
+            "Expected definition-type element"
         );
 
         // Check the reference within this definition
-        let references = main_definition["references"].as_array().unwrap();
-        let first_ref = &references[0];
-        assert_eq!(first_ref["reference_type"].as_str().unwrap(), "CALLS");
-        assert_eq!(
-            first_ref["location"].as_str().unwrap(),
-            project.project_path.clone() + "/main/src/com/example/app/Main.java:L17-17"
+        assert!(
+            xml_str.contains("<references>"),
+            "Expected references element"
         );
-        assert_eq!(
-            first_ref["context"].as_str().unwrap(),
-            "@Traceable\n    public void main() {\n        if (this.myParameter.bar() instanceof Bar bar) {\n            bar.baz();\n        }"
+        assert!(
+            xml_str.contains("<reference>"),
+            "Expected at least one reference"
+        );
+        assert!(
+            xml_str.contains("<reference-type>CALLS</reference-type>"),
+            "Expected CALLS reference type"
+        );
+        assert!(
+            xml_str.contains(&format!(
+                "<location>{}/main/src/com/example/app/Main.java:L17-17</location>",
+                project.project_path
+            )),
+            "Expected reference location"
+        );
+        assert!(
+            xml_str.contains("<context>"),
+            "Expected context element in CDATA"
+        );
+        assert!(xml_str.contains("@Traceable"), "Expected context content");
+        assert!(
+            xml_str.contains("public void main() {"),
+            "Expected main method signature in context"
+        );
+        assert!(
+            xml_str.contains("this.myParameter.bar()"),
+            "Expected method call in context"
+        );
+        assert!(xml_str.contains("}"), "Expected closing brace in context");
+        assert!(
+            xml_str.contains("</context>"),
+            "Expected closing context element"
         );
 
         setup.cleanup();
@@ -196,52 +242,75 @@ mod tests {
 
         let content = result.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content[0];
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
-        // Check the definitions and summary for Bar class
-        let definitions = parsed["definitions"].as_array().unwrap();
-        let next_page = &parsed["next_page"];
-        assert!(next_page.is_null());
-
-        // Find the definition that contains the reference we're looking for (Foo.bar method)
-        let bar_definition = definitions
-            .iter()
-            .find(|def| def["fqn"].as_str().unwrap() == "com.example.app.Foo.bar")
-            .expect("Should find bar method definition");
-
-        // Check definition-level information
-        assert_eq!(bar_definition["name"].as_str().unwrap(), "bar");
-        assert_eq!(
-            bar_definition["location"].as_str().unwrap(),
-            project.project_path.clone() + "/main/src/com/example/app/Foo.java:L6-8"
+        // Parse and validate XML structure for Bar class references
+        assert!(
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
         );
-        assert_eq!(
-            bar_definition["definition_type"].as_str().unwrap(),
-            "Method"
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
         );
-        assert_eq!(
-            bar_definition["fqn"].as_str().unwrap(),
-            "com.example.app.Foo.bar"
+        assert!(
+            !xml_str.contains("<next-page>"),
+            "Expected no next-page element"
+        );
+
+        // Find the bar method definition
+        assert!(
+            xml_str.contains("<fqn>com.example.app.Foo.bar</fqn>"),
+            "Expected Foo.bar method definition"
+        );
+        assert!(
+            xml_str.contains("<name>bar</name>"),
+            "Expected bar method name"
+        );
+        assert!(
+            xml_str.contains(&format!(
+                "<location>{}/main/src/com/example/app/Foo.java:L6-8</location>",
+                project.project_path
+            )),
+            "Expected bar method location"
+        );
+        assert!(
+            xml_str.contains("<definition-type>Method</definition-type>"),
+            "Expected definition-type element"
         );
 
         // Check the reference within this definition (constructor call)
-        let references = bar_definition["references"].as_array().unwrap();
-        let first_ref = &references[0];
-        assert_eq!(first_ref["reference_type"].as_str().unwrap(), "CALLS");
-        assert_eq!(
-            first_ref["location"].as_str().unwrap(),
-            project.project_path.clone() + "/main/src/com/example/app/Foo.java:L7-7"
+        assert!(
+            xml_str.contains("<references>"),
+            "Expected references element"
         );
-        assert_eq!(
-            first_ref["context"].as_str().unwrap(),
-            "public Bar bar() {\n        return new Bar();\n    }"
+        assert!(
+            xml_str.contains("<reference-type>CALLS</reference-type>"),
+            "Expected CALLS reference type"
         );
+        assert!(
+            xml_str.contains(&format!(
+                "<location>{}/main/src/com/example/app/Foo.java:L7-7</location>",
+                project.project_path
+            )),
+            "Expected reference location"
+        );
+        assert!(
+            xml_str.contains("<context>"),
+            "Expected context element in CDATA"
+        );
+        assert!(
+            xml_str.contains("public Bar bar() {"),
+            "Expected method signature in context"
+        );
+        assert!(
+            xml_str.contains("return new Bar()"),
+            "Expected constructor call in context"
+        );
+        assert!(xml_str.contains("}"), "Expected closing brace in context");
 
         setup.cleanup();
     }
@@ -272,17 +341,24 @@ mod tests {
 
         let content_all = result_all.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content_all[0];
-        let json_str_all = match raw {
+        let xml_str_all = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
-        let parsed_all: serde_json::Value =
-            serde_json::from_str(json_str_all).expect("Expected valid JSON in content");
 
-        assert_eq!(
-            parsed_all["next_page"].as_u64().unwrap(),
-            2,
-            "Expected next_page to be present"
+        // Parse and validate XML structure for pagination test (all results)
+        assert!(
+            xml_str_all.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(
+            xml_str_all.contains("<definitions>"),
+            "Expected definitions element"
+        );
+
+        assert!(
+            xml_str_all.contains("<next-page>2</next-page>"),
+            "Expected next-page element with value 2"
         );
 
         // Test pagination by limiting to 1 result
@@ -296,15 +372,24 @@ mod tests {
 
         let content_limited = result_limited.content.expect("Expected content in result");
         let rmcp::model::Annotated { raw, .. } = &content_limited[0];
-        let json_str_limited = match raw {
+        let xml_str_limited = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed_limited: serde_json::Value =
-            serde_json::from_str(json_str_limited).expect("Expected valid JSON in content");
-        let next_page = &parsed_limited["next_page"];
-        assert!(next_page.is_null(), "Expected next_page to be null");
+        // Parse and validate XML structure for pagination test (limited results)
+        assert!(
+            xml_str_limited.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(
+            xml_str_limited.contains("<definitions>"),
+            "Expected definitions element"
+        );
+        assert!(
+            !xml_str_limited.contains("<next-page>"),
+            "Expected no next-page element"
+        );
 
         setup.cleanup();
     }
@@ -339,23 +424,32 @@ mod tests {
         assert!(!content.is_empty(), "Expected non-empty content");
 
         let rmcp::model::Annotated { raw, .. } = &content[0];
-        let json_str = match raw {
+        let xml_str = match raw {
             rmcp::model::RawContent::Text(text_content) => &text_content.text,
             _ => panic!("Expected text content"),
         };
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).expect("Expected valid JSON in content");
-
-        let definitions = parsed["definitions"].as_array().unwrap();
-        let next_page = &parsed["next_page"];
-
-        assert_eq!(
-            definitions.len(),
-            0,
+        // Parse and validate XML structure for empty result
+        assert!(
+            xml_str.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(
+            xml_str.contains("<definitions>"),
+            "Expected definitions element"
+        );
+        assert!(
+            xml_str.contains("</definitions>"),
+            "Expected closing definitions element"
+        );
+        assert!(
+            !xml_str.contains("<definition>"),
             "Expected no definitions for non-existent method"
         );
-        assert!(next_page.is_null(), "Expected next_page to be null");
+        assert!(
+            !xml_str.contains("<next-page>"),
+            "Expected no next-page element"
+        );
 
         setup.cleanup();
     }

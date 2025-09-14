@@ -8,6 +8,7 @@ pub mod read_definitions;
 pub mod search_codebase_definitions;
 pub mod types;
 pub mod utils;
+pub mod xml;
 
 pub use analyze_code_files::*;
 pub use available_tools_service::*;

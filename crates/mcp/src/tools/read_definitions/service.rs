@@ -170,22 +170,18 @@ impl ReadDefinitionsService {
                 total_with_body, total_with_errors
             ));
 
-            message.push_str(r#"
-                Decision Framework:
-                - If your current task is to understand specific definitions, you can use the returned definition bodies directly.
-                - If you need to find references to these definitions, use the `get_references` tool with the definition names and file paths.
-                - If you need to find related definitions or explore the codebase further, use the `search_codebase_definitions` tool.
-            "#);
+            message.push_str("\nDecision Framework:\n");
+            message.push_str("  - If your current task is to understand specific definitions, you can use the returned definition bodies directly.\n");
+            message.push_str("  - If you need to find references to these definitions, use the `get_references` tool with the definition names and file paths.\n");
+            message.push_str("  - If you need to find related definitions or explore the codebase further, use the `search_codebase_definitions` tool.\n");
         } else {
             message.push_str("No definitions were found for the requested names and file paths.\n");
 
-            message.push_str(r#"
-                Decision Framework:
-                - Verify that the definition names and file paths are correct and exact matches.
-                - Use the `search_codebase_definitions` tool to find definitions with similar names.
-                - If you know the definitions exist, use the `index_project` tool to re-index the project and try again.
-                - If you know the definitions exist, and the indexing is up to date, you can stop using the Knowledge Graph for the missing definitions.
-            "#);
+            message.push_str("\nDecision Framework:\n");
+            message.push_str("  - Verify that the definition names and file paths are correct and exact matches.\n");
+            message.push_str("  - Use the `search_codebase_definitions` tool to find definitions with similar names.\n");
+            message.push_str("  - If you know the definitions exist, use the `index_project` tool to re-index the project and try again.\n");
+            message.push_str("  - If you know the definitions exist, and the indexing is up to date, you can stop using the Knowledge Graph for the missing definitions.\n");
         }
 
         message

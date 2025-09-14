@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::thread;
 use std::{borrow::Cow, collections::HashMap};
 
+use crate::tools::xml::{ToXml, XmlBuilder};
 use database::kuzu::database::KuzuDatabase;
 use event_bus::EventBus;
 use indexer::execution::{config::IndexingConfigBuilder, executor::IndexingExecutor};
@@ -85,6 +86,60 @@ pub struct IndexProjectToolLanguageStatsOutput {
     pub definition_type_counts: HashMap<String, usize>,
 }
 
+impl ToXml for IndexProjectToolOutput {
+    fn to_xml(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut builder = XmlBuilder::new();
+
+        builder.start_element("ToolResponse")?;
+
+        builder.start_element("stats")?;
+        builder.write_element("project-path", &self.stats.project_path)?;
+        builder.write_numeric_element("total-files", self.stats.total_files)?;
+        builder.write_numeric_element("total-definitions", self.stats.total_definitions)?;
+        builder
+            .write_numeric_element("total-imported-symbols", self.stats.total_imported_symbols)?;
+        builder.write_numeric_element(
+            "total-definition-relationships",
+            self.stats.total_definition_relationships,
+        )?;
+        builder.write_numeric_element(
+            "total-imported-symbol-relationships",
+            self.stats.total_imported_symbol_relationships,
+        )?;
+        builder.write_numeric_element(
+            "indexing-duration-seconds",
+            self.stats.indexing_duration_seconds,
+        )?;
+
+        builder.start_element("languages")?;
+        for language in &self.stats.languages {
+            builder.start_element("language")?;
+            builder.write_element("language", &language.language)?;
+            builder.write_numeric_element("file-count", language.file_count)?;
+            builder.write_numeric_element("definition-count", language.definition_count)?;
+
+            builder.start_element("definition-type-counts")?;
+            for (def_type, count) in &language.definition_type_counts {
+                builder.start_element("definition-type")?;
+                builder.write_element("type", def_type)?;
+                builder.write_numeric_element("count", *count)?;
+                builder.end_element("definition-type")?;
+            }
+            builder.end_element("definition-type-counts")?;
+
+            builder.end_element("language")?;
+        }
+        builder.end_element("languages")?;
+
+        builder.end_element("stats")?;
+
+        builder.write_optional_cdata_element("system-message", &self.system_message)?;
+
+        builder.end_element("ToolResponse")?;
+        builder.finish()
+    }
+}
+
 pub struct IndexProjectTool {
     database: Arc<KuzuDatabase>,
     workspace_manager: Arc<WorkspaceManager>,
@@ -106,13 +161,13 @@ impl IndexProjectTool {
 
     fn get_system_message(&self, project_stats: &ProjectStatistics) -> Option<String> {
         if project_stats.total_definitions == 0 {
-            return Some(format!(
-                r#"
-            The Knowledge Graph failed to index any definitions in the project {}.
-            This means that the Knowledge Graph is unable to provide useful information for this project and using its tools will not be useful for your current task.
-            "#,
+            let mut message = String::new();
+            message.push_str(&format!(
+                "The Knowledge Graph failed to index any definitions in the project {}.",
                 project_stats.project_path
             ));
+            message.push_str("This means that the Knowledge Graph is unable to provide useful information for this project and using its tools will not be useful for your current task.");
+            return Some(message);
         }
 
         None
@@ -222,9 +277,15 @@ impl KnowledgeGraphTool for IndexProjectTool {
             system_message,
         };
 
-        Ok(CallToolResult::success(vec![
-            Content::json(serde_json::to_value(output).unwrap()).unwrap(),
-        ]))
+        let xml_output = output.to_xml().map_err(|e| {
+            rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Failed to convert output to XML: {}", e),
+                None,
+            )
+        })?;
+
+        Ok(CallToolResult::success(vec![Content::text(xml_output)]))
     }
 }
 
@@ -280,23 +341,27 @@ mod tests {
             .text
             .clone();
 
-        let obj: Value = serde_json::from_str(&text).unwrap();
-
-        let stats = obj
-            .get("stats")
-            .and_then(|v| v.as_object())
-            .expect("stats should be an object");
-
-        let returned_project_path = stats
-            .get("project_path")
-            .and_then(|v| v.as_str())
-            .expect("project_path should exist");
-        assert_eq!(returned_project_path, project_path);
-
-        let total_files = stats
-            .get("total_files")
-            .and_then(|v| v.as_u64())
-            .expect("total_files should exist");
-        assert!(total_files >= 1);
+        // Parse and validate XML structure
+        assert!(
+            text.contains("<ToolResponse>"),
+            "Expected ToolResponse root element"
+        );
+        assert!(text.contains("<stats>"), "Expected stats element");
+        assert!(
+            text.contains("<project-path>"),
+            "Expected project-path element"
+        );
+        assert!(
+            text.contains(&format!("<project-path>{}</project-path>", project_path)),
+            "Expected project path in XML"
+        );
+        assert!(
+            text.contains("<total-files>"),
+            "Expected total-files element"
+        );
+        assert!(
+            text.contains("<total-definitions>"),
+            "Expected total-definitions element"
+        );
     }
 }

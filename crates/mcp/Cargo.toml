@@ -18,6 +18,7 @@ num_cpus = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
+quick-xml = { workspace = true }
 
 [dev-dependencies]
 indexer = { path = "../indexer", features = ["test-utils"] }

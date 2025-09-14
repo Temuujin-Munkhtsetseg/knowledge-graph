@@ -10,6 +10,7 @@ use super::constants::{GET_DEFINITION_TOOL_DESCRIPTION, GET_DEFINITION_TOOL_NAME
 use super::input::GetDefinitionInput;
 use super::service::GetDefinitionService;
 use crate::tools::types::KnowledgeGraphTool;
+use crate::tools::xml::ToXml;
 
 pub struct GetDefinitionTool {
     service: GetDefinitionService,
@@ -59,16 +60,17 @@ impl KnowledgeGraphTool for GetDefinitionTool {
 
     fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let input = GetDefinitionInput::try_from(params)?;
+
         let result = self.service.get_definition(input)?;
-        let json_result = serde_json::to_value(result).map_err(|e| {
+
+        let xml_output = result.to_xml().map_err(|e| {
             rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Failed to serialize result: {}", e),
+                format!("Failed to convert output to XML: {}", e),
                 None,
             )
         })?;
-        Ok(CallToolResult::success(vec![
-            Content::json(json_result).unwrap(),
-        ]))
+
+        Ok(CallToolResult::success(vec![Content::text(xml_output)]))
     }
 }
