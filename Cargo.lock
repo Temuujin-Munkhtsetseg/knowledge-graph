@@ -2997,6 +2997,7 @@ dependencies = [
  "database",
  "event-bus",
  "futures",
+ "ignore",
  "indexer",
  "log",
  "num_cpus",
