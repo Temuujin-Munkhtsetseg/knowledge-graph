@@ -83,7 +83,7 @@ impl KnowledgeGraphTool for ReadDefinitionsTool {
 
         let output = self.service.read_definitions(input)?;
 
-        let xml_output = output.to_xml().map_err(|e| {
+        let xml_output = output.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("Failed to convert output to XML: {}", e),

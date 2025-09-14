@@ -1,11 +1,30 @@
 use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer;
+use regex::Regex;
 use std::io::Cursor;
+
+/// Removes CDATA sections from XML, replacing them with their inner content
+/// This is useful when the XML is intended for LLM consumption rather than parsing
+pub fn remove_cdata_sections(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let cdata_regex = Regex::new(r"(?s)<!\[CDATA\[(.*?)\]\]>")?;
+
+    // Replace all CDATA sections with their inner content
+    let result = cdata_regex.replace_all(xml, "$1");
+
+    Ok(result.to_string())
+}
 
 /// Trait for converting tool output structures to XML
 pub trait ToXml {
     /// Convert the structure to XML string with proper formatting
     fn to_xml(&self) -> Result<String, Box<dyn std::error::Error>>;
+
+    /// Convert the structure to XML string with CDATA sections removed.
+    /// This is useful when the XML is intended for LLM consumption rather than parsing.
+    fn to_xml_without_cdata(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let xml = self.to_xml()?;
+        remove_cdata_sections(&xml)
+    }
 }
 
 pub struct XmlBuilder {
@@ -50,7 +69,19 @@ impl XmlBuilder {
         content: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.start_element(name)?;
-        let cdata = Event::CData(BytesCData::new(format!("\n{}\n", content)));
+
+        // Only add newlines if content doesn't already start/end with them
+        let formatted_content = if content.starts_with('\n') && content.ends_with('\n') {
+            content.to_string()
+        } else if content.starts_with('\n') {
+            format!("{}\n", content)
+        } else if content.ends_with('\n') {
+            format!("\n{}", content)
+        } else {
+            format!("\n{}\n", content)
+        };
+
+        let cdata = Event::CData(BytesCData::new(formatted_content));
         self.writer.write_event(cdata)?;
         self.end_element(name)?;
         Ok(())
@@ -115,5 +146,60 @@ impl XmlBuilder {
 impl Default for XmlBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remove_cdata_sections() {
+        let xml_with_cdata = r#"<root>
+    <element><![CDATA[
+        Some code content
+        with special characters <>&"'
+    ]]></element>
+    <another><![CDATA[More content]]></another>
+    <normal>Regular content</normal>
+</root>"#;
+
+        let expected = r#"<root>
+    <element>
+        Some code content
+        with special characters <>&"'
+    </element>
+    <another>More content</another>
+    <normal>Regular content</normal>
+</root>"#;
+
+        let result = remove_cdata_sections(xml_with_cdata).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_remove_cdata_sections_empty_cdata() {
+        let xml_with_empty_cdata = r#"<element><![CDATA[]]></element>"#;
+        let expected = r#"<element></element>"#;
+
+        let result = remove_cdata_sections(xml_with_empty_cdata).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_remove_cdata_sections_no_cdata() {
+        let xml_without_cdata = r#"<root><element>Normal content</element></root>"#;
+
+        let result = remove_cdata_sections(xml_without_cdata).unwrap();
+        assert_eq!(result, xml_without_cdata);
+    }
+
+    #[test]
+    fn test_remove_cdata_sections_multiple_on_same_line() {
+        let xml = r#"<root><a><![CDATA[content1]]></a><b><![CDATA[content2]]></b></root>"#;
+        let expected = r#"<root><a>content1</a><b>content2</b></root>"#;
+
+        let result = remove_cdata_sections(xml).unwrap();
+        assert_eq!(result, expected);
     }
 }
