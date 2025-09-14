@@ -5,7 +5,8 @@ from utils import TomlConfig
 from src.opencode.opencode import OpencodeRunSessionData
 from src.opencode.models import AssistantMessage, StepFinishPart, Tokens, CacheTokens, MessageOrPart
 from src.opencode.models import extract_assistant_messages, extract_user_messages, extract_parts
-
+from dataclasses import dataclass, field
+import uuid
 import orjson
 
 from src.constants import SESSION_DATA_PATH, SWEBENCH_REPORT_DIR
@@ -69,7 +70,96 @@ def calculate_total_tokens(messages: List[MessageOrPart]) -> Tokens:
     )
 
 
-def get_session_statistics(session_data: OpencodeRunSessionData) -> Dict[str, Any]:
+@dataclass
+class SessionStatistics:
+    session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    counts: Dict[str, Any] = field(default_factory=dict)
+    cost: Dict[str, Any] = field(default_factory=dict)
+    tokens: Dict[str, Any] = field(default_factory=dict)
+    timing: Dict[str, Any] = field(default_factory=dict)
+    is_agg: bool = False
+
+    @classmethod
+    def avg(cls, session_statistics: List['SessionStatistics']) -> 'SessionStatistics':
+        if not session_statistics:
+            return cls()
+            
+        avg_session_statistics = cls()
+        n = len(session_statistics)
+        
+        # Helper function to average numeric values, skip non-numeric
+        def avg_numeric_values(values):
+            if not values:
+                return 0
+            numeric_values = [v for v in values if isinstance(v, (int, float))]
+            return sum(numeric_values) / len(numeric_values) if numeric_values else 0
+        
+        # Helper function to merge dictionaries by averaging their numeric values
+        def avg_dict_values(dicts):
+            if not dicts:
+                return {}
+            all_keys = set()
+            for d in dicts:
+                if isinstance(d, dict):
+                    all_keys.update(d.keys())
+            
+            result = {}
+            for key in all_keys:
+                values = [d.get(key, 0) for d in dicts if isinstance(d, dict)]
+                result[key] = avg_numeric_values(values)
+            return result
+        
+        # Average counts (handle nested dicts)
+        avg_session_statistics.counts = {}
+        if session_statistics[0].counts:
+            for key in session_statistics[0].counts:
+                values = [s.counts.get(key, 0) for s in session_statistics]
+                if key in ["parts_by_type", "tools_used"]:
+                    # These are nested dictionaries
+                    avg_session_statistics.counts[key] = avg_dict_values(values)
+                else:
+                    # These are numeric values
+                    avg_session_statistics.counts[key] = avg_numeric_values(values)
+        
+        # Average cost (all numeric)
+        avg_session_statistics.cost = {}
+        if session_statistics[0].cost:
+            for key in session_statistics[0].cost:
+                values = [s.cost.get(key, 0) for s in session_statistics]
+                avg_session_statistics.cost[key] = avg_numeric_values(values)
+        
+        # Average tokens (all numeric)
+        avg_session_statistics.tokens = {}
+        if session_statistics[0].tokens:
+            for key in session_statistics[0].tokens:
+                values = [s.tokens.get(key, 0) for s in session_statistics]
+                avg_session_statistics.tokens[key] = avg_numeric_values(values)
+        
+        # For timing, we'll skip averaging the nested list and just average the total
+        avg_session_statistics.timing = {}
+        if session_statistics[0].timing:
+            for key in session_statistics[0].timing:
+                if key == "assistant_messages_with_timing":
+                    # Skip averaging the complex nested structure
+                    avg_session_statistics.timing[key] = []
+                else:
+                    values = [s.timing.get(key, 0) for s in session_statistics]
+                    avg_session_statistics.timing[key] = avg_numeric_values(values)
+        
+        avg_session_statistics.is_agg = True
+        return avg_session_statistics
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "counts": self.counts,
+            "cost": self.cost,
+            "tokens": self.tokens,
+            "timing": self.timing,
+            "is_agg": self.is_agg
+        }
+
+def get_session_statistics(session_data: OpencodeRunSessionData) -> SessionStatistics:
     """
     Get comprehensive statistics about a session.
     
@@ -100,9 +190,9 @@ def get_session_statistics(session_data: OpencodeRunSessionData) -> Dict[str, An
     total_cost = calculate_total_cost(messages)
     total_tokens = calculate_total_tokens(messages)
     
-    return {
-        "session_id": session_data.session_id,
-        "counts": {
+    return SessionStatistics(
+        session_id=session_data.session_id,
+        counts={
             "total_items": len(messages),
             "assistant_messages": len(assistant_messages),
             "user_messages": len(user_messages),
@@ -110,11 +200,11 @@ def get_session_statistics(session_data: OpencodeRunSessionData) -> Dict[str, An
             "parts_by_type": part_counts,
             "tools_used": tool_counts,
         },
-        # "cost": {
-        #     "total": total_cost,
-        #     "per_message": total_cost / max(len(assistant_messages), 1),
-        # },
-        "tokens": {
+        cost={
+            "total": total_cost,
+            "per_message": total_cost / max(len(assistant_messages), 1),
+        },
+        tokens={
             "input": total_tokens.input,
             "output": total_tokens.output,
             "reasoning": total_tokens.reasoning,
@@ -122,7 +212,7 @@ def get_session_statistics(session_data: OpencodeRunSessionData) -> Dict[str, An
             "cache_write": total_tokens.cache.write,
             "total": total_tokens.input + total_tokens.output + total_tokens.reasoning,
         },
-        "timing": {
+        timing={
             "assistant_messages_with_timing": [
                 {
                     "id": msg.id,
@@ -134,15 +224,30 @@ def get_session_statistics(session_data: OpencodeRunSessionData) -> Dict[str, An
             ],
             "total_duration_ms": sum(msg.time.completed - msg.time.created for msg in assistant_messages if msg.time.completed),
         }
-    }
+    )
 
 def generate_report(toml_config: TomlConfig):
-    with open(SESSION_DATA_PATH, "r") as f:
-        session_data = [dict(orjson.loads(line)) for line in f.readlines()]
-    session_data = [OpencodeRunSessionData.from_dict(session) for session in session_data]
-    for session in session_data:
-        report = get_session_statistics(session)
-        print(json.dumps(report, indent=4))
+    try:
+        with open(toml_config.pipeline.session_paths.session_data_path, "r") as f:
+            session_data = [dict(orjson.loads(line)) for line in f.readlines()]
+        session_data = [OpencodeRunSessionData.from_dict(session) for session in session_data]
+        session_stats = []
+        for session in session_data:
+            print(f"--------------------------------")
+            print(f"Generating report for {session.fixture.instance_id}")
+            report = get_session_statistics(session)
+            print(json.dumps(report.to_dict(), indent=4))
+            print(f"--------------------------------")
+            session_stats.append(report)
 
-    # with open(SWEBENCH_REPORT_DIR / "report.json", "r") as f:
-    #     json.dump(metrics, f, indent=4)
+        print(f"Generating average report for all sessions")
+        avg_session_statistics = SessionStatistics.avg(session_stats)
+        avg_session_statistics.session_id = toml_config.pipeline.session_name
+        print(json.dumps(avg_session_statistics.to_dict(), indent=4))
+
+        # with open(SWEBENCH_REPORT_DIR / "report.json", "r") as f:
+        #     json.dump(metrics, f, indent=4)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(e)

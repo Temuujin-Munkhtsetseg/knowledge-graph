@@ -3,30 +3,35 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+ENV_PATH = Path("../.env").absolute()
+load_dotenv(ENV_PATH)
 LOCAL = os.getenv("LOCAL") == "1"
 
-# These paths are relative to the gkg-evals subdirectory
-FIXTURES_METADATA_PATH = Path("./../data/fixtures_metadata.json").absolute() if LOCAL else Path("/app/data/fixtures_metadata.json")
-FIXTURES_DIR_PATH = Path("./../data/fixtures").absolute() if LOCAL else Path("/app/data/fixtures")
-PATCHES_PATH = Path("./../data/patches.jsonl").absolute() if LOCAL else Path("/app/data/patches.jsonl")
-SESSION_DATA_PATH = Path("./../data/session_data.jsonl").absolute() if LOCAL else Path("/app/data/session_data.jsonl")
-OPENCODE_LOGS_PATH = Path("./../data/opencode_logs.txt").absolute()
-OPENCODE_CONFIG_PATH = Path("./../data/opencode_config.json").absolute() # this is just for logging
+# Global dirs (relative to the gkg-evals/pipeline subdirectory)
+GKG_EVALS_DIR = Path("./../").absolute()
+DATA_DIR = Path("./../data").absolute()
+RUNS_DIR = DATA_DIR / "runs"
 
-# MultiSweBench
-BASE_DIR_MULTISWEBENCH = Path("./../data/repos/multi-swe-bench").absolute() if LOCAL else Path("/app/data/repos/multi-swe-bench")
-MULTISWEBENCH_CONFIG_PATH = Path("./../data/multiswebench_config.json").absolute().resolve()
-MULTISWEBENCH_OUTPUT_DIR = Path("./../data/multiswebench_output").absolute().resolve()
-MULTISWEBENCH_LOCATION = Path("./../harness/multi-swe-bench").absolute().resolve()
-MULTISWEBENCH_WORKDIR = Path("./../data/evals_workdir").absolute().resolve()
+# These paths are relative to a gkg-evals/pipeline/runs/<session_name> subdirectory
+FIXTURES_METADATA_PATH = "fixtures_metadata.json"
+FIXTURES_DIR_PATH = "fixtures"
+SESSION_DATA_PATH = "session_data.jsonl"
+OPENCODE_LOGS_PATH = "opencode_logs.txt"
+OPENCODE_CONFIG_PATH = "opencode_config.json" # this is just for logging
+
+# MultiSweBench (These are outdated for now, but do not change them)
+BASE_DIR_MULTISWEBENCH = DATA_DIR / "repos/multi-swe-bench"
+MULTISWEBENCH_CONFIG_PATH = DATA_DIR / "multiswebench_config.json"
+MULTISWEBENCH_OUTPUT_DIR = DATA_DIR / "multiswebench_output"
+MULTISWEBENCH_LOCATION = DATA_DIR / "harness/multi-swe-bench"
+MULTISWEBENCH_WORKDIR = DATA_DIR / "evals_workdir"
 
 # SweBench
-BASE_DIR_SWEBENCH = Path("./../data/repos/swebench").absolute() if LOCAL else Path("/app/data/repos/swebench")
-SWEBENCH_LOCATION = Path("./../harness/SWE-bench").absolute().resolve()
-SWEBENCH_FIXTURES_DIR_PATH = Path("./../data/fixtures/swebench").absolute().resolve()
-SWEBENCH_PATCHES_PATH = Path("./../data/swebench_patches.jsonl").absolute().resolve()
-SWEBENCH_REPORT_DIR = Path("./../data/swebench_report").absolute().resolve()
+SWEBENCH_HARNESS_LOCATION_DIR = "harness/SWE-bench"
+BASE_REPOS_DIR_SWEBENCH = "repos/swebench"
+SWEBENCH_FIXTURES_DIR_PATH = "fixtures/swebench"
+SWEBENCH_PATCHES_PATH = "swebench_patches.jsonl"
+SWEBENCH_REPORT_DIR = "swebench_report"
 
 # Executables, relative to the gkg-evals subdirectory
 GKG_PATH_RELEASE = Path("./../../../target/release/gkg").absolute()

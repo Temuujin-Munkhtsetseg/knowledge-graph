@@ -1,5 +1,4 @@
 
-OPENCODE_MAX_TIME = 240
 OPENCODE_TIME_ELAPSED_DEBOUNCE = 5
 
 # https://opencode.ai/docs/agents/#available-tools
@@ -15,4 +14,4 @@ OPENCODE_DEFAULT_MCP = {
     }
 }
 
-OPENCODE_VERSION = "0.6.4"
+OPENCODE_VERSION = "0.7.9"

@@ -7,14 +7,9 @@ from src.utils import run_threaded
 from src.harness.swe_bench import SweBenchFixtureMetadata, get_swebench_lite_dataset
 from src.utils import TomlConfig
 
-from src.constants import BASE_DIR_SWEBENCH, FIXTURES_METADATA_PATH, FIXTURES_DIR_PATH
-
 # MULTISWEBENCH
 # from src.constants import BASE_DIR_MULTISWEBENCH
 # from src.harness.multi_swe_bench import MultiSweBenchFixtureMetadata, get_fixtures_metadata
-
-def clone_fixtures():
-    FIXTURES_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
 def clone_repository(fixture: SweBenchFixtureMetadata) -> tuple[bool, Path]:
     repo_url = f"https://github.com/{fixture.org}/{fixture.repo}.git"
@@ -161,7 +156,8 @@ def remove_worktrees(fixtures: list[SweBenchFixtureMetadata]):
 
 def download(toml_config: TomlConfig):
     ### SWEBENCH ###
-    ds = get_swebench_lite_dataset()
+    ds = get_swebench_lite_dataset(toml_config)
+    base_repos_dir = toml_config.pipeline.session_paths.swe_bench_repos_dir
 
     ## TODO: Turn fixtures into an interface via abc module
 
@@ -173,7 +169,7 @@ def download(toml_config: TomlConfig):
         item["repo"] = repo
         item["org"] = org
         metadata = SweBenchFixtureMetadata.from_dict(item)
-        repo_path = BASE_DIR_SWEBENCH / org / repo
+        repo_path = base_repos_dir / org / repo
         metadata.add_repo_path(repo_path)
         if not repo_path.exists():
             os.makedirs(repo_path, exist_ok=True)
@@ -189,7 +185,13 @@ def download(toml_config: TomlConfig):
     run_threaded(clone_repository, unique_fixtures)
     run_threaded(create_worktree, fixtures)
 
-    with open(FIXTURES_METADATA_PATH, "w") as f:
+    fixtures_metadata_path = toml_config.pipeline.session_paths.fixtures_metadata_path
+    if not fixtures_metadata_path.exists():
+        for f in fixtures:
+            if not f.worktree_path.exists():
+                raise ValueError(f"Worktree path does not exist: {f.worktree_path}")
+
+    with open(fixtures_metadata_path, "w") as f:
         json.dump([fx.to_dict() for fx in fixtures], f, indent=4)
 
     ### MULTISWEBENCH ###

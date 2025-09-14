@@ -101,58 +101,6 @@ git_verify() {
     git lfs pull
 }
 
-setup_swebench() {
-    cd "$SCRIPT_DIR"
-    # Check if SWE-bench already exists in harness/
-    if [ -d "harness/SWE-bench" ]; then
-        echo "✓ SWE-bench already exists in harness/ - skipping clone"
-    else
-        echo "Cloning SWE-bench repository..."
-        mkdir -p harness
-        cd harness
-        git clone https://github.com/princeton-nlp/SWE-bench.git
-        cd SWE-bench
-        
-        # Checkout specific commit
-        echo "Checking out commit c7c22a916c9215e709722bc5ab18df4062dc6248..."
-        git checkout c7c22a916c9215e709722bc5ab18df4062dc6248
-        
-        # Remove .git directory to prevent it from being treated as a submodule
-        echo "Removing .git directory to prevent embedded repository issues..."
-        rm -rf .git
-        
-        pip install -e .
-        
-        cd "$SCRIPT_DIR"
-        echo "✓ SWE-bench setup completed successfully!"
-        echo "Note: SWE-bench dependencies are managed through uv/pyproject.toml"
-    fi
-}
-
-setup_multiswebench() {
-    cd "$SCRIPT_DIR"
-    # Check if multi-swe-bench already exists in harness/
-    if [ -d "harness/multi-swe-bench" ]; then
-        echo "✓ multi-swe-bench already exists in harness/ - skipping clone"
-    else
-        echo "Cloning multi-swe-bench repository..."
-        mkdir -p harness
-        cd harness
-        git clone https://github.com/multi-swe-bench/multi-swe-bench.git
-        cd multi-swe-bench
-        
-        # Checkout specific commit
-        echo "Checking out commit a3051748c123c19a775c8d2a64c4c954d02000a5..."
-        git checkout a3051748c123c19a775c8d2a64c4c954d02000a5
-        
-        echo "Installing multi-swe-bench..."
-        make install
-        
-        cd "$SCRIPT_DIR"
-        echo "✓ multi-swe-bench setup completed successfully!"
-    fi
-}
-
 check_for_dependencies_and_setup() {
     # Opencode will be installed via npx
     
@@ -165,9 +113,8 @@ check_for_dependencies_and_setup() {
     echo "✓ mise found in PATH"
 
     # Create harness directory if it doesn't exist
-    mkdir -p harness
-    
-    setup_swebench
+    # mkdir -p harness
+    # setup_swebench
     # setup_multiswebench
     
     # Trust and install mise tools
@@ -214,13 +161,11 @@ run_full_pipeline() {
     local config_abs_path="$2"
 
     echo "Running full pipeline with config: $config_abs_path"
-    run_pipeline_step "$local_mode" "$config_abs_path" "download" ""
-    run_pipeline_step "$local_mode" "$config_abs_path" "index" ""
-    start_gkg_server
-    run_pipeline_step "$local_mode" "$config_abs_path" "agent" ""
-    stop_gkg_server
+    run_pipeline_step "$local_mode" "$config_abs_path" "download" "."
+    run_pipeline_step "$local_mode" "$config_abs_path" "index" "."
+    run_pipeline_step "$local_mode" "$config_abs_path" "agent" "."
     run_pipeline_step "$local_mode" "$config_abs_path" "evals" "../harness/SWE-bench"
-    run_pipeline_step "$local_mode" "$config_abs_path" "report" ""
+    run_pipeline_step "$local_mode" "$config_abs_path" "report" "."
 }
 
 
@@ -258,22 +203,11 @@ run_local() {
     
     # Handle different phases
     case "$phase" in
-        download)
-            run_pipeline_step "$local_mode" "$config_abs_path" $phase
-            ;;
-        index)
-            run_pipeline_step "$local_mode" "$config_abs_path" $phase
-            ;;
-        agent)
-            start_gkg_server
-            run_pipeline_step "$local_mode" "$config_abs_path" $phase
-            stop_gkg_server
+        noop|download|index|agent|report)
+            run_pipeline_step "$local_mode" "$config_abs_path" $phase "."
             ;;
         evals)
-            run_pipeline_step "$local_mode" "$config_abs_path" $phase
-            ;;
-        report)
-            run_pipeline_step "$local_mode" "$config_abs_path" $phase
+            run_pipeline_step "$local_mode" "$config_abs_path" $phase "."
             ;;
         all)
             run_full_pipeline "$local_mode" "$config_abs_path"
@@ -282,53 +216,6 @@ run_local() {
     
     echo "Phase '$phase' completed successfully!"
     exit 0
-}
-
-# Function to start GKG server
-start_gkg_server() {
-    echo "Starting gkg server in release mode..."
-    
-    # Remember current directory and go to knowledge-graph root
-    local original_dir=$(pwd)
-    cd ../../
-    
-    # Start server in background and capture PID
-    echo "Starting gkg server on port 27495..."
-    cargo run --bin gkg server start &
-    GKG_PID=$!
-
-    # Wait for server to be fully ready
-    echo "Waiting for server to start..."
-    sleep 3
-    
-    # Verify server is running and wait for it to be ready
-    max_attempts=10
-    attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if kill -0 $GKG_PID 2>/dev/null; then
-            # Try to connect to the server to ensure it's ready
-            if curl -s http://localhost:27495/health >/dev/null 2>&1; then
-                echo "✓ gkg server is ready and responding (PID: $GKG_PID)"
-                break
-            else
-                echo "Server process running but not ready yet... (attempt $attempt/$max_attempts)"
-            fi
-        else
-            echo "Error: gkg server process not running"
-            exit 1
-        fi
-        
-        sleep 2
-        attempt=$((attempt + 1))
-    done
-    
-    if [ $attempt -gt $max_attempts ]; then
-        echo "Error: gkg server failed to become ready after $max_attempts attempts"
-        exit 1
-    fi
-
-    # Return to original directory
-    cd "$original_dir"
 }
 
 # Parse command line arguments
@@ -346,7 +233,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: $0 <config.toml> [phase] [--local]"
             echo "  config.toml       Path to TOML configuration file"
-            echo "  phase             Optional phase: download, index, agent, evals, report, all (default: all)"
+            echo "  phase             Optional phase: noop, download, index, agent, evals, report, all (default: all)"
             echo "  --local           Run in local mode"
             echo "  --help, -h        Show this help message"
             exit 0
@@ -385,10 +272,10 @@ fi
 
 # Validate phase
 case "$phase" in
-    download|index|agent|evals|report|all)
+    noop|download|index|agent|evals|report|all)
         ;;
     *)
-        echo "Error: Invalid phase '$phase'. Valid phases: download, index, agent, evals, report, all"
+        echo "Error: Invalid phase '$phase'. Valid phases: noop, download, index, agent, evals, report, all"
         exit 1
         ;;
 esac
