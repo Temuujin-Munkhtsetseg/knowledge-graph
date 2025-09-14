@@ -249,8 +249,8 @@ export class ApiClient extends HttpClient {
     const queryParams: GraphInitialQueryRequest = {
       directory_limit: 20,
       file_limit: 100,
-      definition_limit: 500,
-      imported_symbol_limit: 50,
+      definition_limit: 2000,
+      imported_symbol_limit: 200,
     };
 
     return this.get<GraphInitialSuccessResponse>(
@@ -269,7 +269,7 @@ export class ApiClient extends HttpClient {
     projectPath: string,
     nodeId: string,
     nodeType: string,
-    limit: number = 100,
+    limit: number = 200,
   ): Promise<GraphNeighborsSuccessResponse> {
     const queryParams: GraphNeighborsQueryRequest = {
       limit,
