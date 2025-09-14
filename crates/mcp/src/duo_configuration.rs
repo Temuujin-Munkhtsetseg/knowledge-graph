@@ -17,7 +17,7 @@ pub enum ApprovedTools {
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum McpServer {
+pub enum DuoMcpServer {
     Url {
         url: String,
         #[serde(rename = "approvedTools", skip_serializing_if = "Option::is_none")]
@@ -33,15 +33,15 @@ pub enum McpServer {
 
 #[derive(Serialize, Deserialize)]
 
-struct McpConfig {
+struct DuoMcpConfig {
     #[serde(skip)]
     path: PathBuf,
 
     #[serde(rename = "mcpServers")]
-    mcp_servers: HashMap<String, McpServer>,
+    mcp_servers: HashMap<String, DuoMcpServer>,
 }
 
-impl McpConfig {
+impl DuoMcpConfig {
     fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -56,7 +56,7 @@ impl McpConfig {
         }
 
         let content = fs::read_to_string(path.clone())?;
-        let json: McpConfig = serde_json::from_str(&content)?;
+        let json: DuoMcpConfig = serde_json::from_str(&content)?;
 
         Ok(Self {
             path,
@@ -64,7 +64,7 @@ impl McpConfig {
         })
     }
 
-    pub fn add_server(mut self, name: String, server: McpServer) -> Self {
+    pub fn add_server(mut self, name: String, server: DuoMcpServer) -> Self {
         self.mcp_servers.insert(name, server);
 
         self
@@ -80,12 +80,12 @@ impl McpConfig {
 // Helper function that adds the local HTTP server to the MCP configuration.
 pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) -> Result<()> {
     let expanded_path = naively_expand_shell_path(mcp_config_path)?;
-    let mut config = McpConfig::get_or_create(expanded_path)?;
+    let mut config = DuoMcpConfig::get_or_create(expanded_path)?;
 
     let server_url = format!("http://localhost:{port}/mcp");
 
     // Check if knowledge graph server already exists
-    if let Some(McpServer::Url {
+    if let Some(DuoMcpServer::Url {
         url,
         approved_tools,
     }) = config.mcp_servers.get(MCP_NAME)
@@ -97,7 +97,7 @@ pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) 
 
         // If URL matches but approvedTools is missing, add it
         if url.as_str() == server_url {
-            let server = McpServer::Url {
+            let server = DuoMcpServer::Url {
                 url: url.clone(),
                 approved_tools: Some(ApprovedTools::Bool(true)),
             };
@@ -108,7 +108,7 @@ pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) 
     }
 
     // Server doesn't exist or URL doesn't match, create/update it
-    let server = McpServer::Url {
+    let server = DuoMcpServer::Url {
         url: server_url,
         approved_tools: Some(ApprovedTools::Bool(true)),
     };
@@ -188,7 +188,7 @@ mod tests {
 
         add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
 
-        let config = McpConfig::get_or_create(mcp_config_path.clone()).unwrap();
+        let config = DuoMcpConfig::get_or_create(mcp_config_path.clone()).unwrap();
         assert_eq!(config.mcp_servers.len(), 1);
 
         check_http_server_is_added_to_existing_config(
@@ -206,11 +206,11 @@ mod tests {
         let port = 8080;
 
         // Add a random server to the config
-        McpConfig::get_or_create(mcp_config_path.clone())
+        DuoMcpConfig::get_or_create(mcp_config_path.clone())
             .unwrap()
             .add_server(
                 "gitlab".to_string(),
-                McpServer::Command {
+                DuoMcpServer::Command {
                     command: "gitlab".to_string(),
                     args: vec!["mcp".to_string(), "server".to_string()],
                     approved_tools: None,
@@ -221,7 +221,7 @@ mod tests {
 
         add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
 
-        let config = McpConfig::get_or_create(mcp_config_path.clone()).unwrap();
+        let config = DuoMcpConfig::get_or_create(mcp_config_path.clone()).unwrap();
         assert_eq!(config.mcp_servers.len(), 2);
 
         check_http_server_is_added_to_existing_config(
@@ -240,7 +240,7 @@ mod tests {
         add_local_http_server_to_mcp_config(mcp_config_path.clone(), 8080).unwrap();
         add_local_http_server_to_mcp_config(mcp_config_path.clone(), 8081).unwrap();
 
-        let config = McpConfig::get_or_create(mcp_config_path.clone()).unwrap();
+        let config = DuoMcpConfig::get_or_create(mcp_config_path.clone()).unwrap();
         assert_eq!(config.mcp_servers.len(), 1);
 
         check_http_server_is_added_to_existing_config(
@@ -259,7 +259,7 @@ mod tests {
 
         add_local_http_server_to_mcp_config(mcp_config_path.clone(), port).unwrap();
 
-        let config = McpConfig::get_or_create(mcp_config_path.clone()).unwrap();
+        let config = DuoMcpConfig::get_or_create(mcp_config_path.clone()).unwrap();
         assert_eq!(config.mcp_servers.len(), 1);
 
         check_http_server_is_added_to_existing_config(
@@ -376,9 +376,9 @@ mod tests {
         assert_eq!(expanded_path, path);
     }
 
-    fn check_http_server_is_added_to_existing_config(server: &McpServer, port: u16) {
+    fn check_http_server_is_added_to_existing_config(server: &DuoMcpServer, port: u16) {
         match server {
-            McpServer::Url { url, .. } => {
+            DuoMcpServer::Url { url, .. } => {
                 assert_eq!(*url, format!("http://localhost:{port}/mcp"))
             }
             _ => panic!("Expected URL server"),
