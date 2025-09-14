@@ -124,3 +124,69 @@ Output: An object containing:
   - `code` (string): A snippet of the code for the definition.
   - `is_ambiguous` (boolean): A flag indicating if the found reference is ambiguous.
 - `system_message` (string, optional): A message provided if multiple lines or symbol occurrences were found, which may affect the results.
+
+### repo_map
+
+The `repo_map` tool produces a compact, API-style map of a repository segment. It accepts project-relative files and/or directories, traverses them using `.gitignore`-aware rules, and returns:
+
+- Directories as an ASCII tree
+- Files with a condensed definitions section, including line ranges and short context snippets
+
+This output is designed to be token-efficient for LLMs and readable for humans:
+
+Input:
+
+- `project_absolute_path` (string, required): Absolute path to the indexed project root.
+- `relative_paths` (string[], required): Project-relative files or directories to include.
+- `depth` (integer, optional): Directory/file traversal depth. Range: 1–3. Default is tool-defined.
+- `show_directories` (boolean, optional, default: true): Include the directories ASCII tree.
+- `show_definitions` (boolean, optional, default: true): Include files and their definitions.
+- `page` (integer, optional, default: 1): 1-based page number.
+- `page_size` (integer, optional): Max definitions per page (capped by the tool).
+
+Depth semantics:
+
+- Depth is counted from each `relative_paths` entry.
+- Directories are expanded up to `depth` levels. Files at or within that depth are included. There is a hard maximum depth of 3 at this time.
+
+Output format:
+
+The tool returns a single XML string wrapped in a `<ToolResponse>` element. Structure:
+
+```xml
+<ToolResponse>
+  <repo-map>
+    <depth>2</depth>
+    <directories>
+    ├── app
+    │   └── models
+    └── lib
+    </directories>
+    <files>
+      <file>
+        <path>lib/authentication.ts</path>
+        <definitions>
+        class AuthenticationError L3-8
+        │ export class AuthenticationError extends Error {
+        │   constructor(message: string = "Authentication failed") {
+        │     super(message);
+
+        method AuthenticationError::constructor L4-7
+        │     this.name = "AuthenticationError";
+        ... (other definitions elided)
+        </definitions>
+      </file>
+      <!-- more <file> entries -->
+    </files>
+  </repo-map>
+  <system-message>
+  Returned 52 definitions from 1 input path(s). depth=2.
+  </system-message>
+</ToolResponse>
+```
+
+Notes:
+
+- File `path` values are project-relative.
+- `location` in definition lines is line-only (e.g., `L10-15`).
+- Definitions are formatted text within a single CDATA block; there are no nested per-definition XML tags.

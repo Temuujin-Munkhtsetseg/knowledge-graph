@@ -14,6 +14,7 @@ use crate::tools::get_references::tool::GetReferencesTool;
 use crate::tools::index_project::IndexProjectTool;
 use crate::tools::read_definitions::READ_DEFINITIONS_TOOL_NAME;
 use crate::tools::read_definitions::tool::ReadDefinitionsTool;
+use crate::tools::repo_map::{REPO_MAP_TOOL_NAME, RepoMapTool};
 use crate::tools::types::KnowledgeGraphTool;
 use database::kuzu::database::KuzuDatabase;
 use database::querying::QueryingService;
@@ -92,6 +93,16 @@ impl AvailableToolsService {
             tools.insert(
                 READ_DEFINITIONS_TOOL_NAME.to_string(),
                 Box::new(ReadDefinitionsTool::new(
+                    query_service.clone(),
+                    workspace_manager.clone(),
+                )),
+            );
+        }
+
+        if configuration.is_tool_enabled(REPO_MAP_TOOL_NAME) {
+            tools.insert(
+                REPO_MAP_TOOL_NAME.to_string(),
+                Box::new(RepoMapTool::new(
                     query_service.clone(),
                     workspace_manager.clone(),
                 )),
