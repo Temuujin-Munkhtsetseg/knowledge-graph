@@ -71,6 +71,7 @@ async fn main() -> anyhow::Result<()> {
                     args.enable_reindexing,
                     args.detached,
                     args.port,
+                    args.mcp_configuration_path,
                     Arc::clone(&database),
                     Arc::clone(&workspace_manager),
                     Arc::clone(&event_bus),
@@ -86,12 +87,14 @@ async fn main() -> anyhow::Result<()> {
                     enable_reindexing: false,
                     detached: false,
                     port: None,
+                    mcp_configuration_path: None,
                 };
                 server::start(
                     args.register_mcp,
                     args.enable_reindexing,
                     args.detached,
                     args.port,
+                    args.mcp_configuration_path,
                     Arc::clone(&database),
                     Arc::clone(&workspace_manager),
                     Arc::clone(&event_bus),

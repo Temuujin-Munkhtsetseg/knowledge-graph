@@ -23,12 +23,31 @@ async fn main() -> Result<()> {
     let event_bus = Arc::new(EventBus::new());
     let database = Arc::new(KuzuDatabase::new());
 
+    let mcp_configuration =
+        if let Some(idx) = std::env::args().position(|arg| arg == "--mcp-configuration") {
+            // Try to get the next argument as the path
+            if let Some(path) = std::env::args().nth(idx + 1) {
+                let path = std::path::PathBuf::from(path);
+                Arc::new(mcp::configuration::read_mcp_configuration(path))
+            } else {
+                // If no path is provided after the flag, use default
+                Arc::new(mcp::configuration::get_or_create_mcp_configuration(
+                    workspace_manager.clone(),
+                ))
+            }
+        } else {
+            Arc::new(mcp::configuration::get_or_create_mcp_configuration(
+                workspace_manager.clone(),
+            ))
+        };
+
     run(
         port,
         enable_reindexing,
         database,
         workspace_manager,
         event_bus,
+        mcp_configuration,
     )
     .await
 }

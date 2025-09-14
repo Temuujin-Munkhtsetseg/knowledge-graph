@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::configuration::McpConfiguration;
 use crate::tools::ANALYZE_CODE_FILES_TOOL_NAME;
 use crate::tools::INDEX_PROJECT_TOOL_NAME;
 use crate::tools::SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME;
@@ -32,57 +33,70 @@ impl AvailableToolsService {
         workspace_manager: Arc<WorkspaceManager>,
         database: Arc<KuzuDatabase>,
         event_bus: Arc<EventBus>,
+        configuration: Arc<McpConfiguration>,
     ) -> Self {
         let mut tools: HashMap<String, Box<dyn KnowledgeGraphTool>> = HashMap::new();
 
-        tools.insert(
-            SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME.to_string(),
-            Box::new(SearchCodebaseDefinitionsTool::new(
-                query_service.clone(),
-                workspace_manager.clone(),
-            )),
-        );
+        if configuration.is_tool_enabled(SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME) {
+            tools.insert(
+                SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME.to_string(),
+                Box::new(SearchCodebaseDefinitionsTool::new(
+                    query_service.clone(),
+                    workspace_manager.clone(),
+                )),
+            );
+        }
 
-        tools.insert(
-            ANALYZE_CODE_FILES_TOOL_NAME.to_string(),
-            Box::new(AnalyzeCodeFilesTool::new(
-                query_service.clone(),
-                workspace_manager.clone(),
-            )),
-        );
+        if configuration.is_tool_enabled(ANALYZE_CODE_FILES_TOOL_NAME) {
+            tools.insert(
+                ANALYZE_CODE_FILES_TOOL_NAME.to_string(),
+                Box::new(AnalyzeCodeFilesTool::new(
+                    query_service.clone(),
+                    workspace_manager.clone(),
+                )),
+            );
+        }
 
-        tools.insert(
-            INDEX_PROJECT_TOOL_NAME.to_string(),
-            Box::new(IndexProjectTool::new(
-                database.clone(),
-                workspace_manager.clone(),
-                event_bus.clone(),
-            )),
-        );
+        if configuration.is_tool_enabled(INDEX_PROJECT_TOOL_NAME) {
+            tools.insert(
+                INDEX_PROJECT_TOOL_NAME.to_string(),
+                Box::new(IndexProjectTool::new(
+                    database.clone(),
+                    workspace_manager.clone(),
+                    event_bus.clone(),
+                )),
+            );
+        }
 
-        tools.insert(
-            GET_REFERENCES_TOOL_NAME.to_string(),
-            Box::new(GetReferencesTool::new(
-                query_service.clone(),
-                workspace_manager.clone(),
-            )),
-        );
+        if configuration.is_tool_enabled(GET_REFERENCES_TOOL_NAME) {
+            tools.insert(
+                GET_REFERENCES_TOOL_NAME.to_string(),
+                Box::new(GetReferencesTool::new(
+                    query_service.clone(),
+                    workspace_manager.clone(),
+                )),
+            );
+        }
 
-        tools.insert(
-            GET_DEFINITION_TOOL_NAME.to_string(),
-            Box::new(GetDefinitionTool::new(
-                database.clone(),
-                workspace_manager.clone(),
-            )),
-        );
+        if configuration.is_tool_enabled(GET_DEFINITION_TOOL_NAME) {
+            tools.insert(
+                GET_DEFINITION_TOOL_NAME.to_string(),
+                Box::new(GetDefinitionTool::new(
+                    database.clone(),
+                    workspace_manager.clone(),
+                )),
+            );
+        }
 
-        tools.insert(
-            READ_DEFINITIONS_TOOL_NAME.to_string(),
-            Box::new(ReadDefinitionsTool::new(
-                query_service.clone(),
-                workspace_manager.clone(),
-            )),
-        );
+        if configuration.is_tool_enabled(READ_DEFINITIONS_TOOL_NAME) {
+            tools.insert(
+                READ_DEFINITIONS_TOOL_NAME.to_string(),
+                Box::new(ReadDefinitionsTool::new(
+                    query_service.clone(),
+                    workspace_manager.clone(),
+                )),
+            );
+        }
 
         Self { tools }
     }
