@@ -1,7 +1,6 @@
 use crate::endpoints::shared::StatusResponse;
 use database::querying::QueryResultRow;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use ts_rs::TS;
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
@@ -82,9 +81,8 @@ pub struct GraphRelationship {
     pub id: String,
     pub source: String,
     pub target: String,
+    pub relationship_name: String,
     pub relationship_type: String,
-    #[ts(type = "Record<string, any>")]
-    pub properties: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug)]

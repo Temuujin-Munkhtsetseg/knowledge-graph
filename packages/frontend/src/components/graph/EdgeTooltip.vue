@@ -50,7 +50,7 @@ const getNodeColor = (nodeType: string) => {
 const relationshipTypeDisplay = computed(() => {
   if (!props.relationship) return '';
 
-  switch (props.relationship.relationship_type) {
+  switch (props.relationship.relationship_name) {
     case 'DIRECTORY_RELATIONSHIPS':
       return 'Directory Contains';
     case 'FILE_RELATIONSHIPS':
@@ -58,14 +58,14 @@ const relationshipTypeDisplay = computed(() => {
     case 'DEFINITION_RELATIONSHIPS':
       return 'Definition Reference';
     default:
-      return props.relationship.relationship_type.replace(/_/g, ' ').toLowerCase();
+      return props.relationship.relationship_name.replace(/_/g, ' ').toLowerCase();
   }
 });
 
 const relationshipColor = computed(() => {
   if (!props.relationship) return 'bg-muted';
 
-  switch (props.relationship.relationship_type) {
+  switch (props.relationship.relationship_name) {
     case 'DIRECTORY_RELATIONSHIPS':
       return 'bg-amber-500';
     case 'FILE_RELATIONSHIPS':
@@ -89,6 +89,14 @@ const tooltipPosition = computed(() => {
     right: `${window.innerWidth - containerRect.right + 16}px`,
   };
 });
+
+const formatRelationshipType = (relationshipType: string) => {
+  return relationshipType
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/"/g, '');
+};
 </script>
 
 <template>
@@ -176,22 +184,14 @@ const tooltipPosition = computed(() => {
             </div>
           </div>
 
-          <!-- Relationship Properties -->
-          <div
-            v-if="relationship.properties && Object.keys(relationship.properties).length > 0"
-            class="space-y-2"
-          >
+          <!-- Relationship type -->
+          <div class="space-y-2">
             <Separator />
-            <div class="text-xs sm:text-sm font-medium">Properties</div>
-            <div class="ml-5 sm:ml-6 space-y-1">
-              <div
-                v-for="[key, value] in Object.entries(relationship.properties)"
-                :key="key"
-                class="flex items-center gap-2 text-xs"
-              >
-                <span class="text-muted-foreground">{{ key }}:</span>
-                <span class="font-mono min-w-0 break-words">{{ value }}</span>
-              </div>
+            <div class="ml-5 sm:ml-6 space-y-1 text-xs">
+              <span class="text-muted-foreground">Relationship Type: </span>
+              <span class="font-mono min-w-0">{{
+                formatRelationshipType(relationship.relationship_type)
+              }}</span>
             </div>
           </div>
         </div>
