@@ -9,12 +9,12 @@ use crate::endpoints::shared::StatusResponse;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
+use database::querying::mappers::RELATIONSHIP_TYPE_MAPPER;
 use database::querying::{
     QueryLibrary, QueryResult, QueryResultRow, QueryingService, service::DatabaseQueryingService,
 };
 use event_bus::types::project_info::{TSProjectInfo, to_ts_project_info};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::error;
 use ts_rs::TS;
@@ -268,8 +268,9 @@ fn process_neighbors_row(
     let source_data = extract_node_data(&*row, 0)?;
     let target_data = extract_node_data(&*row, 17)?;
 
-    let relationship_type = row.get_string_value(34)?;
+    let relationship_name = row.get_string_value(34)?;
     let relationship_id = row.get_string_value(35)?;
+    let relationship_type = RELATIONSHIP_TYPE_MAPPER(&*row, 36)?;
 
     let source_id = source_data.id.clone();
     let target_id = target_data.id.clone();
@@ -287,8 +288,8 @@ fn process_neighbors_row(
             id: relationship_id,
             source: source_id,
             target: target_id,
-            relationship_type,
-            properties: HashMap::new(),
+            relationship_name,
+            relationship_type: relationship_type.to_string(),
         });
     }
 

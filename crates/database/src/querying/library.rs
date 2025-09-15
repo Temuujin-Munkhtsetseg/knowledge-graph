@@ -34,7 +34,7 @@ pub enum QueryParameterDefinition {
 #[derive(Debug, Clone)]
 pub struct RelationshipConfig {
     pub source_type: &'static str,
-    pub relationship_type: &'static str,
+    pub relationship_name: &'static str,
     pub target_type: &'static str,
     pub priority: i32,
 }
@@ -46,58 +46,58 @@ impl QueryLibrary {
             // Directory relationships (priority 1)
             RelationshipConfig {
                 source_type: "DirectoryNode",
-                relationship_type: "DIRECTORY_RELATIONSHIPS",
+                relationship_name: "DIRECTORY_RELATIONSHIPS",
                 target_type: "DirectoryNode",
                 priority: 1,
             },
             RelationshipConfig {
                 source_type: "DirectoryNode",
-                relationship_type: "DIRECTORY_RELATIONSHIPS",
+                relationship_name: "DIRECTORY_RELATIONSHIPS",
                 target_type: "FileNode",
                 priority: 1,
             },
             // File relationships (priority 2)
             RelationshipConfig {
                 source_type: "FileNode",
-                relationship_type: "FILE_RELATIONSHIPS",
+                relationship_name: "FILE_RELATIONSHIPS",
                 target_type: "DefinitionNode",
                 priority: 2,
             },
             RelationshipConfig {
                 source_type: "FileNode",
-                relationship_type: "FILE_RELATIONSHIPS",
+                relationship_name: "FILE_RELATIONSHIPS",
                 target_type: "ImportedSymbolNode",
                 priority: 2,
             },
             // Definition relationships (priority 3)
             RelationshipConfig {
                 source_type: "DefinitionNode",
-                relationship_type: "DEFINITION_RELATIONSHIPS",
+                relationship_name: "DEFINITION_RELATIONSHIPS",
                 target_type: "DefinitionNode",
                 priority: 3,
             },
             RelationshipConfig {
                 source_type: "DefinitionNode",
-                relationship_type: "DEFINITION_RELATIONSHIPS",
+                relationship_name: "DEFINITION_RELATIONSHIPS",
                 target_type: "ImportedSymbolNode",
                 priority: 3,
             },
             // Import relationships (priority 4)
             RelationshipConfig {
                 source_type: "ImportedSymbolNode",
-                relationship_type: "IMPORTED_SYMBOL_RELATIONSHIPS",
+                relationship_name: "IMPORTED_SYMBOL_RELATIONSHIPS",
                 target_type: "ImportedSymbolNode",
                 priority: 4,
             },
             RelationshipConfig {
                 source_type: "ImportedSymbolNode",
-                relationship_type: "IMPORTED_SYMBOL_RELATIONSHIPS",
+                relationship_name: "IMPORTED_SYMBOL_RELATIONSHIPS",
                 target_type: "DefinitionNode",
                 priority: 4,
             },
             RelationshipConfig {
                 source_type: "ImportedSymbolNode",
-                relationship_type: "IMPORTED_SYMBOL_RELATIONSHIPS",
+                relationship_name: "IMPORTED_SYMBOL_RELATIONSHIPS",
                 target_type: "FileNode",
                 priority: 4,
             },
@@ -114,17 +114,18 @@ impl QueryLibrary {
 
         format!(
             r#"
-            MATCH (source:{source_type})-[r:{relationship_type}]-(target:{target_type})
+            MATCH (source:{source_type})-[r:{relationship_name}]-(target:{target_type})
             RETURN 
                 {source_return}
                 {target_return}
-                '{relationship_type}' as relationship_type,
+                '{relationship_name}' as relationship_name,
                 id(r) as relationship_id,
+                r.type as relationship_type,
                 {priority} as order_priority
             LIMIT ${limit_param}
             "#,
             source_type = config.source_type,
-            relationship_type = config.relationship_type,
+            relationship_name = config.relationship_name,
             target_type = config.target_type,
             priority = config.priority,
             source_return = source_return,
@@ -409,8 +410,10 @@ impl QueryLibrary {
             ("target_import_type", STRING_MAPPER),
             ("target_import_path", STRING_MAPPER),
             ("target_import_alias", STRING_MAPPER),
-            ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
+            ("relationship_name", STRING_MAPPER),
             ("relationship_id", STRING_MAPPER),
+            ("relationship_type", STRING_MAPPER),
+            ("relationship_name", RELATIONSHIP_TYPE_MAPPER),
             ("order_priority", INT_MAPPER),
         ])
     }
@@ -571,16 +574,17 @@ impl QueryLibrary {
 
         format!(
             r#"
-            MATCH (source:{source_type})-[r:{relationship_type}]-(target:{target_type}) {where_clause}
+            MATCH (source:{source_type})-[r:{relationship_name}]-(target:{target_type}) {where_clause}
             RETURN 
                 {source_return}
                 {target_return}
-                '{relationship_type}' as relationship_type,
+                '{relationship_name}' as relationship_name,
                 id(r) as relationship_id,
+                r.type as relationship_type,
                 {priority} as order_priority
             "#,
             source_type = config.source_type,
-            relationship_type = config.relationship_type,
+            relationship_name = config.relationship_name,
             target_type = config.target_type,
             priority = config.priority,
             where_clause = where_clause,

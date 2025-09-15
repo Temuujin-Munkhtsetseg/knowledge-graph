@@ -38,7 +38,7 @@ export type GraphNeighborsSuccessResponse = { nodes: Array<TypedGraphNode>, rela
 
 export type GraphNodeCountsResponse = { directory_count: number, file_count: number, definition_count: number, imported_symbol_count: number, };
 
-export type GraphRelationship = { id: string, source: string, target: string, relationship_type: string, properties: Record<string, any>, };
+export type GraphRelationship = { id: string, source: string, target: string, relationship_name: string, relationship_type: string, };
 
 export type GraphRelationshipCountsResponse = { directory_relationships: number, file_relationships: number, definition_relationships: number, };
 
