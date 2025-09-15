@@ -368,14 +368,6 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
     }
 
     fn to_mcp_tool(&self) -> Tool {
-        let all_projects_paths = self
-            .workspace_manager
-            .list_all_projects()
-            .iter()
-            .map(|project| project.project_path.clone())
-            .collect::<Vec<_>>()
-            .join(",");
-
         let input_schema = json!({
             "type": "object",
             "properties": {
@@ -386,10 +378,9 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
                         "type": "string"
                     }
                 },
-                "project": {
+                "project_absolute_path": {
                     "type": "string",
-                    "description": "Absolute filesystem path to the project root directory where code definitions should be searched.",
-                    "enum": [all_projects_paths]
+                    "description": "Absolute filesystem path to the project root directory where code definitions should be searched. You can use the list_projects tool to get the list of indexed projects.",
                 },
                 "page": {
                     "type": "number",
@@ -398,7 +389,7 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
                     "minimum": MIN_PAGE,
                 }
             },
-            "required": ["search_terms", "project"],
+            "required": ["search_terms", "project_absolute_path"],
         });
 
         Tool {
@@ -418,7 +409,7 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
 
         // Extract and validate parameters with better error messages
         let search_terms = input.get_string_array("search_terms")?;
-        let project_absolute_path = input.get_string("project")?;
+        let project_absolute_path = input.get_string("project_absolute_path")?;
         let page = input.get_u64("page").unwrap_or(DEFAULT_PAGE).max(MIN_PAGE);
 
         let database_path = get_database_path(&self.workspace_manager, project_absolute_path)?;
@@ -475,7 +466,7 @@ mod tests {
 
         let result = tool
             .call(object(json!({
-                "project": project.project_path.clone(),
+                "project_absolute_path": project.project_path.clone(),
                 "search_terms": ["main"],
                 "page": 1,
             })))
@@ -586,7 +577,7 @@ mod tests {
 
         let first_page_result = tool
             .call(object(json!({
-                "project": project.project_path.clone(),
+                "project_absolute_path": project.project_path.clone(),
                 "search_terms": ["repeatedMethod"],
                 "page": 1,
             })))
@@ -631,7 +622,7 @@ mod tests {
 
         let second_page_result = tool
             .call(object(json!({
-                "project": project.project_path.clone(),
+                "project_absolute_path": project.project_path.clone(),
                 "search_terms": ["repeatedMethod"],
                 "page": 2,
             })))

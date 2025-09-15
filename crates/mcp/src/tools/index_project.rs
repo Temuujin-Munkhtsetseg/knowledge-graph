@@ -24,6 +24,7 @@ Behavior:
 
 Requirements:
 - Specify the absolute filesystem path to the project root directory.
+- The project must be indexed in the Knowledge Graph.
 
 When to use:
 - After substantial file modifications, additions, or deletions.
@@ -180,24 +181,15 @@ impl KnowledgeGraphTool for IndexProjectTool {
     }
 
     fn to_mcp_tool(&self) -> Tool {
-        let all_projects_paths = self
-            .workspace_manager
-            .list_all_projects()
-            .iter()
-            .map(|project| project.project_path.clone())
-            .collect::<Vec<_>>()
-            .join(",");
-
         let input_schema = json!({
             "type": "object",
             "properties": {
-                "project": {
+                "project_absolute_path": {
                     "type": "string",
-                    "description": "Absolute filesystem path to the project root directory to re-index.",
-                    "enum": [all_projects_paths]
+                    "description": "Absolute filesystem path to the project root directory to re-index. You can use the list_projects tool to get the list of indexed projects.",
                 }
             },
-            "required": ["project"]
+            "required": ["project_absolute_path"]
         });
 
         Tool {
@@ -212,7 +204,7 @@ impl KnowledgeGraphTool for IndexProjectTool {
     fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let input = KnowledgeGraphToolInput { params };
 
-        let project_absolute_path = input.get_string("project")?;
+        let project_absolute_path = input.get_string("project_absolute_path")?;
 
         // Resolve workspace for the project
         let project_info = self
@@ -331,7 +323,10 @@ mod tests {
         );
 
         let mut params = JsonObject::new();
-        params.insert("project".to_string(), Value::String(project_path.clone()));
+        params.insert(
+            "project_absolute_path".to_string(),
+            Value::String(project_path.clone()),
+        );
 
         let result = tool.call(params).expect("tool call should succeed");
         let text = result.content.unwrap()[0]

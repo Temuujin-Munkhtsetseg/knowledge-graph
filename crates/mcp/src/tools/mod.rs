@@ -3,6 +3,7 @@ pub mod file_reader_utils;
 pub mod get_definition;
 pub mod get_references;
 pub mod index_project;
+pub mod list_projects;
 pub mod read_definitions;
 pub mod repo_map;
 pub mod search_codebase_definitions;
