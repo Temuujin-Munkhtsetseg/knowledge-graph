@@ -1,3 +1,62 @@
+## [0.13.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.12.0...v0.13.0) (2025-09-15)
+
+### :sparkles: Features
+
+* add get_definition tool ([088d974](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/088d9743d396e1eee33ffe2c6c2d1ada9e25de37)) by Bohdan Parkhomchuk
+* add utils for chunked file reads ([156aa32](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/156aa321f0b7d37fcfe33217da35801c0525b26a)) by Bohdan Parkhomchuk
+* **axum:** added basic health check ([593d044](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/593d044030a102c15f937834455670ef46a7c026)) by Michael Usachenko
+* **cli:** allow debug builds of the gkg cli to query kuzu directly for easy experimentation ([ed9d3b9](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ed9d3b97c6e179a384fa6d23d711df934c3cfca6)) by Michael Usachenko
+* **db:** remove import nodes duplication ([f7a751c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/f7a751c45935d2160117d9d4da357d265d317e8c)) by Jean-Gabriel Doyon
+* **evals:** local evaluation framework for gkg part 1 - deps and config ([150656f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/150656fb702d4bf09452aac029435aa3dc756eed)) by Michael Usachenko
+* **evals:** local evaluation framework for gkg part 2 - fixture download and gkg indexing ([872a1a4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/872a1a4ba08085515e89b0618883ad31711aa601)) by Michael Usachenko
+* **evals:** local evaluation framework for gkg part 3 - code agent ([ad055c7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ad055c7b074699b82c2e52707f554f3927e6b094)) by Michael Usachenko
+* **evals:** local evaluation framework for gkg part 4 - swe-bench integration and report gen ([bd7c8b8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/bd7c8b871cf08f867c60f233aaf09893eed90271)) by Michael Usachenko
+* **evals:** local evaluation framework for gkg part 5 - pipeline sessions ([8e613f5](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8e613f515d7b5cf317c9e9abce80c7965e5b3a20)) by Michael Usachenko
+* **indexer:** add call location to imported symbol call edge ([a29f490](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a29f4906686c1d207a4eb956dbd850895ff304d3)) by Jean-Gabriel Doyon
+* **indexer:** added imported symbol relationships ([bf846a1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/bf846a1e02929d553f564b72e511112a43181878)) by Jonathan Shobrook
+* **indexer:** capture line ranges in call edges ([c757c6c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c757c6c76059c48eefdaad9f9e35e559332a84be)) by Michael Angelo Rivera
+* **java:** create call edge between a definition and an dependency import ([505b002](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/505b0026d5cef0627c1c46bde5ca3bdcf6565233)) by Jean-Gabriel Doyon
+* **java:** create reference links to imports ([6ab1894](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6ab1894b37739e12a915291c1e37eaa9b1c23bda)) by Jean-Gabriel Doyon
+* **mcp:** add file context to search codebase tool ([27a2888](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/27a28887debddbf833f8e8bf04eed5b3e5f306c4)) by Jean-Gabriel Doyon
+* **mcp:** add import usage tool ([287020f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/287020f308730972b337d4ae28dde89413facb59)) by michaelangeloio
+* **mcp:** add repo map tool ([01cdc5f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/01cdc5f70ac85ee6f5b2d5e268689028c7b4e3a3)) by michaelangeloio
+* **mcp:** auto add approvedTools for mcp registration ([ccc5079](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/ccc50791716376d2ae06e3941e320b85f704b6d9)) by michaelangeloio
+* **mcp:** create MCP configuration ([1f78449](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1f78449d27aae876dc7ed06e267630617ddb05f4)) by Jean-Gabriel Doyon
+* **mcp:** create read_definitions tool ([d4e1283](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d4e1283aa3b1137dd979db8e177a4f5e3665a061)) by Jean-Gabriel Doyon
+* **mcp:** display tools output as pretty XML ([db784f4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/db784f4269c9a48ce847da8f492b6d6c79a51392)) by Jean-Gabriel Doyon
+* **mcp:** get references tool ([7dcb1f2](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7dcb1f2566f8e1616fc175e2236709154bfcb2e3)) by Jean-Gabriel Doyon
+* **mcp:** improve indexing tool description and output ([b7447fb](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b7447fbfd6c5d733e9d4dca6ae85a104989d1ca2)) by Jean-Gabriel Doyon
+* **mcp:** re-add list_projects tool and switch back project enums to absolute path ([c68d66c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c68d66cd676e71e4334edebc8f218f8aec89f074)) by Jean-Gabriel Doyon
+* **mcp:** remove cdata from xml output ([63f7f45](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/63f7f455ad677e49056d009a09191ef5c493804d)) by Jean-Gabriel Doyon
+* **mcp:** search_codebase_definitions no longer can return full body, added system message ([fdb6cfe](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/fdb6cfe54e56c7560b89edaf2303a0de25ecbac0)) by Jean-Gabriel Doyon
+* sign Windows binaries ([618c158](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/618c158d999c642b78ea5b56cbdb1bde51fd64f3)) by Stan Hu
+* **ui:** display new import relationships in the graph ([4d3cdd7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4d3cdd7b85d9c2f8cfc5c05586f12c4466ca992d)) by Jean-Gabriel Doyon
+* **ui:** display relationship type in the graph ui tooltip ([9104d92](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9104d92de72cb86ff23131b6589fdfe485d0c88e)) by Jean-Gabriel Doyon
+* **ui:** increase displayed node limits ([bd9c5a4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/bd9c5a46a6a152dcae982053c39b3541c1b610fa)) by Jean-Gabriel Doyon
+
+### :bug: Fixes
+
+* **docs:** fix docs light mode title ([4e21e6c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4e21e6c9df4a8a66b2216cd06c9d37970aacd21d)) by Jean-Gabriel Doyon
+* **docs:** integrity check setting is no longer required in ide ([5b99ecb](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5b99ecb5fb384d7963a67a791fb5002bf0205210)) by Bohdan Parkhomchuk
+* **java:** remove package lookup by class name ([8a59736](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8a59736c2458f914bc80bc9b7a9100f08d1353b9)) by Jean-Gabriel Doyon
+* update database schema manager for Windows long path support ([8a52b47](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8a52b47acef1f5e60697c296f32a8d2c4539429e)) by Amr Zaher
+* **workspace-manager:** handle path trailing separator ([3620d39](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3620d394c97ca18e51ae8973e8cf531e821494e4)) by michaelangeloio
+
+### :zap: Refactor
+
+* **mcp:** declare input_schema using serde_json instead of rmpc ([d255a8f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d255a8fbfe23995862f035d710ea0cf67beadff5)) by Jean-Gabriel Doyon
+
+### :repeat: Chore
+
+* **db:** bump kuzu version to 0.11.2 ([1fe3c5c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1fe3c5cfc304026f95661a4898e070f1fbbc0ea8)) by Michael Usachenko
+* deprecate analyze_code_files tool ([a05f5f0](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a05f5f006e20854fa63d4523d5685d8a494dfba3)) by michaelangeloio
+* **deps:** bump gitalisk to v0.6.0 ([c7a9125](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c7a9125c6273c9b629cf525c2b925c47a8143011)) by Michael Usachenko
+* **deps:** bump gitlab-code-parser to 0.18.0 ([28936af](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/28936afc365531b0de12428ef83f90b12d19db10)) by Jean-Gabriel Doyon
+* **mcp:** rename configuration to duo configuration ([c1f78dc](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c1f78dcab1acd075a02729a7cd2eabfda91799f0)) by Jean-Gabriel Doyon
+* rename http-server to http-server-desktop ([b966437](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b966437b3adc0504baa46959a2e242a67ab7e36e)) by michaelangeloio
+* revert "feat(db): remove import nodes duplication" ([b797ae7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/b797ae71d36a36de566e707f55adb3de316d7384)) by Jean-Gabriel Doyon
+* revert "feat(java): create reference links to imports" ([92d1cca](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/92d1ccab3f5482302bc8961054c3912a5892d5a3)) by Jean-Gabriel Doyon
+
 ## [0.12.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.11.1...v0.12.0) (2025-08-28)
 
 ### :sparkles: Features
