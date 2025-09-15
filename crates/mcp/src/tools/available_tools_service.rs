@@ -9,6 +9,7 @@ use crate::tools::get_definition::GetDefinitionTool;
 use crate::tools::get_definition::constants::GET_DEFINITION_TOOL_NAME;
 use crate::tools::get_references::GET_REFERENCES_TOOL_NAME;
 use crate::tools::get_references::tool::GetReferencesTool;
+use crate::tools::import_usage::{IMPORT_USAGE_TOOL_NAME, ImportUsageTool};
 use crate::tools::index_project::IndexProjectTool;
 use crate::tools::list_projects::{LIST_PROJECTS_TOOL_NAME, ListProjectsTool};
 use crate::tools::read_definitions::READ_DEFINITIONS_TOOL_NAME;
@@ -69,6 +70,16 @@ impl AvailableToolsService {
             tools.insert(
                 GET_REFERENCES_TOOL_NAME.to_string(),
                 Box::new(GetReferencesTool::new(
+                    query_service.clone(),
+                    workspace_manager.clone(),
+                )),
+            );
+        }
+
+        if configuration.is_tool_enabled(IMPORT_USAGE_TOOL_NAME) {
+            tools.insert(
+                IMPORT_USAGE_TOOL_NAME.to_string(),
+                Box::new(ImportUsageTool::new(
                     query_service.clone(),
                     workspace_manager.clone(),
                 )),

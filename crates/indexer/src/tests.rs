@@ -295,8 +295,8 @@ async fn setup_reindexing_pipeline(
         );
     } else if language == SupportedLanguage::TypeScript {
         assert_eq!(
-            imported_symbol_count, 8,
-            "Should have 8 imported symbols after initial indexing"
+            imported_symbol_count, 9,
+            "Should have 9 imported symbols after initial indexing"
         );
         let imported_symbols = node_database_service
             .get_by::<String, ImportedSymbolNodeFromKuzu>(

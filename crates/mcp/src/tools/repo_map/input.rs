@@ -63,7 +63,7 @@ impl TryFrom<JsonObject> for RepoMapInput {
         let page_size = params
             .get("page_size")
             .and_then(|v| v.as_u64())
-            .unwrap_or(200)
+            .unwrap_or(50)
             .max(1);
 
         Ok(Self {

@@ -433,7 +433,7 @@ mod tests {
                 "relative_paths": ["."],
                 "depth": 1,
                 "page": 1,
-                "page_size": 200,
+                "page_size": 50,
             })))
             .unwrap();
         let xml_d1 = result.content.unwrap()[0]
@@ -451,7 +451,7 @@ mod tests {
                 "relative_paths": ["."],
                 "depth": 2,
                 "page": 1,
-                "page_size": 200,
+                "page_size": 50,
             })))
             .unwrap();
         let xml_d2 = result.content.unwrap()[0]

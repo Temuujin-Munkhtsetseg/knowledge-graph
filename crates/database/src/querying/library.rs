@@ -39,7 +39,162 @@ pub struct RelationshipConfig {
     pub priority: i32,
 }
 
+#[derive(Debug, Clone)]
+pub struct ImportUsageQueryOptions {
+    pub include_name: bool,
+    pub include_alias: bool,
+}
+
 impl QueryLibrary {
+    // Combined query that returns both imports and their references in one query
+    pub fn get_import_usage(options: ImportUsageQueryOptions) -> Query {
+        let name_clause = if options.include_name {
+            "\n                  AND imp.name = $import_name"
+        } else {
+            ""
+        };
+        let alias_clause = if options.include_alias {
+            "\n                  AND imp.alias = $import_alias"
+        } else {
+            ""
+        };
+        let query = format!(
+            r#"
+                MATCH (f:FileNode)-[:FILE_RELATIONSHIPS]->(imp:ImportedSymbolNode)
+                WHERE toLower(imp.import_path) IN $paths_lc{name_clause}{alias_clause}
+                OPTIONAL MATCH (imp)<-[r:DEFINITION_RELATIONSHIPS]-(src:DefinitionNode)
+                WHERE r IS NULL OR r.type IN [$calls_type_id, $ambiguous_calls_type_id]
+                RETURN
+                  f.path AS file_path,
+                  imp.import_path AS import_path,
+                  imp.name AS name,
+                  imp.alias AS alias,
+                  imp.start_line AS import_start_line,
+                  imp.end_line AS import_end_line,
+                  src.primary_file_path AS ref_file,
+                  COALESCE(r.source_start_line, src.start_line) AS ref_start_line,
+                  COALESCE(r.source_end_line, src.end_line) AS ref_end_line,
+                  src.fqn AS ref_fqn,
+                  src.start_line AS def_start_line
+                LIMIT $limit
+            "#
+        );
+
+        let mut parameters = HashMap::from([
+            (
+                "paths_lc",
+                QueryParameter {
+                    name: "paths_lc",
+                    definition: QueryParameterDefinition::Array(None),
+                },
+            ),
+            (
+                "calls_type_id",
+                QueryParameter {
+                    name: "calls_type_id",
+                    definition: QueryParameterDefinition::Int(None),
+                },
+            ),
+            (
+                "ambiguous_calls_type_id",
+                QueryParameter {
+                    name: "ambiguous_calls_type_id",
+                    definition: QueryParameterDefinition::Int(None),
+                },
+            ),
+            (
+                "limit",
+                QueryParameter {
+                    name: "limit",
+                    definition: QueryParameterDefinition::Int(Some(50)),
+                },
+            ),
+        ]);
+
+        if options.include_name {
+            parameters.insert(
+                "import_name",
+                QueryParameter {
+                    name: "import_name",
+                    definition: QueryParameterDefinition::String(None),
+                },
+            );
+        }
+
+        if options.include_alias {
+            parameters.insert(
+                "import_alias",
+                QueryParameter {
+                    name: "import_alias",
+                    definition: QueryParameterDefinition::String(None),
+                },
+            );
+        }
+
+        Query {
+            query,
+            parameters,
+            result: HashMap::from([
+                ("file_path", STRING_MAPPER),
+                ("import_path", STRING_MAPPER),
+                ("name", STRING_MAPPER),
+                ("alias", STRING_MAPPER),
+                ("import_start_line", INT_MAPPER),
+                ("import_end_line", INT_MAPPER),
+                ("ref_file", STRING_MAPPER),
+                ("ref_start_line", INT_MAPPER),
+                ("ref_end_line", INT_MAPPER),
+                ("ref_fqn", STRING_MAPPER),
+                ("def_start_line", INT_MAPPER),
+            ]),
+        }
+    }
+
+    // Common result mappers used by import-path and import-name import queries
+    fn import_hit_result_mappers() -> HashMap<&'static str, QueryResultMapper> {
+        HashMap::from([
+            ("file_path", STRING_MAPPER),
+            ("import_path", STRING_MAPPER),
+            ("name", STRING_MAPPER),
+            ("alias", STRING_MAPPER),
+            ("start_line", INT_MAPPER),
+            ("end_line", INT_MAPPER),
+        ])
+    }
+
+    pub fn get_dependency_import_paths_query() -> Query {
+        Query {
+            query: r#"
+                MATCH (f:FileNode)-[:FILE_RELATIONSHIPS]->(imp:ImportedSymbolNode)
+                WHERE toLower(COALESCE(imp.import_path, '')) IN $paths_lc
+                RETURN f.path AS file_path,
+                       imp.import_path AS import_path,
+                       imp.name AS name,
+                       imp.alias AS alias,
+                       imp.start_line AS start_line,
+                       imp.end_line AS end_line
+                LIMIT $limit
+            "#
+            .to_string(),
+            parameters: HashMap::from([
+                (
+                    "paths_lc",
+                    QueryParameter {
+                        name: "paths_lc",
+                        definition: QueryParameterDefinition::Array(None),
+                    },
+                ),
+                (
+                    "limit",
+                    QueryParameter {
+                        name: "limit",
+                        definition: QueryParameterDefinition::Int(Some(50)),
+                    },
+                ),
+            ]),
+            result: Self::import_hit_result_mappers(),
+        }
+    }
     /// Returns all supported relationship configurations for the graph
     pub fn get_all_relationship_configs() -> Vec<RelationshipConfig> {
         vec![

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { randomUUID as myRandomUUID } from 'crypto';
 
 export class BaseModel {
   public readonly id: string;
