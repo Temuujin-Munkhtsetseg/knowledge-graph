@@ -5,13 +5,24 @@ sidebar:
   order: 2
 ---
 
+### list_projects
+
+Get a list of all projects in the knowledge graph. Useful when you don't know the absolute filesystem path to the current project root directory or want to see all indexed projects.
+
+Input: This tool takes no input parameters.
+
+Output: An object containing:
+
+- `projects` (array): A list of project objects, each containing:
+  - `project_path` (string): The absolute path to the project root directory.
+
 ### search_codebase_definitions
 
 Efficiently searches the codebase for functions, classes, methods, constants, interfaces that contain one or more search terms. Returns the definition information for definitions matching the search terms. Supports exact matches, partial matches, and case-sensitive/insensitive search modes. Use this tool for code exploration, refactoring, debugging, and understanding code structure.
 
 Input:
 
-- `project` (string): Absolute filesystem path to the project root directory where code definitions should be searched.
+- `project_absolute_path` (string): Absolute filesystem path to the project root directory where code definitions should be searched.
 - `search_terms` (string[]): List of definition names to search for. Can be names of functions, classes, constants, etc.
 - `page` (integer, optional) (default: 1): Page number starting from 1. If the response's next_page field is greater than 1, more results are available at that page. You can use this to retrieve more results if more context is needed.
 
@@ -28,11 +39,11 @@ Output: An object containing:
 
 ### index_project
 
-Creates new or rebuilds the Knowledge Graph index for a project to reflect recent changes.
+Creates new or rebuilds the Knowledge Graph index for a project to reflect recent changes. The project must be indexed in the Knowledge Graph. You can use the `list_projects` tool to get the list of indexed projects.
 
 Input:
 
-- `project` (string): The absolute path to the project root directory to index.
+- `project_absolute_path` (string): The absolute path to the project root directory to index.
 
 Output: An object containing:
 

@@ -10,6 +10,7 @@ use crate::tools::get_definition::constants::GET_DEFINITION_TOOL_NAME;
 use crate::tools::get_references::GET_REFERENCES_TOOL_NAME;
 use crate::tools::get_references::tool::GetReferencesTool;
 use crate::tools::index_project::IndexProjectTool;
+use crate::tools::list_projects::{LIST_PROJECTS_TOOL_NAME, ListProjectsTool};
 use crate::tools::read_definitions::READ_DEFINITIONS_TOOL_NAME;
 use crate::tools::read_definitions::tool::ReadDefinitionsTool;
 use crate::tools::repo_map::{REPO_MAP_TOOL_NAME, RepoMapTool};
@@ -35,6 +36,13 @@ impl AvailableToolsService {
         configuration: Arc<McpConfiguration>,
     ) -> Self {
         let mut tools: HashMap<String, Box<dyn KnowledgeGraphTool>> = HashMap::new();
+
+        if configuration.is_tool_enabled(LIST_PROJECTS_TOOL_NAME) {
+            tools.insert(
+                LIST_PROJECTS_TOOL_NAME.to_string(),
+                Box::new(ListProjectsTool::new(workspace_manager.clone())),
+            );
+        }
 
         if configuration.is_tool_enabled(SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME) {
             tools.insert(

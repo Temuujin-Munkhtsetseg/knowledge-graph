@@ -310,7 +310,7 @@ mod tests {
         );
         let mut index_params = JsonObject::new();
         index_params.insert(
-            "project".to_string(),
+            "project_absolute_path".to_string(),
             serde_json::Value::String(project_path.to_string()),
         );
         let index_result = index_tool.call(index_params);
