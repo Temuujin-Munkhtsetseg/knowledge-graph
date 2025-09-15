@@ -12,8 +12,8 @@ Recommendations:
 "#;
 
 pub const DEFAULT_PAGE: u64 = 1;
-pub const DEFAULT_PAGE_SIZE: u64 = 200;
-pub const MAX_PAGE_SIZE: u64 = 1000;
+pub const DEFAULT_PAGE_SIZE: u64 = 50;
+pub const MAX_PAGE_SIZE: u64 = 200;
 pub const MIN_PAGE: u64 = 1;
 pub const DEFAULT_DEPTH: u64 = 1;
 pub const FILE_READ_TIMEOUT_SECONDS: u64 = 10;
