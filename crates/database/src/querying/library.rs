@@ -31,7 +31,108 @@ pub enum QueryParameterDefinition {
 // TODO: Handle new ID for definitions (file_path + fqn)
 // TODO: Add queries for imported symbols
 
+#[derive(Debug, Clone)]
+pub struct RelationshipConfig {
+    pub source_type: &'static str,
+    pub relationship_type: &'static str,
+    pub target_type: &'static str,
+    pub priority: i32,
+}
+
 impl QueryLibrary {
+    /// Returns all supported relationship configurations for the graph
+    pub fn get_all_relationship_configs() -> Vec<RelationshipConfig> {
+        vec![
+            // Directory relationships (priority 1)
+            RelationshipConfig {
+                source_type: "DirectoryNode",
+                relationship_type: "DIRECTORY_RELATIONSHIPS",
+                target_type: "DirectoryNode",
+                priority: 1,
+            },
+            RelationshipConfig {
+                source_type: "DirectoryNode",
+                relationship_type: "DIRECTORY_RELATIONSHIPS",
+                target_type: "FileNode",
+                priority: 1,
+            },
+            // File relationships (priority 2)
+            RelationshipConfig {
+                source_type: "FileNode",
+                relationship_type: "FILE_RELATIONSHIPS",
+                target_type: "DefinitionNode",
+                priority: 2,
+            },
+            RelationshipConfig {
+                source_type: "FileNode",
+                relationship_type: "FILE_RELATIONSHIPS",
+                target_type: "ImportedSymbolNode",
+                priority: 2,
+            },
+            // Definition relationships (priority 3)
+            RelationshipConfig {
+                source_type: "DefinitionNode",
+                relationship_type: "DEFINITION_RELATIONSHIPS",
+                target_type: "DefinitionNode",
+                priority: 3,
+            },
+            RelationshipConfig {
+                source_type: "DefinitionNode",
+                relationship_type: "DEFINITION_RELATIONSHIPS",
+                target_type: "ImportedSymbolNode",
+                priority: 3,
+            },
+            // Import relationships (priority 4)
+            RelationshipConfig {
+                source_type: "ImportedSymbolNode",
+                relationship_type: "IMPORTED_SYMBOL_RELATIONSHIPS",
+                target_type: "ImportedSymbolNode",
+                priority: 4,
+            },
+            RelationshipConfig {
+                source_type: "ImportedSymbolNode",
+                relationship_type: "IMPORTED_SYMBOL_RELATIONSHIPS",
+                target_type: "DefinitionNode",
+                priority: 4,
+            },
+            RelationshipConfig {
+                source_type: "ImportedSymbolNode",
+                relationship_type: "IMPORTED_SYMBOL_RELATIONSHIPS",
+                target_type: "FileNode",
+                priority: 4,
+            },
+        ]
+    }
+
+    /// Builds a UNION query section for a given relationship configuration
+    pub fn build_relationship_query_section(
+        config: &RelationshipConfig,
+        limit_param: &str,
+    ) -> String {
+        let source_return = Self::get_node_neighbors_return_values(config.source_type, "source");
+        let target_return = Self::get_node_neighbors_return_values(config.target_type, "target");
+
+        format!(
+            r#"
+            MATCH (source:{source_type})-[r:{relationship_type}]-(target:{target_type})
+            RETURN 
+                {source_return}
+                {target_return}
+                '{relationship_type}' as relationship_type,
+                id(r) as relationship_id,
+                {priority} as order_priority
+            LIMIT ${limit_param}
+            "#,
+            source_type = config.source_type,
+            relationship_type = config.relationship_type,
+            target_type = config.target_type,
+            priority = config.priority,
+            source_return = source_return,
+            target_return = target_return,
+            limit_param = limit_param
+        )
+    }
+
     pub fn get_definition_relations_query() -> Query {
         Query {
             query: r#"
@@ -195,255 +296,48 @@ impl QueryLibrary {
     }
 
     pub fn get_initial_project_graph_query() -> Query {
+        let relationships = Self::get_all_relationship_configs();
+
+        // Group relationships by priority to use appropriate limits
+        let mut directory_queries = Vec::new();
+        let mut file_queries = Vec::new();
+        let mut definition_queries = Vec::new();
+        let mut import_queries = Vec::new();
+
+        for config in relationships {
+            let limit_param = match config.priority {
+                1 => "directory_limit",
+                2 => "file_limit",
+                3 => match config.target_type {
+                    "ImportedSymbolNode" => "imported_symbol_limit",
+                    _ => "definition_limit",
+                },
+                4 => "imported_symbol_limit", // Reuse existing parameter for import relationships
+                _ => "definition_limit",
+            };
+
+            let query_section = Self::build_relationship_query_section(&config, limit_param);
+
+            match config.priority {
+                1 => directory_queries.push(query_section),
+                2 => file_queries.push(query_section),
+                3 => definition_queries.push(query_section),
+                4 => import_queries.push(query_section),
+                _ => definition_queries.push(query_section),
+            }
+        }
+
+        // Combine all queries with UNION
+        let mut all_queries = Vec::new();
+        all_queries.extend(directory_queries);
+        all_queries.extend(file_queries);
+        all_queries.extend(definition_queries);
+        all_queries.extend(import_queries);
+
+        let query = all_queries.join("\nUNION\n");
+
         Query {
-            query: r#"
-                MATCH (n:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]-(m:DirectoryNode)
-                RETURN 
-                    n.id as source_id, 
-                    'DirectoryNode' as source_type,
-                    n.name as source_name,
-                    n.path as source_path,
-                    n.absolute_path as source_absolute_path,
-                    n.repository_name as source_repository_name,
-                    '' as source_fqn,
-                    '' as source_definition_type,
-                    '' as source_language,
-                    '' as source_extension,
-                    CAST(0 AS INT64) as source_start_line,
-                    CAST(0 AS INT64) as source_primary_start_byte,
-                    CAST(0 AS INT64) as source_primary_end_byte,
-                    CAST(0 AS INT64) as source_total_locations,
-                    '' as source_import_type,
-                    '' as source_import_path,
-                    '' as source_import_alias,
-                    m.id as target_id,
-                    'DirectoryNode' as target_type,
-                    m.name as target_name,
-                    m.path as target_path,
-                    m.absolute_path as target_absolute_path,
-                    m.repository_name as target_repository_name,
-                    '' as target_fqn,
-                    '' as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(0 AS INT64) as target_start_line,
-                    CAST(0 AS INT64) as target_primary_start_byte,
-                    CAST(0 AS INT64) as target_primary_end_byte,
-                    CAST(0 AS INT64) as target_total_locations,
-                    '' as target_import_type,
-                    '' as target_import_path,
-                    '' as target_import_alias,
-                    'DIRECTORY_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id,
-                    1 as order_priority
-                LIMIT $directory_limit
-                UNION
-                MATCH (n:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]-(f:FileNode)
-                RETURN 
-                    n.id as source_id, 
-                    'DirectoryNode' as source_type,
-                    n.name as source_name,
-                    n.path as source_path,
-                    n.absolute_path as source_absolute_path,
-                    n.repository_name as source_repository_name,
-                    '' as source_fqn,
-                    '' as source_definition_type,
-                    '' as source_language,
-                    '' as source_extension,
-                    CAST(0 AS INT64) as source_start_line,
-                    CAST(0 AS INT64) as source_primary_start_byte,
-                    CAST(0 AS INT64) as source_primary_end_byte,
-                    CAST(0 AS INT64) as source_total_locations,
-                    '' as source_import_type,
-                    '' as source_import_path,
-                    '' as source_import_alias,
-                    f.id as target_id,
-                    'FileNode' as target_type,
-                    f.name as target_name,
-                    f.path as target_path,
-                    f.absolute_path as target_absolute_path,
-                    f.repository_name as target_repository_name,
-                    '' as target_fqn,
-                    '' as target_definition_type,
-                    f.language as target_language,
-                    f.extension as target_extension,
-                    CAST(0 AS INT64) as target_start_line,
-                    CAST(0 AS INT64) as target_primary_start_byte,
-                    CAST(0 AS INT64) as target_primary_end_byte,
-                    CAST(0 AS INT64) as target_total_locations,
-                    '' as target_import_type,
-                    '' as target_import_path,
-                    '' as target_import_alias,
-                    'DIRECTORY_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id,
-                    1 as order_priority
-                LIMIT $directory_limit
-                UNION
-                MATCH (f:FileNode)-[r:FILE_RELATIONSHIPS]-(d:DefinitionNode)
-                RETURN 
-                    f.id as source_id,
-                    'FileNode' as source_type,
-                    f.name as source_name,
-                    f.path as source_path,
-                    f.absolute_path as source_absolute_path,
-                    f.repository_name as source_repository_name,
-                    '' as source_fqn,
-                    '' as source_definition_type,
-                    f.language as source_language,
-                    f.extension as source_extension,
-                    CAST(0 AS INT64) as source_start_line,
-                    CAST(0 AS INT64) as source_primary_start_byte,
-                    CAST(0 AS INT64) as source_primary_end_byte,
-                    CAST(0 AS INT64) as source_total_locations,
-                    '' as source_import_type,
-                    '' as source_import_path,
-                    '' as source_import_alias,
-                    d.id as target_id,
-                    'DefinitionNode' as target_type,
-                    d.name as target_name,
-                    d.primary_file_path as target_path,
-                    '' as target_absolute_path,
-                    '' as target_repository_name,
-                    d.fqn as target_fqn,
-                    d.definition_type as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(d.start_line AS INT64) as target_start_line,
-                    d.primary_start_byte as target_primary_start_byte,
-                    d.primary_end_byte as target_primary_end_byte,
-                    CAST(d.total_locations AS INT64) as target_total_locations,
-                    '' as target_import_type,
-                    '' as target_import_path,
-                    '' as target_import_alias,
-                    'FILE_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id,
-                    2 as order_priority
-                LIMIT $file_limit
-                UNION
-                MATCH (f:FileNode)-[r:FILE_RELATIONSHIPS]-(i:ImportedSymbolNode)
-                RETURN 
-                    f.id as source_id,
-                    'FileNode' as source_type,
-                    f.name as source_name,
-                    f.path as source_path,
-                    f.absolute_path as source_absolute_path,
-                    f.repository_name as source_repository_name,
-                    '' as source_fqn,
-                    '' as source_definition_type,
-                    f.language as source_language,
-                    f.extension as source_extension,
-                    CAST(0 AS INT64) as source_start_line,
-                    CAST(0 AS INT64) as source_primary_start_byte,
-                    CAST(0 AS INT64) as source_primary_end_byte,
-                    CAST(0 AS INT64) as source_total_locations,
-                    '' as source_import_type,
-                    '' as source_import_path,
-                    '' as source_import_alias,
-                    i.id as target_id,
-                    'ImportedSymbolNode' as target_type,
-                    i.name as target_name,
-                    i.file_path as target_path,
-                    '' as target_absolute_path,
-                    '' as target_repository_name,
-                    '' as target_fqn,
-                    '' as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(i.start_line AS INT64) as target_start_line,
-                    i.start_byte as target_primary_start_byte,
-                    i.end_byte as target_primary_end_byte,
-                    CAST(0 AS INT64) as target_total_locations,
-                    i.import_type as target_import_type,
-                    i.import_path as target_import_path,
-                    i.alias as target_import_alias,
-                    'FILE_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id,
-                    2 as order_priority
-                LIMIT $file_limit
-                UNION
-                MATCH (d1:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]-(d2:DefinitionNode)
-                RETURN 
-                    d1.id as source_id,
-                    'DefinitionNode' as source_type,
-                    d1.name as source_name,
-                    d1.primary_file_path as source_path,
-                    '' as source_absolute_path,
-                    '' as source_repository_name,
-                    d1.fqn as source_fqn,
-                    d1.definition_type as source_definition_type,
-                    '' as source_language,
-                    '' as source_extension,
-                    CAST(d1.start_line AS INT64) as source_start_line,
-                    d1.primary_start_byte as source_primary_start_byte,
-                    d1.primary_end_byte as source_primary_end_byte,
-                    CAST(d1.total_locations AS INT64) as source_total_locations,
-                    '' as source_import_type,
-                    '' as source_import_path,
-                    '' as source_import_alias,
-                    d2.id as target_id,
-                    'DefinitionNode' as target_type,
-                    d2.name as target_name,
-                    d2.primary_file_path as target_path,
-                    '' as target_absolute_path,
-                    '' as target_repository_name,
-                    d2.fqn as target_fqn,
-                    d2.definition_type as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(d2.start_line AS INT64) as target_start_line,
-                    d2.primary_start_byte as target_primary_start_byte,
-                    d2.primary_end_byte as target_primary_end_byte,
-                    CAST(d2.total_locations AS INT64) as target_total_locations,
-                    '' as target_import_type,
-                    '' as target_import_path,
-                    '' as target_import_alias,
-                    'DEFINITION_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id,
-                    3 as order_priority
-                LIMIT $definition_limit
-                UNION
-                MATCH (d:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]-(i:ImportedSymbolNode)
-                RETURN 
-                    d.id as source_id,
-                    'DefinitionNode' as source_type,
-                    d.name as source_name,
-                    d.primary_file_path as source_path,
-                    '' as source_absolute_path,
-                    '' as source_repository_name,
-                    d.fqn as source_fqn,
-                    d.definition_type as source_definition_type,
-                    '' as source_language,
-                    '' as source_extension,
-                    CAST(d.start_line AS INT64) as source_start_line,
-                    d.primary_start_byte as source_primary_start_byte,
-                    d.primary_end_byte as source_primary_end_byte,
-                    CAST(d.total_locations AS INT64) as source_total_locations,
-                    '' as source_import_type,
-                    '' as source_import_path,
-                    '' as source_import_alias,
-                    i.id as target_id,
-                    'ImportedSymbolNode' as target_type,
-                    i.name as target_name,
-                    i.file_path as target_path,
-                    '' as target_absolute_path,
-                    '' as target_repository_name,
-                    '' as target_fqn,
-                    '' as target_definition_type,
-                    '' as target_language,
-                    '' as target_extension,
-                    CAST(i.start_line AS INT64) as target_start_line,
-                    i.start_byte as target_primary_start_byte,
-                    i.end_byte as target_primary_end_byte,
-                    CAST(0 AS INT64) as target_total_locations,
-                    i.import_type as target_import_type,
-                    i.import_path as target_import_path,
-                    i.alias as target_import_alias,
-                    'DEFINITION_RELATIONSHIPS' as relationship_type,
-                    id(r) as relationship_id,
-                    3 as order_priority
-                LIMIT $imported_symbol_limit
-            "#
-            .to_string(),
+            query,
             parameters: HashMap::from([
                 (
                     "directory_limit",
@@ -474,43 +368,51 @@ impl QueryLibrary {
                     },
                 ),
             ]),
-            result: HashMap::from([
-                ("source_id", STRING_MAPPER),
-                ("source_type", STRING_MAPPER),
-                ("source_name", STRING_MAPPER),
-                ("source_path", STRING_MAPPER),
-                ("source_absolute_path", STRING_MAPPER),
-                ("source_repository_name", STRING_MAPPER),
-                ("source_fqn", STRING_MAPPER),
-                ("source_definition_type", STRING_MAPPER),
-                ("source_language", STRING_MAPPER),
-                ("source_extension", STRING_MAPPER),
-                ("source_start_line", INT_MAPPER),
-                ("source_primary_start_byte", INT_MAPPER),
-                ("source_primary_end_byte", INT_MAPPER),
-                ("source_total_locations", INT_MAPPER),
-                ("target_id", STRING_MAPPER),
-                ("target_type", STRING_MAPPER),
-                ("target_name", STRING_MAPPER),
-                ("target_path", STRING_MAPPER),
-                ("target_absolute_path", STRING_MAPPER),
-                ("target_repository_name", STRING_MAPPER),
-                ("target_fqn", STRING_MAPPER),
-                ("target_definition_type", STRING_MAPPER),
-                ("target_language", STRING_MAPPER),
-                ("target_extension", STRING_MAPPER),
-                ("target_start_line", INT_MAPPER),
-                ("target_primary_start_byte", INT_MAPPER),
-                ("target_primary_end_byte", INT_MAPPER),
-                ("target_total_locations", INT_MAPPER),
-                ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
-                ("relationship_id", STRING_MAPPER),
-                ("order_priority", INT_MAPPER),
-                ("import_type", STRING_MAPPER),
-                ("import_path", STRING_MAPPER),
-                ("import_alias", STRING_MAPPER),
-            ]),
+            result: Self::get_graph_result_mappers(),
         }
+    }
+
+    /// Returns the standard result mappers used by both initial graph and node neighbors queries
+    pub fn get_graph_result_mappers() -> HashMap<&'static str, QueryResultMapper> {
+        HashMap::from([
+            ("source_id", STRING_MAPPER),
+            ("source_type", STRING_MAPPER),
+            ("source_name", STRING_MAPPER),
+            ("source_path", STRING_MAPPER),
+            ("source_absolute_path", STRING_MAPPER),
+            ("source_repository_name", STRING_MAPPER),
+            ("source_fqn", STRING_MAPPER),
+            ("source_definition_type", STRING_MAPPER),
+            ("source_language", STRING_MAPPER),
+            ("source_extension", STRING_MAPPER),
+            ("source_start_line", INT_MAPPER),
+            ("source_primary_start_byte", INT_MAPPER),
+            ("source_primary_end_byte", INT_MAPPER),
+            ("source_total_locations", INT_MAPPER),
+            ("source_import_type", STRING_MAPPER),
+            ("source_import_path", STRING_MAPPER),
+            ("source_import_alias", STRING_MAPPER),
+            ("target_id", STRING_MAPPER),
+            ("target_type", STRING_MAPPER),
+            ("target_name", STRING_MAPPER),
+            ("target_path", STRING_MAPPER),
+            ("target_absolute_path", STRING_MAPPER),
+            ("target_repository_name", STRING_MAPPER),
+            ("target_fqn", STRING_MAPPER),
+            ("target_definition_type", STRING_MAPPER),
+            ("target_language", STRING_MAPPER),
+            ("target_extension", STRING_MAPPER),
+            ("target_start_line", INT_MAPPER),
+            ("target_primary_start_byte", INT_MAPPER),
+            ("target_primary_end_byte", INT_MAPPER),
+            ("target_total_locations", INT_MAPPER),
+            ("target_import_type", STRING_MAPPER),
+            ("target_import_path", STRING_MAPPER),
+            ("target_import_alias", STRING_MAPPER),
+            ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
+            ("relationship_id", STRING_MAPPER),
+            ("order_priority", INT_MAPPER),
+        ])
     }
 
     fn get_node_neighbors_return_values(node_type: &str, alias: &str) -> String {
@@ -603,101 +505,103 @@ impl QueryLibrary {
         }
     }
 
-    pub fn get_node_neighbors_query(node_type: &str) -> Option<Query> {
-        let parts = match node_type {
-            "DirectoryNode" => vec![
-                (
-                    "DirectoryNode",
-                    "DIRECTORY_RELATIONSHIPS",
-                    "DirectoryNode",
-                    "source.id = $node_id",
-                ),
-                (
-                    "DirectoryNode",
-                    "DIRECTORY_RELATIONSHIPS",
-                    "FileNode",
-                    "source.id = $node_id",
-                ),
-            ],
-            "FileNode" => vec![
-                (
-                    "DirectoryNode",
-                    "DIRECTORY_RELATIONSHIPS",
-                    "FileNode",
-                    "target.id = $node_id",
-                ),
-                (
-                    "FileNode",
-                    "FILE_RELATIONSHIPS",
-                    "DefinitionNode",
-                    "source.id = $node_id",
-                ),
-                (
-                    "FileNode",
-                    "FILE_RELATIONSHIPS",
-                    "ImportedSymbolNode",
-                    "source.id = $node_id",
-                ),
-            ],
-            "DefinitionNode" => vec![
-                (
-                    "FileNode",
-                    "FILE_RELATIONSHIPS",
-                    "DefinitionNode",
-                    "target.id = $node_id",
-                ),
-                (
-                    "DefinitionNode",
-                    "DEFINITION_RELATIONSHIPS",
-                    "DefinitionNode",
-                    "source.id = $node_id",
-                ),
-                (
-                    "DefinitionNode",
-                    "DEFINITION_RELATIONSHIPS",
-                    "ImportedSymbolNode",
-                    "source.id = $node_id",
-                ),
-            ],
-            "ImportedSymbolNode" => vec![
-                (
-                    "FileNode",
-                    "FILE_RELATIONSHIPS",
-                    "ImportedSymbolNode",
-                    "target.id = $node_id",
-                ),
-                (
-                    "DefinitionNode",
-                    "DEFINITION_RELATIONSHIPS",
-                    "ImportedSymbolNode",
-                    "target.id = $node_id",
-                ),
-            ],
-            _ => return None,
+    /// Returns relationship configs relevant to a specific node type for neighbor queries
+    pub fn get_neighbor_relationship_configs(node_type: &str) -> Vec<RelationshipConfig> {
+        let all_relationships = Self::get_all_relationship_configs();
+
+        match node_type {
+            "DirectoryNode" => all_relationships
+                .into_iter()
+                .filter(|config| config.source_type == "DirectoryNode")
+                .collect(),
+            "FileNode" => all_relationships
+                .into_iter()
+                .filter(|config| {
+                    config.source_type == "FileNode" || config.target_type == "FileNode"
+                })
+                .collect(),
+            "DefinitionNode" => all_relationships
+                .into_iter()
+                .filter(|config| {
+                    config.source_type == "DefinitionNode" || config.target_type == "DefinitionNode"
+                })
+                .collect(),
+            "ImportedSymbolNode" => all_relationships
+                .into_iter()
+                .filter(|config| {
+                    config.target_type == "ImportedSymbolNode"
+                        || config.source_type == "ImportedSymbolNode"
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Builds a neighbor query section with the appropriate WHERE clause for node filtering
+    pub fn build_neighbor_query_section(config: &RelationshipConfig, node_type: &str) -> String {
+        let source_return = Self::get_node_neighbors_return_values(config.source_type, "source");
+        let target_return = Self::get_node_neighbors_return_values(config.target_type, "target");
+
+        // Determine the WHERE clause based on which node type we're filtering by
+        let where_clause = match node_type {
+            "DirectoryNode" => "WHERE source.id = $node_id",
+            "FileNode" => {
+                if config.source_type == "FileNode" {
+                    "WHERE source.id = $node_id"
+                } else {
+                    "WHERE target.id = $node_id"
+                }
+            }
+            "DefinitionNode" => {
+                if config.source_type == "DefinitionNode" {
+                    "WHERE source.id = $node_id"
+                } else {
+                    "WHERE target.id = $node_id"
+                }
+            }
+            "ImportedSymbolNode" => {
+                if config.source_type == "ImportedSymbolNode" {
+                    "WHERE source.id = $node_id"
+                } else {
+                    "WHERE target.id = $node_id"
+                }
+            }
+            _ => "",
         };
 
-        let query = parts.iter().map(|(
-            source_type,
-            relationship_type,
-            target_type,
-            condition,
-        )| {
-            let source_return = Self::get_node_neighbors_return_values(source_type, "source");
-            let target_return = Self::get_node_neighbors_return_values(target_type, "target");
+        format!(
+            r#"
+            MATCH (source:{source_type})-[r:{relationship_type}]-(target:{target_type}) {where_clause}
+            RETURN 
+                {source_return}
+                {target_return}
+                '{relationship_type}' as relationship_type,
+                id(r) as relationship_id,
+                {priority} as order_priority
+            "#,
+            source_type = config.source_type,
+            relationship_type = config.relationship_type,
+            target_type = config.target_type,
+            priority = config.priority,
+            where_clause = where_clause,
+            source_return = source_return,
+            target_return = target_return,
+        )
+    }
 
-            format!(
-                r#"
-                MATCH (source:{source_type})-[r:{relationship_type}]-(target:{target_type}) WHERE {condition}
-                RETURN 
-                    {source_return}
-                    {target_return}
-                    '{relationship_type}' as relationship_type,
-                    id(r) as relationship_id
-                "#, 
-            )
-        }).collect::<Vec<String>>().join("\nUNION\n");
+    pub fn get_node_neighbors_query(node_type: &str) -> Option<Query> {
+        let relationship_configs = Self::get_neighbor_relationship_configs(node_type);
 
-        let query = format!("{query} LIMIT $limit");
+        if relationship_configs.is_empty() {
+            return None;
+        }
+
+        let query_sections: Vec<String> = relationship_configs
+            .iter()
+            .map(|config| Self::build_neighbor_query_section(config, node_type))
+            .collect();
+
+        let query = format!("{} LIMIT $limit", query_sections.join("\nUNION\n"));
 
         Some(Query {
             query,
@@ -717,38 +621,7 @@ impl QueryLibrary {
                     },
                 ),
             ]),
-            result: HashMap::from([
-                ("source_id", STRING_MAPPER),
-                ("source_type", STRING_MAPPER),
-                ("source_name", STRING_MAPPER),
-                ("source_path", STRING_MAPPER),
-                ("source_absolute_path", STRING_MAPPER),
-                ("source_repository_name", STRING_MAPPER),
-                ("source_fqn", STRING_MAPPER),
-                ("source_definition_type", STRING_MAPPER),
-                ("source_language", STRING_MAPPER),
-                ("source_extension", STRING_MAPPER),
-                ("source_start_line", INT_MAPPER),
-                ("source_primary_start_byte", INT_MAPPER),
-                ("source_primary_end_byte", INT_MAPPER),
-                ("source_total_locations", INT_MAPPER),
-                ("target_id", STRING_MAPPER),
-                ("target_type", STRING_MAPPER),
-                ("target_name", STRING_MAPPER),
-                ("target_path", STRING_MAPPER),
-                ("target_absolute_path", STRING_MAPPER),
-                ("target_repository_name", STRING_MAPPER),
-                ("target_fqn", STRING_MAPPER),
-                ("target_definition_type", STRING_MAPPER),
-                ("target_language", STRING_MAPPER),
-                ("target_extension", STRING_MAPPER),
-                ("target_start_line", INT_MAPPER),
-                ("target_primary_start_byte", INT_MAPPER),
-                ("target_primary_end_byte", INT_MAPPER),
-                ("target_total_locations", INT_MAPPER),
-                ("relationship_type", RELATIONSHIP_TYPE_MAPPER),
-                ("relationship_id", STRING_MAPPER),
-            ]),
+            result: Self::get_graph_result_mappers(),
         })
     }
 
