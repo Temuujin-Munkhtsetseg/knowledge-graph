@@ -56,6 +56,11 @@
     color: var(--site-title-light) !important;
   }
 
+  /* Explicit light mode for gitlab-text */
+  [data-theme="light"] .gitlab-text {
+    color: var(--site-title-light) !important;
+  }
+
   /* Hero Title Styling */
   .hero-title {
     display: flex !important;
@@ -69,9 +74,9 @@
     text-transform: none !important;
   }
 
-  /* GitLab text with white color */
+  /* GitLab text with theme-aware color */
   .gitlab-text {
-    color: white !important;
+    color: var(--site-title-light) !important;
     position: relative !important;
     display: inline-block !important;
   }
@@ -114,7 +119,7 @@
 
   /* Dark mode adjustments for better visibility */
   [data-theme="dark"] .gitlab-text {
-    color: white !important;
+    color: var(--site-title-dark) !important;
   }
 
   [data-theme="dark"] .knowledge-text,
@@ -127,7 +132,7 @@
   /* Also handle prefers-color-scheme for system dark mode */
   @media (prefers-color-scheme: dark) {
     .gitlab-text {
-      color: white !important;
+      color: var(--site-title-dark) !important;
     }
 
     .knowledge-text,
@@ -138,8 +143,14 @@
     }
   }
 
+  /* Handle prefers-color-scheme for system light mode */
+  @media (prefers-color-scheme: light) {
+    .gitlab-text {
+      color: var(--site-title-light) !important;
+    }
+  }
+
   /* Ensure smooth gradient rendering */
-  .gitlab-text,
   .knowledge-text,
   .graph-text {
     background-size: 200% 200% !important;
@@ -149,7 +160,7 @@
   /* Fallback for browsers that don't support background-clip: text */
   @supports not (-webkit-background-clip: text) {
     .gitlab-text {
-      color: white !important;
+      color: var(--site-title-light) !important;
     }
     .knowledge-text {
       color: #f59e0b !important;
@@ -159,7 +170,7 @@
     }
 
     [data-theme="dark"] .gitlab-text {
-      color: white !important;
+      color: var(--site-title-dark) !important;
     }
 
     [data-theme="dark"] .knowledge-text,
