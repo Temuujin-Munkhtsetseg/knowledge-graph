@@ -6,6 +6,7 @@ members = [
   "crates/xtask",
   "crates/workspace-manager",
   "crates/http-server-desktop",
+  "crates/http-server-deployed",
   "crates/mcp",
   "crates/logging",
   "crates/database",
