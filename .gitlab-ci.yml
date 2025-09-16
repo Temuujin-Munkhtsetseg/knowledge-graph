@@ -464,7 +464,7 @@ build:code-sign:
     - |
       if [[ "$CI_SERVER_HOST" == "gitlab.com" &&
             "$CI_PROJECT_PATH" == "gitlab-org/rust/knowledge-graph" &&
-            -n "$CI_COMMIT_TAG" ]] || [[ "$FORCE_CODE_SIGN" == "true" ]]; then
+            "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
         echo "Signing binaries..."
         ./scripts/sign-and-repackage.sh ./gkg-windows-x86_64.tar.gz windows
       else
