@@ -273,7 +273,7 @@ impl NodeFieldAccess for DefinitionNode {
 }
 
 /// Represents a single location where an imported symbol is found
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct ImportedSymbolLocation {
     /// File path where this symbol was imported
     pub file_path: String,

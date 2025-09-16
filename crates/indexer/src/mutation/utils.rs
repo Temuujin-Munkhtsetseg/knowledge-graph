@@ -306,13 +306,13 @@ impl<'a> GraphMapper<'a> {
             };
 
             let Some(target_id) = id_generator.get_definition_id(
-                &file_rel.file_path,
+                &file_rel.definition_location.file_path,
                 &file_rel.definition_location.to_range(),
             ) else {
                 def_not_found += 1;
                 warn!(
                     "(FILE_DEFINITION_RELATIONSHIPS) Target definition ID not found: FQN({}) File({})",
-                    file_rel.definition_fqn, file_rel.file_path,
+                    file_rel.definition_fqn, file_rel.definition_location.file_path,
                 );
                 continue;
             };
