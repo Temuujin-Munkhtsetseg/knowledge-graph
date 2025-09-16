@@ -6,7 +6,8 @@ use crate::analysis::types::{
     DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DirectoryNode,
     DirectoryRelationship, FileDefinitionRelationship, FileImportedSymbolRelationship, FileNode,
     FqnType, GraphData, ImportedSymbolDefinitionRelationship, ImportedSymbolFileRelationship,
-    ImportedSymbolImportedSymbolRelationship, ImportedSymbolNode, OptimizedFileTree,
+    ImportedSymbolImportedSymbolRelationship, ImportedSymbolLocation, ImportedSymbolNode,
+    OptimizedFileTree,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
@@ -110,6 +111,9 @@ impl AnalysisService {
         for (language, results) in results_by_language {
             let mut definition_map = HashMap::new(); // (fqn_str, file_path) -> (node, fqn)
             let mut imported_symbol_map = HashMap::new(); // (fqn_str, file_path) -> [node, ...]
+            let mut imported_symbol_to_imported_symbols = HashMap::new();
+            let mut imported_symbol_to_definitions = HashMap::new();
+            let mut imported_symbol_to_files = HashMap::new();
 
             // Initialize Ruby resolver with capacity estimates for this language
             if language == SupportedLanguage::Ruby && !results.is_empty() {
@@ -133,8 +137,6 @@ impl AnalysisService {
                     file_result,
                     &mut definition_map,
                     &mut imported_symbol_map,
-                    &mut definition_relationships,
-                    &mut definition_imported_symbol_relationships,
                     &mut file_definition_relationships,
                     &mut file_imported_symbol_relationships,
                 );
@@ -144,55 +146,43 @@ impl AnalysisService {
                 );
             }
 
+            let file_tree = OptimizedFileTree::new(file_paths);
             self.add_nodes(
                 &definition_map,
                 &imported_symbol_map,
                 &mut definition_nodes,
                 &mut imported_symbol_nodes,
             );
-
-            // Process references for Ruby and Java using the new expression resolver
-            if language == SupportedLanguage::Ruby || language == SupportedLanguage::Java {
-                for file_result in &results {
-                    if let Some(references) = &file_result.references {
-                        let relative_path = self
-                            .filesystem_analyzer
-                            .get_relative_path(&file_result.file_path);
-
-                        if language == SupportedLanguage::Ruby {
-                            self.ruby_analyzer.process_references(
-                                references,
-                                &relative_path,
-                                &mut definition_relationships,
-                            );
-                        } else if language == SupportedLanguage::Java {
-                            self.java_analyzer.process_references(
-                                references,
-                                &relative_path,
-                                &mut definition_relationships,
-                                &mut definition_imported_symbol_relationships,
-                            );
-                        }
-                    }
-                }
-            }
-
-            let file_tree = OptimizedFileTree::new(file_paths);
-            self.add_interfile_relationships(
+            self.add_definition_relationships(
+                language,
+                &definition_map,
+                &imported_symbol_map,
+                &mut definition_relationships,
+                &mut definition_imported_symbol_relationships,
+            );
+            self.extract_import_relationships(
                 language,
                 file_tree,
                 &mut definition_map,
                 &mut imported_symbol_map,
+                &mut imported_symbol_to_imported_symbols,
+                &mut imported_symbol_to_definitions,
+                &mut imported_symbol_to_files,
                 &mut imported_symbol_imported_symbol_relationships,
                 &mut imported_symbol_definition_relationships,
                 &mut imported_symbol_file_relationships,
             );
-            self.add_intrafile_relationships(
+            self.extract_reference_relationships(
                 language,
-                definition_map,
-                imported_symbol_map,
+                &results,
+                &definition_map,
                 &mut definition_relationships,
                 &mut definition_imported_symbol_relationships,
+                &mut file_definition_relationships,
+                &mut file_imported_symbol_relationships,
+                &imported_symbol_to_imported_symbols,
+                &imported_symbol_to_definitions,
+                &imported_symbol_to_files,
             );
         }
 
@@ -291,8 +281,6 @@ impl AnalysisService {
         file_result: &FileProcessingResult,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
         file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
     ) {
@@ -321,16 +309,6 @@ impl AnalysisService {
                     imported_symbol_map,
                     file_imported_symbol_relationships,
                 );
-                self.python_analyzer.process_references(
-                    &file_result.references,
-                    &relative_path,
-                    definition_map,
-                    imported_symbol_map,
-                    definition_relationships,
-                    definition_imported_symbol_relationships,
-                    file_definition_relationships,
-                    file_imported_symbol_relationships,
-                );
             }
             SupportedLanguage::Kotlin => {
                 self.kotlin_analyzer.process_definitions(
@@ -344,12 +322,6 @@ impl AnalysisService {
                     &relative_path,
                     imported_symbol_map,
                     file_imported_symbol_relationships,
-                );
-                self.kotlin_analyzer.process_references(
-                    &file_result.references,
-                    &relative_path,
-                    definition_map,
-                    definition_relationships,
                 );
             }
             SupportedLanguage::Java => {
@@ -393,12 +365,6 @@ impl AnalysisService {
                     imported_symbol_map,
                     file_imported_symbol_relationships,
                 );
-                self.typescript_analyzer.process_references(
-                    file_result,
-                    &relative_path,
-                    definition_relationships,
-                    file_definition_relationships,
-                );
             }
             SupportedLanguage::Rust => {
                 self.rust_analyzer.process_definitions(
@@ -413,6 +379,150 @@ impl AnalysisService {
                     imported_symbol_map,
                     file_imported_symbol_relationships,
                 );
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn extract_import_relationships(
+        &mut self,
+        language: SupportedLanguage,
+        file_tree: OptimizedFileTree,
+        definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        imported_symbol_to_imported_symbols: &mut HashMap<
+            ImportedSymbolLocation,
+            Vec<ImportedSymbolNode>,
+        >,
+        imported_symbol_to_definitions: &mut HashMap<ImportedSymbolLocation, Vec<DefinitionNode>>,
+        imported_symbol_to_files: &mut HashMap<ImportedSymbolLocation, Vec<String>>,
+        imported_symbol_imported_symbol_relationships: &mut Vec<
+            ImportedSymbolImportedSymbolRelationship,
+        >,
+        imported_symbol_definition_relationships: &mut Vec<ImportedSymbolDefinitionRelationship>,
+        imported_symbol_file_relationships: &mut Vec<ImportedSymbolFileRelationship>,
+    ) {
+        if language == SupportedLanguage::Python {
+            // Maps imported symbols to their sources (e.g. a definition, another imported symbol, etc.)
+            self.python_analyzer.resolve_imported_symbols(
+                imported_symbol_map,
+                definition_map,
+                &file_tree,
+                imported_symbol_to_imported_symbols,
+                imported_symbol_to_definitions,
+                imported_symbol_to_files,
+            );
+
+            // Create imported symbol -> imported symbol relationships
+            for (source_location, target_imported_symbols) in imported_symbol_to_imported_symbols {
+                for target_imported_symbol in target_imported_symbols {
+                    let relationship = ImportedSymbolImportedSymbolRelationship {
+                        source_location: source_location.clone(),
+                        target_location: target_imported_symbol.location.clone(),
+                        relationship_type: RelationshipType::ImportedSymbolToImportedSymbol,
+                    };
+                    imported_symbol_imported_symbol_relationships.push(relationship);
+                }
+            }
+
+            // Create imported symbol -> definition relationships
+            for (source_location, target_definitions) in imported_symbol_to_definitions {
+                for target_definition in target_definitions {
+                    let relationship = ImportedSymbolDefinitionRelationship {
+                        source_location: source_location.clone(),
+                        target_location: target_definition.location.clone(),
+                        relationship_type: RelationshipType::ImportedSymbolToDefinition,
+                    };
+                    imported_symbol_definition_relationships.push(relationship);
+                }
+            }
+
+            // Create imported symbol -> file relationships
+            for (source_location, target_files) in imported_symbol_to_files {
+                for target_file in target_files {
+                    let relationship = ImportedSymbolFileRelationship {
+                        source_location: source_location.clone(),
+                        target_location: target_file.clone(),
+                        relationship_type: RelationshipType::ImportedSymbolToFile,
+                    };
+                    imported_symbol_file_relationships.push(relationship);
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn extract_reference_relationships(
+        &mut self,
+        language: SupportedLanguage,
+        file_results: &Vec<&FileProcessingResult>,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        imported_symbol_to_imported_symbols: &HashMap<
+            ImportedSymbolLocation,
+            Vec<ImportedSymbolNode>,
+        >,
+        imported_symbol_to_definitions: &HashMap<ImportedSymbolLocation, Vec<DefinitionNode>>,
+        imported_symbol_to_files: &HashMap<ImportedSymbolLocation, Vec<String>>,
+    ) {
+        for file_result in file_results {
+            let relative_path = self
+                .filesystem_analyzer
+                .get_relative_path(&file_result.file_path);
+
+            match language {
+                SupportedLanguage::Python => {
+                    self.python_analyzer.process_references(
+                        &file_result.references,
+                        &relative_path,
+                        definition_map,
+                        definition_relationships,
+                        definition_imported_symbol_relationships,
+                        file_definition_relationships,
+                        file_imported_symbol_relationships,
+                        imported_symbol_to_imported_symbols,
+                        imported_symbol_to_definitions,
+                        imported_symbol_to_files,
+                    );
+                }
+                SupportedLanguage::Ruby | SupportedLanguage::Java => {
+                    if let Some(references) = &file_result.references {
+                        if language == SupportedLanguage::Ruby {
+                            self.ruby_analyzer.process_references(
+                                references,
+                                &relative_path,
+                                definition_relationships,
+                            );
+                        } else if language == SupportedLanguage::Java {
+                            self.java_analyzer.process_references(
+                                references,
+                                &relative_path,
+                                definition_relationships,
+                                definition_imported_symbol_relationships,
+                            );
+                        }
+                    }
+                }
+                SupportedLanguage::Kotlin => {
+                    self.kotlin_analyzer.process_references(
+                        &file_result.references,
+                        &relative_path,
+                        definition_map,
+                        definition_relationships,
+                    );
+                }
+                SupportedLanguage::TypeScript => {
+                    self.typescript_analyzer.process_references(
+                        file_result,
+                        &relative_path,
+                        definition_relationships,
+                        file_definition_relationships,
+                    );
+                }
+                _ => {}
             }
         }
     }
@@ -441,83 +551,55 @@ impl AnalysisService {
         );
     }
 
-    fn add_intrafile_relationships(
+    fn add_definition_relationships(
         &self,
         language: SupportedLanguage,
-        definition_map: HashMap<(String, String), (DefinitionNode, FqnType)>,
-        imported_symbol_map: HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
         definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
         match language {
             SupportedLanguage::Ruby => {
                 self.ruby_analyzer
-                    .add_definition_relationships(&definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, definition_relationships);
             }
             SupportedLanguage::Python => {
                 self.python_analyzer.add_definition_relationships(
-                    &definition_map,
-                    &imported_symbol_map,
+                    definition_map,
+                    imported_symbol_map,
                     definition_relationships,
                     definition_imported_symbol_relationships,
                 );
             }
             SupportedLanguage::Kotlin => {
                 self.kotlin_analyzer
-                    .add_definition_relationships(&definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, definition_relationships);
             }
             SupportedLanguage::Java => {
                 self.java_analyzer
-                    .add_definition_relationships(&definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, definition_relationships);
             }
             SupportedLanguage::CSharp => {
                 self.csharp_analyzer
-                    .add_definition_relationships(&definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, definition_relationships);
             }
             SupportedLanguage::TypeScript => {
                 self.typescript_analyzer.add_definition_relationships(
-                    &definition_map,
-                    &imported_symbol_map,
+                    definition_map,
+                    imported_symbol_map,
                     definition_relationships,
                     definition_imported_symbol_relationships,
                 );
             }
             SupportedLanguage::Rust => {
                 self.rust_analyzer.add_definition_relationships(
-                    &definition_map,
-                    &imported_symbol_map,
+                    definition_map,
+                    imported_symbol_map,
                     definition_relationships,
                     definition_imported_symbol_relationships,
                 );
             }
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn add_interfile_relationships(
-        &mut self,
-        language: SupportedLanguage,
-        file_tree: OptimizedFileTree,
-        definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
-        imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        imported_symbol_imported_symbol_relationships: &mut Vec<
-            ImportedSymbolImportedSymbolRelationship,
-        >,
-        imported_symbol_definition_relationships: &mut Vec<ImportedSymbolDefinitionRelationship>,
-        imported_symbol_file_relationships: &mut Vec<ImportedSymbolFileRelationship>,
-    ) {
-        if language == SupportedLanguage::Python {
-            // Finds the origin of each imported symbol, if it's local
-            self.python_analyzer.resolve_imported_symbols(
-                imported_symbol_map,
-                definition_map,
-                &file_tree,
-                imported_symbol_imported_symbol_relationships,
-                imported_symbol_definition_relationships,
-                imported_symbol_file_relationships,
-            );
-
-            // TODO: Handle references to imported symbols
         }
     }
 }
