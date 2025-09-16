@@ -1,3 +1,14 @@
+## [0.14.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.13.0...v0.14.0) (2025-09-16)
+
+### :sparkles: Features
+
+* add basic HTTP server for server-side ([eabab41](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/eabab4134860388b95fb5fdfa4037a5b2a68f31c)) by Jan Provaznik
+* **indexer:** added cross-file reference resolution for Python ([8de2aa3](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8de2aa3ea0efedaf1c788f5fbdef80fabb29e43e)) by Jonathan Shobrook
+
+### :bug: Fixes
+
+* code sign Windows binary on default branch ([0d119c4](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/0d119c415f945e8e50f0722a24d71c75541f136f)) by Stan Hu
+
 ## [0.13.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.12.0...v0.13.0) (2025-09-15)
 
 ### :sparkles: Features
