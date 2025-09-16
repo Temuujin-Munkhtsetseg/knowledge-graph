@@ -27,6 +27,10 @@ run = "cargo run --bin dev-server"
 [tasks.server-dev-reindexing]
 run = "cargo run --bin dev-server -- --enable-reindexing"
 
+# runs server-side version of http server
+[tasks.server-deployed]
+run = "cargo run --bin http-server-deployed"
+
 # runs the http server in debug mode with auto-reload on file changes
 # serves at http://localhost:27495
 # only watches crates/* for changes

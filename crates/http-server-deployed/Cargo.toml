@@ -1,0 +1,28 @@
+[package]
+name = "http-server-deployed"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+http = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+
+[[bin]]
+name = "http-server-deployed"
+path = "src/main.rs"
+
+[dev-dependencies]
+assert_cmd = "2.0.17"
+nix.workspace = true
+serial_test.workspace = true
+tempfile.workspace = true
+axum-test.workspace = true
