@@ -234,7 +234,10 @@ impl JavaFile {
             last_known_scope = Some(scope_name.clone());
         }
 
-        self.scopes.get_mut(last_known_scope.as_ref().unwrap())
+        match last_known_scope {
+            Some(scope_name) => self.scopes.get_mut(&scope_name),
+            None => None,
+        }
     }
 
     pub fn index_scope(&mut self, fqn: JavaFqn, include_self: bool) {
