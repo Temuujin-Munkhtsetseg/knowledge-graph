@@ -40,7 +40,7 @@ pub(crate) struct JavaFile {
     pub imported_symbols: FxHashMap<String, String>,
     /// Imported packages (e.g. "com.example.util.*")
     pub wildcard_imports: FxHashSet<String>,
-    /// Class name -> Class
+    /// Class FQN -> Class
     pub classes: FxHashMap<String, JavaClass>,
     /// Enum name -> set of enum constant names declared in that enum (in this file)
     pub enum_constants_by_enum: FxHashMap<String, FxHashSet<String>>,
@@ -117,7 +117,7 @@ impl JavaFile {
         };
 
         self.index_scope(definition.fqn.clone(), true);
-        self.classes.insert(definition.name.clone(), class);
+        self.classes.insert(class.fqn.clone(), class);
     }
 
     pub fn index_method(&mut self, definition: &JavaDefinitionInfo) {
@@ -184,11 +184,11 @@ impl JavaFile {
         let mut current_range_distance = u64::MAX;
 
         for scope in self.scopes.values() {
-            if !self.classes.contains_key(&scope.name) {
+            if !self.classes.contains_key(&scope.fqn) {
                 continue;
             }
 
-            let class = self.classes.get(&scope.name).unwrap();
+            let class = self.classes.get(&scope.fqn).unwrap();
             if scope.range.0 <= offset && scope.range.1 >= offset {
                 let range_distance = offset - scope.range.0;
                 if range_distance < current_range_distance {
@@ -254,7 +254,6 @@ impl JavaFile {
 
             if !self.scopes.contains_key(&scope_name) {
                 let scope = ScopeTree::new(
-                    part.node_name.clone(),
                     scope_name.clone(),
                     (
                         part.range.byte_offset.0 as u64,

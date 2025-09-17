@@ -19,16 +19,14 @@ impl DefinitionMap {
 }
 
 pub(crate) struct ScopeTree {
-    pub name: String,
     pub fqn: String,
     pub range: (u64, u64),
     pub definition_map: DefinitionMap,
 }
 
 impl ScopeTree {
-    pub fn new(name: String, fqn: String, range: (u64, u64)) -> Self {
+    pub fn new(fqn: String, range: (u64, u64)) -> Self {
         Self {
-            name,
             fqn,
             range,
             definition_map: DefinitionMap::new(),

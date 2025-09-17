@@ -462,4 +462,29 @@ mod integration_tests {
         assert_eq!(start_line, 41);
         assert_eq!(end_line, 41);
     }
+
+    #[traced_test]
+    #[tokio::test]
+    async fn test_java_reference_to_deep_nested_class() {
+        let database = Arc::new(KuzuDatabase::new());
+        let setup = setup_java_reference_pipeline(&database).await;
+
+        let database_instance = database
+            .get_or_create_database(&setup.database_path, None)
+            .expect("Failed to create database");
+        let node_database_service = NodeDatabaseService::new(&database_instance);
+
+        // InnerInnerHelpers.innerDoHelp -> InnerHelpers.innerDoHelp
+        let callers_to_inner_do_help = node_database_service
+            .find_calls_to_method("com.example.helpers.Helpers.InnerHelpers.innerDoHelp")
+            .unwrap_or_default();
+
+        assert!(
+            callers_to_inner_do_help
+                .iter()
+                .any(|c| c
+                    .ends_with("com.example.helpers.Helpers.InnerInnerHelpers.innerInnerDoHelp")),
+            "InnerInnerHelpers.innerDoHelp should call InnerHelpers.innerDoHelp"
+        );
+    }
 }
