@@ -3,15 +3,13 @@ title: HTTP Server API
 description: REST API endpoints and Server-Sent Events for GitLab Knowledge Graph server
 ---
 
-# HTTP Server API
-
 The GitLab Knowledge Graph server provides an HTTP API for programmatic access to the Knowledge Graph, along with real-time SSE events for monitoring progress.
 
 ## Base URL
 
 When running locally (default port):
 
-```
+```none
 http://localhost:27495
 ```
 
@@ -123,7 +121,7 @@ Search the knowledge graph for specific patterns.
 
 Get statistics about the knowledge graph.
 
-## Server-Sent Events (SSE)
+### Server-Sent Events (SSE)
 
 #### `GET /api/events`
 
@@ -138,7 +136,7 @@ Connect to the events endpoint for real-time Server-Sent Events during indexing 
 
 When you first connect, you'll receive a connection confirmation:
 
-```
+```http
 event: gkg-connection
 data: {"type":"connection-established","timestamp":"2024-01-01T00:00:00Z","message":"SSE connection established"}
 ```
@@ -147,7 +145,7 @@ data: {"type":"connection-established","timestamp":"2024-01-01T00:00:00Z","messa
 
 All system events are sent with the `gkg-event` event type:
 
-```
+```http
 event: gkg-event
 data: {"WorkspaceIndexing":{"Started":{"workspace_folder_info":{...},"projects_to_process":[...],"started_at":"2024-01-01T00:00:00Z"}}}
 ```
