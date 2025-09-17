@@ -3015,6 +3015,7 @@ name = "mcp"
 version = "0.14.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "database",
  "event-bus",

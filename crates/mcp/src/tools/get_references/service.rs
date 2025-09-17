@@ -27,7 +27,7 @@ impl GetReferencesService {
         }
     }
 
-    pub fn get_references(
+    pub async fn get_references(
         &self,
         input: GetReferencesToolInput,
     ) -> Result<GetReferencesToolOutput, rmcp::ErrorData> {
@@ -82,7 +82,7 @@ impl GetReferencesService {
                 current_index += 1;
             }
         }
-        let file_contents = self.read_reference_chunks(file_chunks);
+        let file_contents = self.read_reference_chunks(file_chunks).await;
 
         // Build final results with content
         let mut file_read_errors = Vec::new();
@@ -149,40 +149,36 @@ impl GetReferencesService {
         })
     }
 
-    fn read_reference_chunks(
+    async fn read_reference_chunks(
         &self,
         file_chunks: Vec<(String, usize, usize)>,
     ) -> Vec<std::io::Result<String>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                match timeout(
-                    Duration::from_secs(FILE_READ_TIMEOUT_SECONDS),
-                    read_file_chunks(file_chunks.clone()),
-                )
-                .await
-                {
-                    Ok(Ok(results)) => results,
-                    Ok(Err(e)) => file_chunks
-                        .iter()
-                        .map(|_| {
-                            Err(std::io::Error::new(
-                                e.kind(),
-                                format!("Failed to read file chunks: {}.", e),
-                            ))
-                        })
-                        .collect(),
-                    Err(_) => file_chunks
-                        .iter()
-                        .map(|_| {
-                            Err(std::io::Error::new(
-                                std::io::ErrorKind::TimedOut,
-                                "File reading operation timed out.",
-                            ))
-                        })
-                        .collect(),
-                }
-            })
-        })
+        match timeout(
+            Duration::from_secs(FILE_READ_TIMEOUT_SECONDS),
+            read_file_chunks(file_chunks.clone()),
+        )
+        .await
+        {
+            Ok(Ok(results)) => results,
+            Ok(Err(e)) => file_chunks
+                .iter()
+                .map(|_| {
+                    Err(std::io::Error::new(
+                        e.kind(),
+                        format!("Failed to read file chunks: {}.", e),
+                    ))
+                })
+                .collect(),
+            Err(_) => file_chunks
+                .iter()
+                .map(|_| {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "File reading operation timed out.",
+                    ))
+                })
+                .collect(),
+        }
     }
 
     fn get_system_message(

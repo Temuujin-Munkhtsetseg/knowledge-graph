@@ -24,7 +24,10 @@ impl ImportUsageService {
         }
     }
 
-    pub fn analyze(&self, input: ImportUsageInput) -> Result<ImportUsageOutput, rmcp::ErrorData> {
+    pub async fn analyze(
+        &self,
+        input: ImportUsageInput,
+    ) -> Result<ImportUsageOutput, rmcp::ErrorData> {
         let import_paths: Vec<String> = input
             .packages
             .iter()
@@ -104,35 +107,16 @@ impl ImportUsageService {
         // Perform a single file read for all chunks
         let combined_contents = if combined_chunks.is_empty() {
             Vec::new()
-        } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            tokio::task::block_in_place(|| {
-                handle.block_on(async {
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(FILE_READ_TIMEOUT_SECONDS),
-                        read_file_chunks(combined_chunks),
-                    )
-                    .await
-                    {
-                        Ok(Ok(results)) => results,
-                        _ => Vec::new(),
-                    }
-                })
-            })
         } else {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                rmcp::ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-            })?;
-            rt.block_on(async {
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(FILE_READ_TIMEOUT_SECONDS),
-                    read_file_chunks(combined_chunks),
-                )
-                .await
-                {
-                    Ok(Ok(results)) => results,
-                    _ => Vec::new(),
-                }
-            })
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(FILE_READ_TIMEOUT_SECONDS),
+                read_file_chunks(combined_chunks),
+            )
+            .await
+            {
+                Ok(Ok(results)) => results,
+                _ => Vec::new(),
+            }
         };
 
         // Build a unified snippet map keyed by (relative file path, start, end)

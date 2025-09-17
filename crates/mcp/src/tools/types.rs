@@ -1,10 +1,12 @@
+use async_trait::async_trait;
 use rmcp::model::CallToolResult;
 use rmcp::model::{JsonObject, Tool};
 
+#[async_trait]
 pub trait KnowledgeGraphTool: Send + Sync {
     fn name(&self) -> &str;
     fn to_mcp_tool(&self) -> Tool;
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData>;
+    async fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData>;
 }
 
 pub struct KnowledgeGraphToolInput {

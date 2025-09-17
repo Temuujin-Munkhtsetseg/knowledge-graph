@@ -175,6 +175,7 @@ impl IndexProjectTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for IndexProjectTool {
     fn name(&self) -> &str {
         INDEX_PROJECT_TOOL_NAME
@@ -201,7 +202,7 @@ impl KnowledgeGraphTool for IndexProjectTool {
         }
     }
 
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+    async fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let input = KnowledgeGraphToolInput { params };
 
         let project_absolute_path = input.get_string("project_absolute_path")?;
@@ -328,7 +329,8 @@ mod tests {
             Value::String(project_path.clone()),
         );
 
-        let result = tool.call(params).expect("tool call should succeed");
+        let result =
+            futures::executor::block_on(tool.call(params)).expect("tool call should succeed");
         let text = result.content.unwrap()[0]
             .raw
             .as_text()

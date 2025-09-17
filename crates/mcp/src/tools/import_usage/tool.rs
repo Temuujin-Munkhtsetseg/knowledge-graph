@@ -31,6 +31,7 @@ impl ImportUsageTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for ImportUsageTool {
     fn name(&self) -> &str {
         IMPORT_USAGE_TOOL_NAME
@@ -74,9 +75,9 @@ impl KnowledgeGraphTool for ImportUsageTool {
         }
     }
 
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+    async fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let input = ImportUsageInput::new(params, &self.workspace_manager)?;
-        let output = self.service.analyze(input)?;
+        let output = self.service.analyze(input).await?;
         let xml = output
             .to_xml_without_cdata()
             .map_err(|e| rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
@@ -139,7 +140,7 @@ mod tests {
             "project_absolute_path".to_string(),
             serde_json::Value::String(project_path.to_string()),
         );
-        let index_result = index_tool.call(index_params);
+        let index_result = index_tool.call(index_params).await;
         assert!(index_result.is_ok(), "Indexing should succeed");
     }
 
@@ -172,6 +173,7 @@ mod tests {
                     { "import_path": "org.springframework.web.bind.annotation" }
                 ]
             })))
+            .await
             .unwrap();
 
         let xml = match &result.content.unwrap()[0].raw {
@@ -204,6 +206,7 @@ mod tests {
                     { "import_path": "org.apache.logging.log4j" }
                 ]
             })))
+            .await
             .unwrap();
 
         let xml = result.content.unwrap()[0]
@@ -236,6 +239,7 @@ mod tests {
                     { "import_path": "ORG.APACHE.LOGGING.LOG4J" }
                 ]
             })))
+            .await
             .unwrap();
 
         let xml = result.content.unwrap()[0]
@@ -294,6 +298,7 @@ mod tests {
                     { "import_path": "crypto" }
                 ]
             })))
+            .await
             .unwrap();
 
         let xml = result.content.unwrap()[0]
@@ -315,6 +320,7 @@ mod tests {
                     { "import_path": "crypto", "alias": "myRandomUUID" }
                 ]
             })))
+            .await
             .unwrap();
 
         let xml = result.content.unwrap()[0]
@@ -347,6 +353,7 @@ mod tests {
                 "page": 1,
                 "page_size": 50
             })))
+            .await
             .unwrap();
 
         let xml = result.content.unwrap()[0]
@@ -379,6 +386,7 @@ mod tests {
                 "page": 1,
                 "page_size": 1
             })))
+            .await
             .unwrap();
         let xml1 = page1.content.as_ref().unwrap()[0]
             .raw
@@ -405,6 +413,7 @@ mod tests {
                 "page": 2,
                 "page_size": 1
             })))
+            .await
             .unwrap();
         let xml2 = page2.content.as_ref().unwrap()[0]
             .raw

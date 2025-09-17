@@ -56,6 +56,7 @@ impl RepoMapTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for RepoMapTool {
     fn name(&self) -> &str {
         REPO_MAP_TOOL_NAME
@@ -71,7 +72,7 @@ impl KnowledgeGraphTool for RepoMapTool {
         }
     }
 
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+    async fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let service = RepoMapService {
             query_service: &*self.query_service,
             workspace_manager: &self.workspace_manager,
@@ -148,43 +149,24 @@ impl KnowledgeGraphTool for RepoMapTool {
 
         let file_contents: Vec<std::io::Result<String>> = if chunks.is_empty() {
             Vec::new()
-        } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            tokio::task::block_in_place(|| {
-                handle.block_on(async {
-                    match timeout(Duration::from_secs(10), read_file_chunks(chunks)).await {
-                        Ok(Ok(results)) => Ok(results),
-                        Ok(Err(e)) => Err(rmcp::ErrorData::new(
-                            ErrorCode::INTERNAL_ERROR,
-                            e.to_string(),
-                            None,
-                        )),
-                        Err(_) => Err(rmcp::ErrorData::new(
-                            ErrorCode::INTERNAL_ERROR,
-                            "File reading operation timed out.".to_string(),
-                            None,
-                        )),
-                    }
-                })
-            })?
         } else {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-            })?;
-            rt.block_on(async {
-                match timeout(Duration::from_secs(10), read_file_chunks(chunks)).await {
-                    Ok(Ok(results)) => Ok(results),
-                    Ok(Err(e)) => Err(rmcp::ErrorData::new(
+            match timeout(Duration::from_secs(10), read_file_chunks(chunks)).await {
+                Ok(Ok(results)) => results,
+                Ok(Err(e)) => {
+                    return Err(rmcp::ErrorData::new(
                         ErrorCode::INTERNAL_ERROR,
                         e.to_string(),
                         None,
-                    )),
-                    Err(_) => Err(rmcp::ErrorData::new(
+                    ));
+                }
+                Err(_) => {
+                    return Err(rmcp::ErrorData::new(
                         ErrorCode::INTERNAL_ERROR,
                         "File reading operation timed out.".to_string(),
                         None,
-                    )),
+                    ));
                 }
-            })?
+            }
         };
 
         let mut items: Vec<RepoMapItem> = Vec::with_capacity(rows.len());
@@ -313,7 +295,7 @@ mod tests {
             "project_absolute_path".to_string(),
             serde_json::Value::String(project_path.to_string()),
         );
-        let index_result = index_tool.call(index_params);
+        let index_result = index_tool.call(index_params).await;
         if let Err(e) = &index_result {
             eprintln!("INDEX_DEBUG: indexing error={:?}", e);
         }
@@ -350,6 +332,7 @@ mod tests {
                 "page": 1,
                 "page_size": 200,
             })))
+            .await
             .unwrap();
         let xml = match &result.content.unwrap()[0].raw {
             rmcp::model::RawContent::Text(t) => t.text.clone(),
@@ -387,6 +370,7 @@ mod tests {
                 "show_definitions": false,
                 "show_directories": true,
             })))
+            .await
             .unwrap();
         let xml = result.content.unwrap()[0]
             .raw
@@ -406,6 +390,7 @@ mod tests {
                 "show_definitions": true,
                 "show_directories": false,
             })))
+            .await
             .unwrap();
         let xml = result.content.unwrap()[0]
             .raw
@@ -435,6 +420,7 @@ mod tests {
                 "page": 1,
                 "page_size": 50,
             })))
+            .await
             .unwrap();
         let xml_d1 = result.content.unwrap()[0]
             .raw
@@ -453,6 +439,7 @@ mod tests {
                 "page": 1,
                 "page_size": 50,
             })))
+            .await
             .unwrap();
         let xml_d2 = result.content.unwrap()[0]
             .raw

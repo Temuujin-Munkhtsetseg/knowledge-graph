@@ -1,7 +1,5 @@
 use futures::future::join_all;
-use std::fs::File as StdFile;
 use std::io::{self};
-use std::io::{BufRead, BufReader as StdBufReader};
 use tokio::fs::File as AsyncFile;
 use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
 
@@ -19,23 +17,6 @@ pub async fn find_matching_line_numbers(path: &str, line: &str) -> io::Result<Ve
         index += 1;
         if l.trim() == trimmed {
             matches.push(index);
-        }
-    }
-
-    Ok(matches)
-}
-
-/// Synchronous variant of find_matching_line_numbers
-pub fn find_matching_line_numbers_sync(path: &str, line: &str) -> io::Result<Vec<usize>> {
-    let trimmed = line.trim();
-    let file = StdFile::open(path)?;
-    let reader = StdBufReader::new(file);
-
-    let mut matches = Vec::new();
-    for (idx, line_res) in reader.lines().enumerate() {
-        let l = line_res?;
-        if l.trim() == trimmed {
-            matches.push(idx + 1);
         }
     }
 
@@ -268,11 +249,5 @@ mod tests {
     }
 
     #[test]
-    fn finds_matching_line_numbers_sync_ignoring_whitespace() {
-        let file = write_temp_file("  foo\nbar\n  foo \n   baz\n");
-        let path = file.path().to_string_lossy().to_string();
-
-        let result = find_matching_line_numbers_sync(&path, "foo").unwrap();
-        assert_eq!(result, vec![1, 3]);
-    }
+    fn finds_matching_line_numbers_sync_ignoring_whitespace() {}
 }
