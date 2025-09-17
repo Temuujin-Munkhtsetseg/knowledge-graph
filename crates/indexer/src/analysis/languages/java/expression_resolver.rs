@@ -207,7 +207,7 @@ impl ExpressionResolver {
                 self.resolve_expression(file_path, range, target, resolutions)
             }
             JavaExpression::Annotation { name } => {
-                if let Some(resolution) = self.resolve_type(file_path, name) {
+                if let Some(resolution) = self.resolve_type(file_path, None, name) {
                     match resolution {
                         ResolvedType::Definition(definition) => {
                             resolutions.definition_resolutions.push(definition.clone());
@@ -235,7 +235,7 @@ impl ExpressionResolver {
         let relative_path = self.definition_nodes.get(target.fqn.as_str())?.file_path();
         let file = self.files.get(relative_path)?;
 
-        let class = file.classes.get(target.name.as_str())?;
+        let class = file.classes.get(target.fqn.as_str())?;
         self.resolve_method_in_class_hierarchy(class, member, file, resolutions)
     }
 
@@ -256,9 +256,11 @@ impl ExpressionResolver {
                     fqn: method_fqn,
                 });
 
-            if let Some(resolution) =
-                self.resolve_type(file.file_path.as_str(), &method.return_type)
-            {
+            if let Some(resolution) = self.resolve_type(
+                file.file_path.as_str(),
+                Some(&class.fqn),
+                &method.return_type,
+            ) {
                 return Some(resolution);
             }
         }
@@ -266,7 +268,7 @@ impl ExpressionResolver {
         // Then check all super types recursively
         for super_type in class.super_types.iter() {
             if let Some(ResolvedType::Definition(super_class)) =
-                self.resolve_type(file.file_path.as_str(), super_type)
+                self.resolve_type(file.file_path.as_str(), Some(&class.fqn), super_type)
             {
                 let super_class_definition_file = match self.definition_nodes.get(&super_class.fqn)
                 {
@@ -275,7 +277,7 @@ impl ExpressionResolver {
                 };
 
                 let super_class_definition_class =
-                    match super_class_definition_file.classes.get(&super_class.name) {
+                    match super_class_definition_file.classes.get(&super_class.fqn) {
                         Some(class) => class,
                         None => continue,
                     };
@@ -329,7 +331,7 @@ impl ExpressionResolver {
 
         // Try to resolve the super type
         if let Some(ResolvedType::Definition(super_class)) =
-            self.resolve_type(file_path, super_type)
+            self.resolve_type(file_path, Some(&class.fqn), super_type)
         {
             return Some(ResolvedType::Definition(super_class));
         }
@@ -345,14 +347,15 @@ impl ExpressionResolver {
         let relative_path = self.definition_nodes.get(target.fqn.as_str())?.file_path();
         let file = self.files.get(relative_path)?;
 
-        if let Some(class) = file.classes.get(member) {
+        let potential_class_fqn = format!("{}.{}", target.fqn, member);
+        if let Some(class) = file.classes.get(&potential_class_fqn) {
             return Some(ResolvedType::Definition(DefinitionResolution {
                 name: class.name.clone(),
                 fqn: class.fqn.clone(),
             }));
         }
 
-        if let Some(constants) = file.enum_constants_by_enum.get(target.name.as_str())
+        if let Some(constants) = file.enum_constants_by_enum.get(&target.name)
             && constants.contains(member)
         {
             return Some(ResolvedType::Definition(DefinitionResolution {
@@ -361,7 +364,7 @@ impl ExpressionResolver {
             }));
         }
 
-        let class = file.classes.get(target.name.as_str())?;
+        let class = file.classes.get(&target.fqn)?;
         self.resolve_field_in_class_hierarchy(class, member, file)
     }
 
@@ -377,7 +380,7 @@ impl ExpressionResolver {
             // A field is always typed in Java
             if let Some(binding_type) = &binding.java_type
                 && let Some(resolved_type) =
-                    self.resolve_type(file.file_path.as_str(), binding_type)
+                    self.resolve_type(file.file_path.as_str(), Some(&class.fqn), binding_type)
             {
                 return Some(resolved_type);
             }
@@ -387,7 +390,7 @@ impl ExpressionResolver {
         for super_type in class.super_types.iter() {
             // First check if super type is in the same file
             if let Some(ResolvedType::Definition(super_class)) =
-                self.resolve_type(file.file_path.as_str(), super_type)
+                self.resolve_type(file.file_path.as_str(), Some(&class.fqn), super_type)
             {
                 let super_class_definition_file = match self.definition_nodes.get(&super_class.fqn)
                 {
@@ -396,7 +399,7 @@ impl ExpressionResolver {
                 };
 
                 let super_class_definition_class =
-                    match super_class_definition_file.classes.get(&super_class.name) {
+                    match super_class_definition_file.classes.get(&super_class.fqn) {
                         Some(class) => class,
                         None => continue,
                     };
@@ -428,7 +431,7 @@ impl ExpressionResolver {
             if let Some(imported_definition) = self.definition_nodes.get(import_path) {
                 // If the imported symbol is a class, resolve to the class.
                 let imported_file = self.files.get(imported_definition.file_path()).unwrap();
-                if let Some(class) = imported_file.classes.get(name) {
+                if let Some(class) = imported_file.classes.get(&imported_definition.fqn) {
                     return Some(ResolvedType::Definition(DefinitionResolution {
                         name: class.name.clone(),
                         fqn: class.fqn.clone(),
@@ -468,7 +471,7 @@ impl ExpressionResolver {
             let potential_fqn = format!("{}.{}", import_path, name);
             if let Some(imported_file_path) = self.definition_nodes.get(&potential_fqn)
                 && let Some(imported_file) = self.files.get(imported_file_path.file_path())
-                && let Some(class) = imported_file.classes.get(name)
+                && let Some(class) = imported_file.classes.get(&imported_file_path.fqn)
             {
                 return Some(ResolvedType::Definition(DefinitionResolution {
                     name: class.name.clone(),
@@ -481,7 +484,7 @@ impl ExpressionResolver {
         let potential_fqn = format!("{}.{}", file.package_name, name);
         if let Some(class_file_path) = self.definition_nodes.get(&potential_fqn)
             && let Some(class_file) = self.files.get(class_file_path.file_path())
-            && let Some(class) = class_file.classes.get(name)
+            && let Some(class) = class_file.classes.get(&class_file_path.fqn)
         {
             return Some(ResolvedType::Definition(DefinitionResolution {
                 name: class.name.clone(),
@@ -508,7 +511,9 @@ impl ExpressionResolver {
             if let Some(binding) = scope.definition_map.unique_definitions.get(name) {
                 // Resolve binding type
                 if let Some(binding_type) = &binding.java_type {
-                    if let Some(resolved_type) = self.resolve_type(file_path, binding_type) {
+                    if let Some(resolved_type) =
+                        self.resolve_type(file_path, Some(&scope.fqn), binding_type)
+                    {
                         return Some(resolved_type);
                     }
                 } else if let Some(init) = &binding.init {
@@ -526,7 +531,8 @@ impl ExpressionResolver {
                 for binding in bindings {
                     if binding.range.0 <= range.0 && binding.range.1 >= range.1 {
                         if let Some(binding_type) = &binding.java_type {
-                            if let Some(resolved_type) = self.resolve_type(file_path, binding_type)
+                            if let Some(resolved_type) =
+                                self.resolve_type(file_path, Some(&scope.fqn), binding_type)
                             {
                                 return Some(resolved_type);
                             }
@@ -559,7 +565,7 @@ impl ExpressionResolver {
         type_name: &str,
         resolutions: &mut Resolutions,
     ) -> Option<ResolvedType> {
-        match self.resolve_type(file_path, type_name) {
+        match self.resolve_type(file_path, None, type_name) {
             Some(ResolvedType::Definition(java_type)) => {
                 let file = self.files.get(file_path);
 
@@ -598,12 +604,44 @@ impl ExpressionResolver {
         }
     }
 
-    pub fn resolve_type(&self, file_path: &str, type_name: &str) -> Option<ResolvedType> {
+    pub fn resolve_type(
+        &self,
+        file_path: &str,
+        class_fqn: Option<&str>,
+        type_name: &str,
+    ) -> Option<ResolvedType> {
         // if type name first letter is a lowercase, it's a FQN.
         if let Some(first_letter) = type_name.chars().next()
             && first_letter.is_lowercase()
         {
             return self.resolve_fully_qualified_name(type_name);
+        }
+
+        // Attempt to resolve the type in the class hierarchy
+        if let Some(class_fqn) = class_fqn {
+            let file = self.files.get(file_path)?;
+
+            let parts = type_name.split('.').collect::<Vec<&str>>();
+            if let Some(part) = parts.first()
+                && let Some(parent_scope) = file.scope_hierarchy.get(class_fqn)
+            {
+                let mut current_scope = file.scopes.get(parent_scope);
+                while let Some(scope) = current_scope {
+                    let potential_fqn = format!("{}.{}", scope.fqn, part);
+                    if let Some(class) = file.classes.get(&potential_fqn) {
+                        return Some(ResolvedType::Definition(DefinitionResolution {
+                            name: class.name.clone(),
+                            fqn: class.fqn.clone(),
+                        }));
+                    }
+
+                    if let Some(parent_scope_fqn) = file.scope_hierarchy.get(&scope.fqn) {
+                        current_scope = file.scopes.get(parent_scope_fqn);
+                    } else {
+                        current_scope = None;
+                    }
+                }
+            }
         }
 
         // if type name first letter is a uppercase, it's a class name
@@ -631,7 +669,8 @@ impl ExpressionResolver {
         // Let's find the file in which the class is declared
         let mut parent_symbol_file = None;
         if let Some(parent_symbol) = parts.clone().first() {
-            if file.classes.contains_key(*parent_symbol) {
+            let potential_fqn = format!("{}.{}", file.package_name, parent_symbol);
+            if file.classes.contains_key(&potential_fqn) {
                 parent_symbol_file = Some(file);
             }
 
@@ -652,6 +691,10 @@ impl ExpressionResolver {
 
             // Look at the wildward imports
             for import_path in file.wildcard_imports.iter() {
+                if parent_symbol_file.is_some() {
+                    break;
+                }
+
                 let potential_fqn = format!("{}.{}", import_path, parent_symbol);
                 if let Some(definition) = self.definition_nodes.get(&potential_fqn) {
                     if let Some(file) = self.files.get(definition.file_path()) {
@@ -665,20 +708,20 @@ impl ExpressionResolver {
             let potential_fqn = format!("{}.{}", file.package_name, parent_symbol);
             if let Some(file_path) = self.definition_nodes.get(&potential_fqn)
                 && let Some(file) = self.files.get(file_path.file_path())
+                && parent_symbol_file.is_none()
             {
                 parent_symbol_file = Some(file);
             }
         }
 
-        if let Some(parent_symbol_file) = parent_symbol_file
-            && let Some(class) = parent_symbol_file
-                .classes
-                .get(parts.last()?.to_string().as_str())
-        {
-            return Some(ResolvedType::Definition(DefinitionResolution {
-                name: class.name.clone(),
-                fqn: class.fqn.clone(),
-            }));
+        if let Some(parent_symbol_file) = parent_symbol_file {
+            let potential_fqn = format!("{}.{}", parent_symbol_file.package_name, type_name);
+            if let Some(class) = parent_symbol_file.classes.get(&potential_fqn) {
+                return Some(ResolvedType::Definition(DefinitionResolution {
+                    name: class.name.clone(),
+                    fqn: class.fqn.clone(),
+                }));
+            }
         }
 
         None
