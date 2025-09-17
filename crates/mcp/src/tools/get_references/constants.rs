@@ -8,7 +8,7 @@ Behavior:
 
 Requirements:
 - Provide the exact symbol name as it appears in code (case-sensitive).
-- Specify the file path where the definition is declared.
+- Specify the absolute file path where the definition is declared.
 
 Use cases:
 - Impact analysis before refactoring
@@ -21,7 +21,7 @@ Page: 1 (first page)
 Call:
 {
   "definition_name": "calculateTotal",
-  "file_path": "/project/src/utils/math.js",
+  "absolute_file_path": "/project/src/utils/math.js",
   "page": 1,
 }
 
@@ -30,7 +30,7 @@ Tip: Use with `search_codebase_definitions` first to locate the definition, then
 
 // Schema field names
 pub(in crate::tools::get_references) const DEFINITION_NAME_FIELD: &str = "definition_name";
-pub(in crate::tools::get_references) const FILE_PATH_FIELD: &str = "file_path";
+pub(in crate::tools::get_references) const FILE_PATH_FIELD: &str = "absolute_file_path";
 pub(in crate::tools::get_references) const PAGE_FIELD: &str = "page";
 
 // Default values

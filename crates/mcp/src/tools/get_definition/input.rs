@@ -11,12 +11,12 @@ impl TryFrom<JsonObject> for GetDefinitionInput {
 
     fn try_from(params: JsonObject) -> Result<Self, Self::Error> {
         let file_path = params
-            .get("file_path")
+            .get("absolute_file_path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
                 rmcp::ErrorData::new(
                     ErrorCode::INVALID_REQUEST,
-                    "Missing file_path".to_string(),
+                    "Missing absolute_file_path".to_string(),
                     None,
                 )
             })?

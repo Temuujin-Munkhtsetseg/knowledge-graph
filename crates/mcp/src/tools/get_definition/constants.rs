@@ -13,4 +13,4 @@ Java example:
 File: src/main/java/com/example/User.java
 Line: var name = user.getFirstName() + user.getLastName();
 Call:
-{ "file_path": "src/main/java/com/example/User.java", "line": "var name = user.getFirstName() + user.getLastName();", "symbol_name": "getFirstName" }"#;
+{ "absolute_file_path": "/abs/path/to/src/main/java/com/example/User.java", "line": "var name = user.getFirstName() + user.getLastName();", "symbol_name": "getFirstName" }"#;

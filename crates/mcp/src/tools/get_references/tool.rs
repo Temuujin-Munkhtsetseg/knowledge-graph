@@ -49,7 +49,7 @@ impl KnowledgeGraphTool for GetReferencesTool {
                 },
                 FILE_PATH_FIELD: {
                     "type": "string",
-                    "description": "Absolute or project-relative path to the file that contains the symbol usage. Example: src/main/java/com/example/User.java"
+                    "description": "Absolute file path to the file that contains the symbol usage. Example: /abs/path/to/src/main/java/com/example/User.java"
                 },
                 PAGE_FIELD: {
                     "type": "integer",
@@ -120,7 +120,7 @@ mod tests {
         let result = tool
             .call(object(json!({
                 "definition_name": "bar",
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
             .await
@@ -237,7 +237,7 @@ mod tests {
         let result = tool
             .call(object(json!({
                 "definition_name": "Bar",
-                "file_path": project.project_path.clone() + "/main/src/com/example/app/Bar.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Bar.java",
                 "page": 1,
             })))
             .await
@@ -333,11 +333,13 @@ mod tests {
             Arc::new(setup.workspace_manager.clone()),
         );
 
+        let project = &setup.workspace_manager.clone().list_all_projects()[0];
+
         // First, get all results to see total count
         let result_all = tool
             .call(object(json!({
                 "definition_name": "Foo",
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
             .await
@@ -369,7 +371,7 @@ mod tests {
         let result_limited = tool
             .call(object(json!({
                 "definition_name": "Foo",
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 2,
             })))
             .await
@@ -420,7 +422,7 @@ mod tests {
         let result = tool
             .call(object(json!({
                 "definition_name": "nonExistentMethod",
-                "file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
             .await
@@ -479,7 +481,7 @@ mod tests {
         let result = tool
             .call(object(json!({
                 "definition_name": "bar",
-                "file_path": "non/existent/path/NonExistent.java",
+                "absolute_file_path": "/non/existent/path/NonExistent.java",
                 "page": 1,
             })))
             .await;
@@ -505,10 +507,12 @@ mod tests {
             Arc::new(setup.workspace_manager.clone()),
         );
 
+        let project = &setup.workspace_manager.clone().list_all_projects()[0];
+
         let result_large_page = tool
             .call(object(json!({
                 "definition_name": "bar",
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 999999,
             })))
             .await;
@@ -520,7 +524,7 @@ mod tests {
         let result_zero_page = tool
             .call(object(json!({
                 "definition_name": "bar",
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 0,
             })))
             .await;
@@ -532,7 +536,7 @@ mod tests {
         let result_negative_page = tool
             .call(object(json!({
                 "definition_name": "bar",
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": -10,
             })))
             .await;
@@ -543,7 +547,7 @@ mod tests {
 
         let result_missing_definition = tool
             .call(object(json!({
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
             .await;
@@ -566,7 +570,7 @@ mod tests {
         let result_empty_definition = tool
             .call(object(json!({
                 "definition_name": "",
-                "file_path": "main/src/com/example/app/Foo.java",
+                "absolute_file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
             .await;
