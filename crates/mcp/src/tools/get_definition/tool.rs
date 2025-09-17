@@ -34,9 +34,9 @@ impl KnowledgeGraphTool for GetDefinitionTool {
         let input_schema = json!({
             "type": "object",
             "properties": {
-                "file_path": {
+                "absolute_file_path": {
                     "type": "string",
-                    "description": "Absolute or project-relative path to the file that contains the symbol usage. Example: src/main/java/com/example/User.java"
+                    "description": "Absolute file path to the file that contains the symbol usage. Example: /abs/path/to/src/main/java/com/example/User.java"
                 },
                 "line": {
                     "type": "string",
@@ -47,7 +47,7 @@ impl KnowledgeGraphTool for GetDefinitionTool {
                     "description": "Callable symbol to resolve (method/function name). Example: getFirstName"
                 }
             },
-            "required": ["file_path", "line", "symbol_name"]
+            "required": ["absolute_file_path", "line", "symbol_name"]
         });
 
         Tool {
