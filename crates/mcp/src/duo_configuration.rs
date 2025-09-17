@@ -19,11 +19,15 @@ pub enum ApprovedTools {
 #[serde(untagged)]
 pub enum DuoMcpServer {
     Url {
+        #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+        command_type: Option<String>,
         url: String,
         #[serde(rename = "approvedTools", skip_serializing_if = "Option::is_none")]
         approved_tools: Option<ApprovedTools>,
     },
     Command {
+        #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+        command_type: Option<String>,
         command: String,
         args: Vec<String>,
         #[serde(rename = "approvedTools", skip_serializing_if = "Option::is_none")]
@@ -82,22 +86,24 @@ pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) 
     let expanded_path = naively_expand_shell_path(mcp_config_path)?;
     let mut config = DuoMcpConfig::get_or_create(expanded_path)?;
 
-    let server_url = format!("http://localhost:{port}/mcp");
+    let server_url = format!("http://localhost:{port}/mcp/sse");
 
     // Check if knowledge graph server already exists
     if let Some(DuoMcpServer::Url {
+        command_type,
         url,
         approved_tools,
     }) = config.mcp_servers.get(MCP_NAME)
     {
         // If URL matches and approvedTools already exists (any value), nothing to do
-        if url.as_str() == server_url && approved_tools.is_some() {
+        if url.as_str() == server_url && approved_tools.is_some() && command_type.is_some() {
             return Ok(());
         }
 
         // If URL matches but approvedTools is missing, add it
         if url.as_str() == server_url {
             let server = DuoMcpServer::Url {
+                command_type: Some("sse".to_string()),
                 url: url.clone(),
                 approved_tools: Some(ApprovedTools::Bool(true)),
             };
@@ -109,6 +115,7 @@ pub fn add_local_http_server_to_mcp_config(mcp_config_path: PathBuf, port: u16) 
 
     // Server doesn't exist or URL doesn't match, create/update it
     let server = DuoMcpServer::Url {
+        command_type: Some("sse".to_string()),
         url: server_url,
         approved_tools: Some(ApprovedTools::Bool(true)),
     };
@@ -211,6 +218,7 @@ mod tests {
             .add_server(
                 "gitlab".to_string(),
                 DuoMcpServer::Command {
+                    command_type: Some("stdio".to_string()),
                     command: "gitlab".to_string(),
                     args: vec!["mcp".to_string(), "server".to_string()],
                     approved_tools: None,
@@ -271,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn test_updates_file_to_add_approved_tools_if_missing() {
+    fn test_updates_file_to_add_approved_tools_and_type_if_missing() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mcp_config_path = temp_dir.path().join("mcp.json");
         let port = 8080;
@@ -292,6 +300,12 @@ mod tests {
         let approved = &json["mcpServers"][MCP_NAME]["approvedTools"];
         assert_eq!(approved.as_bool(), Some(true));
 
+        let command_type = &json["mcpServers"][MCP_NAME]["type"];
+        assert_eq!(command_type.as_str(), Some("sse"));
+
+        let url = &json["mcpServers"][MCP_NAME]["url"];
+        assert_eq!(url.as_str(), Some("http://localhost:8080/mcp/sse"));
+
         temp_dir.close().unwrap();
     }
 
@@ -305,7 +319,8 @@ mod tests {
         let original_content = r#"{
   "mcpServers": {
     "knowledge-graph": {
-      "url": "http://localhost:8080/mcp",
+      "type": "sse",
+      "url": "http://localhost:8080/mcp/sse",
       "approvedTools": true
     }
   }
@@ -379,7 +394,7 @@ mod tests {
     fn check_http_server_is_added_to_existing_config(server: &DuoMcpServer, port: u16) {
         match server {
             DuoMcpServer::Url { url, .. } => {
-                assert_eq!(*url, format!("http://localhost:{port}/mcp"))
+                assert_eq!(*url, format!("http://localhost:{port}/mcp/sse"))
             }
             _ => panic!("Expected URL server"),
         }
@@ -471,13 +486,14 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let mcp_config_path = temp_dir.path().join("mcp.json");
         let port = 8080;
-        let server_url = format!("http://localhost:{port}/mcp");
+        let server_url = format!("http://localhost:{port}/mcp/sse");
 
         // Create config with knowledge graph server that has approvedTools set to false
         let fixture_json = format!(
             r#"{{
             "mcpServers": {{
                 "{}": {{
+                    "type": "sse",
                     "url": "{}",
                     "approvedTools": false
                 }}
@@ -505,7 +521,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let mcp_config_path = temp_dir.path().join("mcp.json");
         let port = 8080;
-        let server_url = format!("http://localhost:{port}/mcp");
+        let server_url = format!("http://localhost:{port}/mcp/sse");
 
         // Create config with knowledge graph server missing approvedTools entirely
         let fixture_json = format!(
