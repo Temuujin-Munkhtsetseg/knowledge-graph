@@ -25,6 +25,7 @@ impl ListProjectsTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for ListProjectsTool {
     fn name(&self) -> &str {
         LIST_PROJECTS_TOOL_NAME
@@ -46,7 +47,7 @@ impl KnowledgeGraphTool for ListProjectsTool {
         }
     }
 
-    fn call(&self, _params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+    async fn call(&self, _params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let projects = self.workspace_manager.list_all_projects();
 
         let mut builder = XmlBuilder::new();
@@ -102,7 +103,7 @@ mod tests {
         let tool = ListProjectsTool::new(workspace_manager.clone());
 
         let empty_params = JsonObject::new();
-        let result = tool.call(empty_params).unwrap();
+        let result = futures::executor::block_on(tool.call(empty_params)).unwrap();
 
         assert!(!result.is_error.unwrap_or(false));
         let content = result.content.as_ref().unwrap();

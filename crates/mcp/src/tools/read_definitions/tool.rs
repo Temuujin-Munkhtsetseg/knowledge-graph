@@ -32,6 +32,7 @@ impl ReadDefinitionsTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for ReadDefinitionsTool {
     fn name(&self) -> &str {
         READ_DEFINITIONS_TOOL_NAME
@@ -78,10 +79,10 @@ impl KnowledgeGraphTool for ReadDefinitionsTool {
         }
     }
 
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+    async fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let input = ReadDefinitionsToolInput::new(params, &self.workspace_manager)?;
 
-        let output = self.service.read_definitions(input)?;
+        let output = self.service.read_definitions(input).await?;
 
         let xml_output = output.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
@@ -131,6 +132,7 @@ mod tests {
                     }
                 ]
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -234,6 +236,7 @@ mod tests {
                     }
                 ]
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -305,6 +308,7 @@ mod tests {
                     }
                 ]
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -368,6 +372,7 @@ mod tests {
                     }
                 ]
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -426,70 +431,80 @@ mod tests {
         );
 
         // Test missing definitions field
-        let result_missing_definitions = tool.call(object(json!({})));
+        let result_missing_definitions = tool.call(object(json!({}))).await;
         assert!(
             result_missing_definitions.is_err(),
             "Should return error for missing definitions"
         );
 
         // Test empty definitions array
-        let result_empty_definitions = tool.call(object(json!({
-            "definitions": []
-        })));
+        let result_empty_definitions = tool
+            .call(object(json!({
+                "definitions": []
+            })))
+            .await;
         assert!(
             result_empty_definitions.is_err(),
             "Should return error for empty definitions array"
         );
 
         // Test missing names field
-        let result_missing_names = tool.call(object(json!({
-            "definitions": [
-                {
-                    "file_path": "main/src/com/example/app/Foo.java"
-                }
-            ]
-        })));
+        let result_missing_names = tool
+            .call(object(json!({
+                "definitions": [
+                    {
+                        "file_path": "main/src/com/example/app/Foo.java"
+                    }
+                ]
+            })))
+            .await;
         assert!(
             result_missing_names.is_err(),
             "Should return error for missing names field"
         );
 
         // Test missing file_path field
-        let result_missing_file_path = tool.call(object(json!({
-            "definitions": [
-                {
-                    "names": ["bar"]
-                }
-            ]
-        })));
+        let result_missing_file_path = tool
+            .call(object(json!({
+                "definitions": [
+                    {
+                        "names": ["bar"]
+                    }
+                ]
+            })))
+            .await;
         assert!(
             result_missing_file_path.is_err(),
             "Should return error for missing file_path field"
         );
 
         // Test empty names array
-        let result_empty_names = tool.call(object(json!({
-            "definitions": [
-                {
-                    "names": [],
-                    "file_path": "main/src/com/example/app/Foo.java"
-                }
-            ]
-        })));
+        let result_empty_names = tool
+            .call(object(json!({
+                "definitions": [
+                    {
+                        "names": [],
+                        "file_path": "main/src/com/example/app/Foo.java"
+                    }
+                ]
+            })))
+            .await;
         assert!(
             result_empty_names.is_err(),
             "Should return error for empty names array"
         );
 
         // Test empty name in names array
-        let result_empty_name = tool.call(object(json!({
-            "definitions": [
-                {
-                    "names": [""],
-                    "file_path": "main/src/com/example/app/Foo.java"
-                }
-            ]
-        })));
+        let result_empty_name = tool
+            .call(object(json!({
+                "definitions": [
+                    {
+                        "names": [""],
+                        "file_path": "main/src/com/example/app/Foo.java"
+                    }
+                ]
+            })))
+            .await;
         assert!(
             result_empty_name.is_err(),
             "Should return error for empty name in names array"
@@ -514,14 +529,16 @@ mod tests {
         );
 
         // Test with a file that doesn't exist in the project
-        let result = tool.call(object(json!({
-            "definitions": [
-                {
-                    "names": ["someMethod"],
-                    "file_path": "non/existent/path/NonExistent.java"
-                }
-            ]
-        })));
+        let result = tool
+            .call(object(json!({
+                "definitions": [
+                    {
+                        "names": ["someMethod"],
+                        "file_path": "non/existent/path/NonExistent.java"
+                    }
+                ]
+            })))
+            .await;
 
         // This should return an error since the file is not in the workspace
         assert!(result.is_err(), "Expected error for invalid file path");

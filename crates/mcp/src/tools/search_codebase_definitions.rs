@@ -362,6 +362,7 @@ impl SearchCodebaseDefinitionsTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
     fn name(&self) -> &str {
         SEARCH_CODEBASE_DEFINITIONS_TOOL_NAME
@@ -401,7 +402,7 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
         }
     }
 
-    fn call(
+    async fn call(
         &self,
         params: rmcp::model::JsonObject,
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
@@ -414,15 +415,10 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
 
         let database_path = get_database_path(&self.workspace_manager, project_absolute_path)?;
 
-        let output = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.search_and_populate_content(
-                project_absolute_path,
-                &database_path,
-                &search_terms,
-                page,
-            ))
-        })
-        .map_err(rmcp::ErrorData::from)?;
+        let output = self
+            .search_and_populate_content(project_absolute_path, &database_path, &search_terms, page)
+            .await
+            .map_err(rmcp::ErrorData::from)?;
 
         let xml_output = output.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
@@ -470,6 +466,7 @@ mod tests {
                 "search_terms": ["main"],
                 "page": 1,
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -581,6 +578,7 @@ mod tests {
                 "search_terms": ["repeatedMethod"],
                 "page": 1,
             })))
+            .await
             .unwrap();
 
         let content = first_page_result
@@ -626,6 +624,7 @@ mod tests {
                 "search_terms": ["repeatedMethod"],
                 "page": 2,
             })))
+            .await
             .unwrap();
 
         let content = second_page_result

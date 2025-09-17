@@ -33,6 +33,7 @@ impl GetReferencesTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for GetReferencesTool {
     fn name(&self) -> &str {
         GET_REFERENCES_TOOL_NAME
@@ -70,10 +71,10 @@ impl KnowledgeGraphTool for GetReferencesTool {
         }
     }
 
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+    async fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let input = GetReferencesToolInput::new(params, &self.workspace_manager)?;
 
-        let output = self.service.get_references(input)?;
+        let output = self.service.get_references(input).await?;
 
         let xml_output = output.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
@@ -122,6 +123,7 @@ mod tests {
                 "file_path": "main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -238,6 +240,7 @@ mod tests {
                 "file_path": project.project_path.clone() + "/main/src/com/example/app/Bar.java",
                 "page": 1,
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -337,6 +340,7 @@ mod tests {
                 "file_path": "main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
+            .await
             .unwrap();
 
         let content_all = result_all.content.expect("Expected content in result");
@@ -368,6 +372,7 @@ mod tests {
                 "file_path": "main/src/com/example/app/Foo.java",
                 "page": 2,
             })))
+            .await
             .unwrap();
 
         let content_limited = result_limited.content.expect("Expected content in result");
@@ -418,6 +423,7 @@ mod tests {
                 "file_path": project.project_path.clone() + "/main/src/com/example/app/Foo.java",
                 "page": 1,
             })))
+            .await
             .unwrap();
 
         let content = result.content.expect("Expected content in result");
@@ -470,11 +476,13 @@ mod tests {
         );
 
         // Test with a file that doesn't exist in the project
-        let result = tool.call(object(json!({
-            "definition_name": "bar",
-            "file_path": "non/existent/path/NonExistent.java",
-            "page": 1,
-        })));
+        let result = tool
+            .call(object(json!({
+                "definition_name": "bar",
+                "file_path": "non/existent/path/NonExistent.java",
+                "page": 1,
+            })))
+            .await;
 
         // This should return an error since the file is not in the workspace
         assert!(result.is_err(), "Expected error for invalid file path");
@@ -497,59 +505,71 @@ mod tests {
             Arc::new(setup.workspace_manager.clone()),
         );
 
-        let result_large_page = tool.call(object(json!({
-            "definition_name": "bar",
-            "file_path": "main/src/com/example/app/Foo.java",
-            "page": 999999,
-        })));
+        let result_large_page = tool
+            .call(object(json!({
+                "definition_name": "bar",
+                "file_path": "main/src/com/example/app/Foo.java",
+                "page": 999999,
+            })))
+            .await;
         assert!(
             result_large_page.is_ok(),
             "Should handle oversized limit gracefully"
         );
 
-        let result_zero_page = tool.call(object(json!({
-            "definition_name": "bar",
-            "file_path": "main/src/com/example/app/Foo.java",
-            "page": 0,
-        })));
+        let result_zero_page = tool
+            .call(object(json!({
+                "definition_name": "bar",
+                "file_path": "main/src/com/example/app/Foo.java",
+                "page": 0,
+            })))
+            .await;
         assert!(
             result_zero_page.is_ok(),
             "Should handle zero limit gracefully"
         );
 
-        let result_negative_page = tool.call(object(json!({
-            "definition_name": "bar",
-            "file_path": "main/src/com/example/app/Foo.java",
-            "page": -10,
-        })));
+        let result_negative_page = tool
+            .call(object(json!({
+                "definition_name": "bar",
+                "file_path": "main/src/com/example/app/Foo.java",
+                "page": -10,
+            })))
+            .await;
         assert!(
             result_negative_page.is_ok(),
             "Should handle negative offset gracefully"
         );
 
-        let result_missing_definition = tool.call(object(json!({
-            "file_path": "main/src/com/example/app/Foo.java",
-            "page": 1,
-        })));
+        let result_missing_definition = tool
+            .call(object(json!({
+                "file_path": "main/src/com/example/app/Foo.java",
+                "page": 1,
+            })))
+            .await;
         assert!(
             result_missing_definition.is_err(),
             "Should return error for missing definition_name"
         );
 
-        let result_missing_file_path = tool.call(object(json!({
-            "definition_name": "bar",
-            "page": 1,
-        })));
+        let result_missing_file_path = tool
+            .call(object(json!({
+                "definition_name": "bar",
+                "page": 1,
+            })))
+            .await;
         assert!(
             result_missing_file_path.is_err(),
             "Should return error for missing absolute_file_path"
         );
 
-        let result_empty_definition = tool.call(object(json!({
-            "definition_name": "",
-            "file_path": "main/src/com/example/app/Foo.java",
-            "page": 1,
-        })));
+        let result_empty_definition = tool
+            .call(object(json!({
+                "definition_name": "",
+                "file_path": "main/src/com/example/app/Foo.java",
+                "page": 1,
+            })))
+            .await;
         assert!(
             result_empty_definition.is_err(),
             "Should return error for empty definition_name"

@@ -136,5 +136,6 @@ impl AvailableToolsService {
                 None,
             ))?
             .call(params)
+            .await
     }
 }

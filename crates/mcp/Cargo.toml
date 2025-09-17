@@ -21,6 +21,7 @@ log = { workspace = true }
 quick-xml = { workspace = true }
 regex = { workspace = true }
 ignore = { workspace = true }
+async-trait = { workspace = true, optional = false }
 
 [dev-dependencies]
 indexer = { path = "../indexer", features = ["test-utils"] }

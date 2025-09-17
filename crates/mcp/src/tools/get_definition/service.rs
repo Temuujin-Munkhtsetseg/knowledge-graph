@@ -11,7 +11,7 @@ use workspace_manager::WorkspaceManager;
 use super::input::GetDefinitionInput;
 use super::output::{Definition, DefinitionInfo, GetDefinitionOutput, ImportedSymbolInfo};
 use super::repository::{self, RawHit};
-use crate::tools::file_reader_utils::{find_matching_line_numbers_sync, read_file_chunks};
+use crate::tools::file_reader_utils::{find_matching_line_numbers, read_file_chunks};
 use crate::tools::utils;
 
 pub struct GetDefinitionService {
@@ -27,17 +27,16 @@ impl GetDefinitionService {
         }
     }
 
-    pub fn get_definition(
+    pub async fn get_definition(
         &self,
         input: GetDefinitionInput,
     ) -> Result<GetDefinitionOutput, rmcp::ErrorData> {
         let (abs_path, project_info, relative_file_path) =
             utils::resolve_paths(&self.workspace_manager, &input.file_path)?;
 
-        let matching_lines =
-            find_matching_line_numbers_sync(abs_path.to_str().unwrap(), &input.line).map_err(
-                |e| rmcp::ErrorData::new(ErrorCode::INVALID_REQUEST, e.to_string(), None),
-            )?;
+        let matching_lines = find_matching_line_numbers(abs_path.to_str().unwrap(), &input.line)
+            .await
+            .map_err(|e| rmcp::ErrorData::new(ErrorCode::INVALID_REQUEST, e.to_string(), None))?;
 
         if matching_lines.is_empty() {
             return Ok(GetDefinitionOutput {
@@ -53,17 +52,9 @@ impl GetDefinitionService {
             .collect();
         let line_results = if line_chunks.is_empty() {
             Vec::new()
-        } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            tokio::task::block_in_place(|| {
-                handle.block_on(read_file_chunks(line_chunks)).map_err(|e| {
-                    rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-                })
-            })?
         } else {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-            })?;
-            rt.block_on(read_file_chunks(line_chunks))
+            read_file_chunks(line_chunks)
+                .await
                 .map_err(|e| rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None))?
         };
 
@@ -181,19 +172,9 @@ impl GetDefinitionService {
 
         let chunks_results = if chunks_input.is_empty() {
             Vec::new()
-        } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            tokio::task::block_in_place(|| {
-                handle
-                    .block_on(read_file_chunks(chunks_input))
-                    .map_err(|e| {
-                        rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-                    })
-            })?
         } else {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-            })?;
-            rt.block_on(read_file_chunks(chunks_input))
+            read_file_chunks(chunks_input)
+                .await
                 .map_err(|e| rmcp::ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None))?
         };
 

@@ -24,6 +24,7 @@ impl GetDefinitionTool {
     }
 }
 
+#[async_trait::async_trait]
 impl KnowledgeGraphTool for GetDefinitionTool {
     fn name(&self) -> &str {
         GET_DEFINITION_TOOL_NAME
@@ -58,10 +59,10 @@ impl KnowledgeGraphTool for GetDefinitionTool {
         }
     }
 
-    fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
+    async fn call(&self, params: JsonObject) -> Result<CallToolResult, rmcp::ErrorData> {
         let input = GetDefinitionInput::try_from(params)?;
 
-        let result = self.service.get_definition(input)?;
+        let result = self.service.get_definition(input).await?;
 
         let xml_output = result.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
