@@ -120,9 +120,18 @@ impl<'a> KuzuConnection<'a> {
             .canonicalize()
             .map_err(DatabaseError::Io)?;
 
+        // Strip UNC prefix and normalize backslashes for Windows - Kuzu SQL parser requires forward slashes
+        let db_safe_path = if cfg!(windows) {
+            let path_str = absolute_path.to_string_lossy();
+            let stripped = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
+            stripped.replace('\\', "/")
+        } else {
+            absolute_path.display().to_string()
+        };
+
         // For Parquet files, we don't need HEADER option as schema is embedded
         // Schema information is stored in Parquet metadata
-        let query = format!("COPY {} FROM '{}'", table_name, absolute_path.display());
+        let query = format!("COPY {} FROM '{}'", table_name, db_safe_path);
 
         info!("Importing data into {}: {}", table_name, file_path);
         self.execute_ddl(&query).map_err(|e| {
@@ -149,7 +158,16 @@ impl<'a> KuzuConnection<'a> {
             .canonicalize()
             .map_err(DatabaseError::Io)?;
 
-        let mut query = format!("COPY {} FROM '{}'", table_name, absolute_path.display());
+        // Strip UNC prefix and normalize backslashes for Windows - Kuzu SQL parser requires forward slashes
+        let db_safe_path = if cfg!(windows) {
+            let path_str = absolute_path.to_string_lossy();
+            let stripped = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
+            stripped.replace('\\', "/")
+        } else {
+            absolute_path.display().to_string()
+        };
+
+        let mut query = format!("COPY {} FROM '{}'", table_name, db_safe_path);
 
         // For Parquet files, only from/to options are needed for relationship tables
         // HEADER is not needed as schema is embedded in Parquet metadata

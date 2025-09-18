@@ -2,6 +2,7 @@ use crate::data_directory::DataDirectory;
 use crate::errors::{Result, WorkspaceManagerError};
 use crate::manifest::{ProjectMetadata, Status, WorkspaceFolderMetadata, generate_path_hash};
 use crate::state_service::LocalStateService;
+use dunce;
 use gitalisk_core::repository::gitalisk_repository::CoreGitaliskRepository;
 use gitalisk_core::workspace_folder::gitalisk_workspace::CoreGitaliskWorkspaceFolder;
 use log::info;
@@ -138,9 +139,8 @@ impl WorkspaceManager {
         &self,
         workspace_folder_path: &Path,
     ) -> Result<WorkspaceFolderInfo> {
-        let canonical_workspace_folder_path = workspace_folder_path
-            .canonicalize()
-            .map_err(WorkspaceManagerError::Io)?;
+        let canonical_workspace_folder_path =
+            dunce::canonicalize(workspace_folder_path).map_err(WorkspaceManagerError::Io)?;
         let workspace_folder_path_str = canonical_workspace_folder_path
             .to_string_lossy()
             .to_string();
@@ -222,9 +222,8 @@ impl WorkspaceManager {
         workspace_folder_path: &str,
         project_path: &str,
     ) -> Result<ProjectInfo> {
-        let canonical_project_path = PathBuf::from(project_path)
-            .canonicalize()
-            .map_err(WorkspaceManagerError::Io)?;
+        let canonical_project_path =
+            dunce::canonicalize(project_path).map_err(WorkspaceManagerError::Io)?;
         let project_path_str = canonical_project_path.to_string_lossy().to_string();
 
         if !self
@@ -651,8 +650,7 @@ impl WorkspaceManager {
         &self,
         workspace_folder_path: &Path,
     ) -> Result<WorkspaceFolderInfo> {
-        let canonical_path = workspace_folder_path
-            .canonicalize()
+        let canonical_path = dunce::canonicalize(workspace_folder_path)
             .map_err(WorkspaceManagerError::Io)?
             .to_string_lossy()
             .to_string();
