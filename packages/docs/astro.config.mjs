@@ -198,6 +198,10 @@ export default defineConfig({
           label: "Contribute",
           autogenerate: { directory: "contribute" },
         },
+        {
+          label: "Server Side Deployment",
+          autogenerate: { directory: "server-side" },
+        },
       ],
       editLink: {
         baseUrl:
