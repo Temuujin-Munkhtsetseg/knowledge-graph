@@ -1,3 +1,29 @@
+## [0.15.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.14.0...v0.15.0) (2025-09-18)
+
+### :sparkles: Features
+
+* **cli:** allow start server with debug logs ([7eb6054](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7eb605451088b4f8b392c772a65793c9582abf80)) by Jean-Gabriel Doyon
+* **mcp:** allow mcp tools asynchronous execution ([e9b22f6](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e9b22f63a29b15ea73c25215f0a90c8fdfee9039)) by Bohdan Parkhomchuk
+* switch to cloud hsm mac signing ([3fde5d1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3fde5d115e9fb182e0fc34d1fd949eb9aac1174c)) by Bohdan Parkhomchuk
+
+### :bug: Fixes
+
+* **java:** check null enclosing scope ([1e90795](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1e90795bab62963b077debddc03959293354bb81)) by Jean-Gabriel Doyon
+* **java:** resolve reference to nested classes ([43ff927](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/43ff927948a6afb9ec8fcf8871383a7e21c1174a)) by Jean-Gabriel Doyon
+* **mcp:** add duo MCP server as SSE ([e2eb8d0](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e2eb8d036b9df0da490cc748b92ab16009ae2a93)) by Jean-Gabriel Doyon
+
+### :memo: Documentation
+
+* add api reference to sidebar ([7ae9ae6](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/7ae9ae613a5613d6ab306202f5f707bbd30d5e8d)) by Dennis Meister
+* add documentation for allowing raw db access ([98f8e1b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/98f8e1b4792106aabd43affa368a6c1c437c5c75)) by Isaac Dawson
+
+### :repeat: Chore
+
+* **deps:** bump gitlab-code-parser to 0.18.1 ([68f47ac](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/68f47ac3bb7c7f48e011b51b6cf01d2cd741689e)) by Jean-Gabriel Doyon
+* rename paths to absolute paths for tools ([85aec8b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/85aec8b55cc9bce0da113ec78814f7b6e0a666fb)) by Bohdan Parkhomchuk
+* update wording to clarify project status ([55c2231](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/55c2231dc865ddadb9a78deeb02ecb5be84ecb94)) by Lucas Charles
+* use https for semantic release isntead of ssh ([309002b](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/309002b83a405b463650e16ba4f9b510a73e92f3)) by Bohdan Parkhomchuk
+
 ## [0.14.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.13.0...v0.14.0) (2025-09-16)
 
 ### :sparkles: Features
