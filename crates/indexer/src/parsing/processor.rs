@@ -1,4 +1,5 @@
 use crate::project::file_info::FileInfo;
+use log::debug;
 use parser_core::{
     csharp::{
         analyzer::CSharpAnalyzer,
@@ -291,7 +292,8 @@ impl<'a> FileProcessor<'a> {
         parse_result: &ParseResult,
         matches: &[MatchWithNodes],
     ) -> Result<(Definitions, Option<ImportedSymbols>, Option<References>), anyhow::Error> {
-        match language {
+        debug!("Starting to analyze file {}.", self.path);
+        let result = match language {
             SupportedLanguage::Ruby => {
                 let analyzer = RubyAnalyzer::new();
                 match analyzer.parse_and_analyze(self.content) {
@@ -410,7 +412,9 @@ impl<'a> FileProcessor<'a> {
                     )),
                 }
             }
-        }
+        };
+        debug!("Finished analyzing file {}.", self.path);
+        result
     }
 }
 
