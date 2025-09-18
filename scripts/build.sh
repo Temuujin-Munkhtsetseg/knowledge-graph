@@ -50,12 +50,6 @@ fi
 
 build_bin() {
     cargo build $CARGO_PARAMS --bin gkg --target $TARGET
-
-    # Sign and notarize the binary
-    if [ "$PLATFORM" = "darwin" ];then
-        ./scripts/macos-sign-notarize.sh "target/${TARGET}/release/gkg"
-    fi
-
     tar -czvf gkg-${PLATFORM}-${ARCH}.tar.gz -C target/${TARGET}/release gkg
     echo "created gkg-${PLATFORM}-${ARCH}.tar.gz"
 }
