@@ -17,16 +17,24 @@ use workspace_manager::WorkspaceManager;
 async fn main() -> anyhow::Result<()> {
     let cli = GkgCli::parse_args();
 
-    let verbose = match cli.command {
-        Commands::Index { verbose, .. } => verbose,
-        Commands::Server { .. } => false,
+    let verbose = match &cli.command {
+        Commands::Index { verbose, .. } => *verbose,
+        Commands::Server {
+            action: Some(ServerCommands::Start(args)),
+            ..
+        } => args.verbose,
+        Commands::Server {
+            action: Some(ServerCommands::Stop),
+            ..
+        } => false,
+        Commands::Server { action: None, .. } => false,
         Commands::Clean => false,
         Commands::DevTools { .. } => false,
     };
 
-    let mode = match cli.command {
+    let mode = match &cli.command {
         Commands::Index { .. } => LogMode::Cli,
-        Commands::Server { ref action } => match action {
+        Commands::Server { action } => match action {
             Some(ServerCommands::Start(args)) => {
                 if args.detached {
                     LogMode::ServerBackground
@@ -88,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
                     detached: false,
                     port: None,
                     mcp_configuration_path: None,
+                    verbose: false,
                 };
                 server::start(
                     args.register_mcp,

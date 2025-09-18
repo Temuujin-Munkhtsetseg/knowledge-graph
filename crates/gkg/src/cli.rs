@@ -116,4 +116,8 @@ pub struct ServerStartArgs {
     /// Path to MCP configuration file (example: ~/.gkg/mcp.settings.json)
     #[arg(long)]
     pub mcp_configuration_path: Option<PathBuf>,
+
+    /// Enable verbose logging
+    #[arg(long)]
+    pub verbose: bool,
 }
