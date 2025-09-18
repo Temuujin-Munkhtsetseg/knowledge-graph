@@ -12,6 +12,9 @@ struct Args {
     // Socket file path to use
     #[arg(short, long, default_value = "/tmp/gkg-indexer-http.sock")]
     socket: String,
+    // Server mode - server can run either in indexer or webserver mode
+    #[arg(short, long, default_value = "indexer")]
+    mode: String,
 }
 
 #[tokio::main]
@@ -21,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let listener = UnixListener::bind(&args.socket)?;
 
-    let app = endpoints::get_routes();
+    let app = endpoints::get_routes(args.mode);
 
     info!("HTTP server listening on {}", args.socket);
     axum::serve(listener, app)
