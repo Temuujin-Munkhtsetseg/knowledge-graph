@@ -350,6 +350,8 @@ start-release:
 
 cargo-update:
   stage: build-release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   needs:
     - start-release
   extends: .rust-job-template
@@ -369,6 +371,8 @@ cargo-update:
 .linux-build-template:
   image: rust:1.88.0-bookworm
   stage: build-release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   needs:
     - frontend-build
     - cargo-update
@@ -392,6 +396,8 @@ cargo-update:
   tags:
     - saas-macos-medium-m1
   stage: build-release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   needs:
     - frontend-build
     - cargo-update
@@ -438,6 +444,8 @@ build:windows-x86_64:
   tags:
     - saas-windows-medium-amd64
   stage: build-release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   needs:
     - frontend-build
     - cargo-update
@@ -458,8 +466,12 @@ build:code-sign:
   image: ${CI_REGISTRY}/gitlab-com/gl-infra/common-ci-tasks-images/code-signer:1.1.0
   extends: .google-oidc:auth
   stage: build-release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   needs:
     - build:windows-x86_64
+    - build:darwin-aarch64
+    - build:darwin-x86_64
   script:
     - |
       if [[ "$CI_SERVER_HOST" == "gitlab.com" &&
@@ -467,23 +479,27 @@ build:code-sign:
             "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
         echo "Signing binaries..."
         ./scripts/sign-and-repackage.sh ./gkg-windows-x86_64.tar.gz windows
+        ./scripts/sign-and-repackage.sh ./gkg-darwin-aarch64.tar.gz macos
+        ./scripts/sign-and-repackage.sh ./gkg-darwin-x86_64.tar.gz macos
       else
         echo "Not signing binaries"
       fi
   artifacts:
     paths:
       - ./gkg-windows-x86_64.tar.gz
+      - ./gkg-darwin-aarch64.tar.gz
+      - ./gkg-darwin-x86_64.tar.gz
     expire_in: 7 days
   timeout: 2h
 
 release:
   image: registry.gitlab.com/gitlab-org/editor-extensions/build-images/node-codesign:22.14.0
   stage: release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   needs:
     - build:linux-aarch64-gnu
     - build:linux-x86_64-gnu
-    - build:darwin-aarch64
-    - build:darwin-x86_64
     - build:code-sign
     - cargo-update
   before_script:
