@@ -1,4 +1,5 @@
 use database::graph::RelationshipType;
+use log::debug;
 use parser_core::java::{
     ast::java_fqn_to_string,
     types::{JavaDefinitionInfo, JavaDefinitionType, JavaExpression, JavaImportType},
@@ -66,6 +67,7 @@ impl ExpressionResolver {
         definition_relationships: &mut Vec<DefinitionRelationship>,
         definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
+        debug!("Resolving Java references in file {}.", file_path);
         if let Some(java_iterator) = references.iter_java() {
             for reference in java_iterator {
                 let range = (
@@ -89,6 +91,7 @@ impl ExpressionResolver {
 
                 if let Some(expression) = expression {
                     let mut resolutions = Resolutions::default();
+                    debug!("Resolving Java expression {}.", reference.name);
                     self.resolve_expression(file_path, range, &expression, &mut resolutions);
 
                     for resolved_definition in resolutions.definition_resolutions {
@@ -313,6 +316,11 @@ impl ExpressionResolver {
     }
 
     fn resolve_this_reference(&self, file_path: &str, range: (u64, u64)) -> Option<ResolvedType> {
+        debug!(
+            "Resolving Java this reference in file {} at range ({}, {}).",
+            file_path, range.0, range.1
+        );
+
         let file = self.files.get(file_path)?;
         let class = file.get_class_at_offset(range.0)?;
 
@@ -323,6 +331,11 @@ impl ExpressionResolver {
     }
 
     fn resolve_super_reference(&self, file_path: &str, range: (u64, u64)) -> Option<ResolvedType> {
+        debug!(
+            "Resolving Java super reference in file {} at range ({}, {}).",
+            file_path, range.0, range.1
+        );
+
         let file = self.files.get(file_path)?;
         let class = file.get_class_at_offset(range.0)?;
 
@@ -344,6 +357,11 @@ impl ExpressionResolver {
         target: &DefinitionResolution,
         member: &str,
     ) -> Option<ResolvedType> {
+        debug!(
+            "Resolving Java field access {} in target {}.",
+            member, target.fqn
+        );
+
         let relative_path = self.definition_nodes.get(target.fqn.as_str())?.file_path();
         let file = self.files.get(relative_path)?;
 
@@ -374,6 +392,8 @@ impl ExpressionResolver {
         member: &str,
         file: &JavaFile,
     ) -> Option<ResolvedType> {
+        debug!("Resolving Java field {} in class hierarchy.", member);
+
         // Check in current class first
         let scope = file.scopes.get(&class.fqn)?;
         if let Some(binding) = scope.definition_map.unique_definitions.get(member) {
@@ -424,6 +444,10 @@ impl ExpressionResolver {
         range: (u64, u64),
         name: &str,
     ) -> Option<ResolvedType> {
+        debug!(
+            "Resolving Java identifier expression {} in file {}.",
+            name, file_path
+        );
         let file = self.files.get(file_path).unwrap();
 
         // Look up if the identifier is a class name the imported symbols
@@ -501,6 +525,11 @@ impl ExpressionResolver {
         range: (u64, u64),
         name: &str,
     ) -> Option<ResolvedType> {
+        debug!(
+            "Resolving Java identifier type {} in file {} at range.",
+            name, file_path
+        );
+
         let file = self.files.get(file_path).unwrap();
         let file_scope = file.get_scope_at_offset(range.0);
 
@@ -565,6 +594,11 @@ impl ExpressionResolver {
         type_name: &str,
         resolutions: &mut Resolutions,
     ) -> Option<ResolvedType> {
+        debug!(
+            "Resolving Java constructor call {} in file {}.",
+            type_name, file_path
+        );
+
         match self.resolve_type(file_path, None, type_name) {
             Some(ResolvedType::Definition(java_type)) => {
                 let file = self.files.get(file_path);
@@ -610,6 +644,13 @@ impl ExpressionResolver {
         class_fqn: Option<&str>,
         type_name: &str,
     ) -> Option<ResolvedType> {
+        debug!(
+            "Resolving Java type {} in file {} in class {}.",
+            type_name,
+            file_path,
+            class_fqn.unwrap_or("N/A")
+        );
+
         // if type name first letter is a lowercase, it's a FQN.
         if let Some(first_letter) = type_name.chars().next()
             && first_letter.is_lowercase()
