@@ -310,7 +310,7 @@ impl PythonAnalyzer {
                     // Check imported_symbol_to_files hashmap
                     if imported_symbol_to_files.contains_key(&current_location) {
                         // Ignore and terminate search as this case is only possible for wildcard imports or partial resolutions
-                        todo!();
+                        // todo!()
                     }
                 }
 
