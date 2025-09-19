@@ -59,23 +59,26 @@ You may wish to connect an LLM directly to the database using Kuzu's official [M
 On macOS the Claude Desktop configuration file is stored in ~/Library/Application Support/Claude/claude_desktop_config.json.
 
 To connect, use the kuzudb/mcp-server docker image and add this to the mcpServers object:
+
+```json
 {
-"mcpServers": {
-"kuzu": {
-"command": "docker",
-"args": [
-"run",
-"-v",
-"{Path to the directory containing Kuzu database file}:/database",
-"-e",
-"KUZU_DB_FILE={Kuzu database file name}",
-"--rm",
-"-i",
-"kuzudb/mcp-server"
-]
+  "mcpServers": {
+    "kuzu": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-v",
+        "{Path to the directory containing Kuzu database file}:/database",
+        "-e",
+        "KUZU_DB_FILE={Kuzu database file name}",
+        "--rm",
+        "-i",
+        "kuzudb/mcp-server"
+      ]
+    }
+  }
 }
-}
-}
+```
 
 Change the {Path to the directory containing Kuzu database file} to the actual path
 and then restart Claude Desktop.
