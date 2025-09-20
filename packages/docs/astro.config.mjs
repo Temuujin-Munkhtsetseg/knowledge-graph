@@ -191,10 +191,6 @@ export default defineConfig({
           autogenerate: { directory: "architecture" },
         },
         {
-          label: "Server Side Indexing",
-          autogenerate: { directory: "server-side-indexing" },
-        },
-        {
           label: "Contribute",
           autogenerate: { directory: "contribute" },
         },

@@ -1,5 +1,4 @@
 pub mod analysis;
-pub mod deployed;
 pub mod execution;
 pub mod indexer;
 pub mod mutation;

@@ -29,13 +29,6 @@ include:
   before_script:
     - rustup set auto-self-update disable
 
-.go-job-template:
-  image: ${GITLAB_DEPENDENCY_PROXY}golang:1.24.5
-  variables:
-    GOPATH: $CI_PROJECT_DIR/.go
-  before_script:
-    - mkdir -p .go
-
 mr-title-check:
   image: ${GITLAB_DEPENDENCY_PROXY}node:lts-alpine
   stage: lint
@@ -86,30 +79,6 @@ frontend-build:
     paths:
       - packages/frontend/dist/
     expire_in: 24 hours
-
-build-bindings:
-  image: rust:1.88.0-bookworm
-  stage: build
-  allow_failure: true
-  when: manual
-  tags:
-    - saas-linux-large-amd64
-  script:
-    - apt-get update && apt-get install -y build-essential cmake gcc g++ python3 libclang-dev
-    - rustup target add ${ARCH}-unknown-linux-gnu
-    - ./scripts/build.sh lib
-  variables:
-    PLATFORM: Linux
-    ARCH: x86_64
-    CARGO_PARAMS: "--release"
-  artifacts:
-    paths:
-      - ./gkg-linux-${ARCH}.tar.gz
-      - ./lib
-    expire_in: 7 days
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 docs-build:
   stage: build
@@ -197,21 +166,6 @@ rust-unit-test-report:
     reports:
       junit:
         - target/nextest/ci/junit.xml
-
-go-tests:
-  stage: test
-  allow_failure: true
-  needs:
-    - build-bindings
-  script:
-    - mkdir /tmp/libindexer
-    - tar xzf lib/linux_amd64/libindexer_c_bindings.tar.gz -C /tmp/libindexer
-    - cd bindings/go/
-    - CGO_LDFLAGS="-L/tmp/libindexer/lib" CGO_CFLAGS="-I/tmp/libindexer/include" go test ./...
-  extends: .go-job-template
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # Shared benchmark template for GKG indexing performance tests
 .gkg-benchmark-template:
@@ -387,8 +341,6 @@ cargo-update:
   artifacts:
     paths:
       - ./gkg-linux-${ARCH}.tar.gz
-      - ./lib
-      - ./bindings/go/include
     expire_in: 7 days
 
 .darwin-build-template:
@@ -412,8 +364,6 @@ cargo-update:
   artifacts:
     paths:
       - ./gkg-darwin-${ARCH}.tar.gz
-      - ./lib
-      - ./bindings/go/include
     expire_in: 7 days
 
 build:linux-aarch64-gnu:
@@ -525,6 +475,5 @@ release:
     - npm ci
     # Generate SHA256 checksums for all binaries
     - for file in *.tar.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
-    - for file in lib/*/libindexer_c_bindings.tar.gz; do if [ -f "$file" ]; then sha256sum "$file" > "${file}.sha256"; fi; done
     - npm run semantic-release
   allow_failure: false

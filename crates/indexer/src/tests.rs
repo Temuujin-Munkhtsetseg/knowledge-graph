@@ -2,8 +2,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::analysis::types::{DefinitionType, GraphData};
-use crate::deployed::executor::DeployedIndexingExecutor;
-use crate::execution::config::IndexingConfigBuilder;
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
@@ -21,7 +19,6 @@ use gitalisk_core::repository::testing::local::LocalGitRepository;
 use kuzu::{Database, SystemConfig};
 use parser_core::SupportedLanguage;
 use std::fs;
-use tempfile::TempDir;
 use tracing_test::traced_test;
 
 fn init_local_git_repository(language: SupportedLanguage) -> LocalGitRepository {
@@ -131,45 +128,6 @@ pub async fn modify_test_repo_typescript(
         "import { Authentication } from './lib/authentication';\nimport { UserManagement } from './lib/user_management';\nimport { UserModel } from './app/models/user_model';",
     );
     tokio::fs::write(&main_ts_path, modified_content).await?;
-    Ok(())
-}
-
-/// Helper function to create a temporary non-git repository by copying existing fixture files
-fn create_non_git_test_repository() -> TempDir {
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let repo_path = temp_dir.path();
-
-    // Copy fixture files from the existing fixtures directory
-    let fixtures_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/test-repo");
-
-    copy_dir_all(&fixtures_path, repo_path).expect("Failed to copy fixture files");
-
-    temp_dir
-}
-
-/// Recursively copy a directory and all its contents
-fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    if !dst.exists() {
-        fs::create_dir_all(dst)?;
-    }
-
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if src_path.is_dir() {
-            copy_dir_all(&src_path, &dst_path)?;
-        } else {
-            fs::copy(&src_path, &dst_path)?;
-        }
-    }
-
     Ok(())
 }
 
@@ -1318,40 +1276,7 @@ async fn test_detailed_data_inspection() {
 
 #[traced_test]
 #[tokio::test]
-async fn test_server_side_repository_processing() {
-    let repository_temp_path = create_non_git_test_repository();
-    // convert repository_temp_path to path_buf. No mode code. 1 line
-    let repository_path = repository_temp_path.path().to_path_buf();
-
-    // Create a new temp direcory and specify database file path within it
-    let database_temp_path = tempfile::tempdir().expect("Failed to create temp directory");
-    let database_path = database_temp_path.path().join("database.kz");
-
-    let parquet_temp_path = tempfile::tempdir().expect("Failed to create temp directory");
-    let parquet_path = parquet_temp_path.path().to_path_buf();
-
-    let config = IndexingConfigBuilder::build(0); // Number of CPU Cores will be used instead
-    let server_indexer =
-        DeployedIndexingExecutor::new(repository_path, database_path, parquet_path, config);
-    let result = server_indexer
-        .execute()
-        .await
-        .expect("Failed to process repository");
-
-    assert!(!result.total_files > 0, "Should have processed some files");
-
-    assert!(result.total_files > 0, "Should have processed some files");
-    assert!(
-        result.total_definitions > 0,
-        "Should have processed some definitions"
-    );
-}
-
-#[traced_test]
-#[tokio::test]
 async fn test_parquet_file_structure() {
-    use std::fs;
-
     // Create temporary repository with test files
     let temp_repo = init_local_git_repository(SupportedLanguage::Ruby);
     let repo_path = temp_repo.path.to_str().unwrap();

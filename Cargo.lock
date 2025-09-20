@@ -2569,14 +2569,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indexer-c-bindings"
-version = "0.15.0"
-dependencies = [
- "indexer",
- "tokio",
-]
-
-[[package]]
 name = "indexmap"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
