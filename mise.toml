@@ -4,7 +4,7 @@ python = "3.12"
 rust = "stable"
 uv = "latest"
 
-# compiles cli and static library for release
+# compiles cli for release
 [tasks.build]
 run = "./scripts/build.sh"
 
@@ -12,10 +12,6 @@ run = "./scripts/build.sh"
 # this is used to run the production cli from the command line
 [tasks.build-cli-release]
 run = "cargo build --release -p gkg && cargo install --path crates/gkg"
-
-# compiles static knowledge graph library
-[tasks.build-lib]
-run = "CARGO_PARAMS='--release' ./scripts/build.sh lib"
 
 # runs the http server in debug mode
 # serves at http://localhost:27495
@@ -55,17 +51,6 @@ run = "cargo test"
 [tasks.nextest]
 run = "cargo nextest run"
 
-# runs go bindings tests
-[tasks.gotest]
-run = "cd bindings/go/ && go test ./..."
-
-# removes generated artifacts and libs
-[tasks.clean]
-run = [
-    "cargo clean",
-    "rm -rf lib/*/",
-]
-  
 [tasks.lint]
 run = "cargo clippy --all-targets --all-features -- -D warnings"
 
