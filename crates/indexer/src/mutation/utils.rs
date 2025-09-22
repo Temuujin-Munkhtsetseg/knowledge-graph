@@ -318,18 +318,32 @@ impl<'a> GraphMapper<'a> {
             };
             let relationship_type = relationship_mapping.get_type_id(file_rel.relationship_type);
 
+            let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
+                if let Some(loc) = file_rel.source_location.as_ref() {
+                    (
+                        Some(loc.start_byte as usize),
+                        Some(loc.end_byte as usize),
+                        Some(loc.start_line as usize),
+                        Some(loc.end_line as usize),
+                        Some(loc.start_col as usize),
+                        Some(loc.end_col as usize),
+                    )
+                } else {
+                    (None, None, None, None, None, None)
+                };
+
             relationships
                 .file_to_definition
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
                     relationship_type,
-                    start_byte: None,
-                    end_byte: None,
-                    start_line: None,
-                    end_line: None,
-                    start_column: None,
-                    end_column: None,
+                    start_byte,
+                    end_byte,
+                    start_line,
+                    end_line,
+                    start_column: start_col,
+                    end_column: end_col,
                 });
         }
 
@@ -361,19 +375,32 @@ impl<'a> GraphMapper<'a> {
             };
             let relationship_type = relationship_mapping.get_type_id(file_rel.relationship_type);
 
+            let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
+                if let Some(loc) = file_rel.source_location.as_ref() {
+                    (
+                        Some(loc.start_byte as usize),
+                        Some(loc.end_byte as usize),
+                        Some(loc.start_line as usize),
+                        Some(loc.end_line as usize),
+                        Some(loc.start_col as usize),
+                        Some(loc.end_col as usize),
+                    )
+                } else {
+                    (None, None, None, None, None, None)
+                };
+
             relationships
                 .file_to_imported_symbol
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
                     relationship_type,
-                    // the imported symbol already captures the location
-                    start_byte: None,
-                    end_byte: None,
-                    start_line: None,
-                    end_line: None,
-                    start_column: None,
-                    end_column: None,
+                    start_byte,
+                    end_byte,
+                    start_line,
+                    end_line,
+                    start_column: start_col,
+                    end_column: end_col,
                 });
         }
 

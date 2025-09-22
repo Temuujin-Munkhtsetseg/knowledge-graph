@@ -420,6 +420,8 @@ pub struct FileDefinitionRelationship {
     pub relationship_type: RelationshipType,
     /// Definition location (foreign key to DefinitionNode.location)
     pub definition_location: SourceLocation,
+    /// Optional location where definition is used (e.g., Call edges)
+    pub source_location: Option<SourceLocation>,
 }
 
 /// Represents a relationship between a file and an imported symbol
@@ -431,6 +433,8 @@ pub struct FileImportedSymbolRelationship {
     pub import_location: ImportedSymbolLocation,
     /// Type of relationship (import, or a reference)
     pub relationship_type: RelationshipType,
+    /// Optional location where imported symbol is used (e.g., Call edges)
+    pub source_location: Option<SourceLocation>,
 }
 
 /// Represents a hierarchical relationship between definitions

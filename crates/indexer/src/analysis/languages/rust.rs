@@ -67,6 +67,7 @@ impl RustAnalyzer {
                         definition_fqn: definition_node.fqn.clone(),
                         relationship_type: RelationshipType::FileDefines,
                         definition_location: location.clone(),
+                        source_location: None,
                     });
                 }
             }
@@ -106,6 +107,7 @@ impl RustAnalyzer {
                         file_path: relative_file_path.to_string(),
                         import_location: location.clone(),
                         relationship_type: RelationshipType::FileImports,
+                        source_location: None,
                     });
                 }
             }

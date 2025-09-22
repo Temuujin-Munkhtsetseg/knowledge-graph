@@ -6,13 +6,13 @@ use crate::analysis::types::{
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
-use parser_core::python::types::PythonImportType;
 use parser_core::python::types::PythonReferenceInfo;
+use parser_core::python::types::{Connector, PythonImportType, Symbol};
 use parser_core::python::{
     fqn::python_fqn_to_string,
     types::{
-        PythonDefinitionInfo, PythonDefinitionType, PythonFqn, PythonImportedSymbolInfo,
-        PythonTargetResolution,
+        PartialResolution, PythonDefinitionInfo, PythonDefinitionType, PythonFqn,
+        PythonImportedSymbolInfo, PythonTargetResolution,
     },
 };
 use parser_core::references::ReferenceTarget;
@@ -23,6 +23,7 @@ use std::collections::{HashMap, HashSet};
 enum ResolvedTarget {
     ImportedSymbol(ImportedSymbolNode),
     Definition(DefinitionNode),
+    File(String),
 }
 
 // Handles Python-specific analysis operations
@@ -67,6 +68,7 @@ impl PythonAnalyzer {
                             definition_fqn: fqn_string.clone(),
                             relationship_type: RelationshipType::FileDefines,
                             definition_location: location.clone(),
+                            source_location: None,
                         });
                     }
 
@@ -121,6 +123,7 @@ impl PythonAnalyzer {
                     file_path: relative_file_path.to_string(),
                     import_location: location.clone(),
                     relationship_type: RelationshipType::FileImports,
+                    source_location: None,
                 });
             }
         }
@@ -132,6 +135,7 @@ impl PythonAnalyzer {
         file_references: &Option<References>,
         relative_file_path: &str,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
         definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
@@ -165,6 +169,7 @@ impl PythonAnalyzer {
                             reference,
                             &source_definition,
                             definition_map,
+                            imported_symbol_map,
                             definition_relationships,
                             definition_imported_symbol_relationships,
                             file_definition_relationships,
@@ -183,6 +188,7 @@ impl PythonAnalyzer {
                                 reference,
                                 &source_definition,
                                 definition_map,
+                                imported_symbol_map,
                                 definition_relationships,
                                 definition_imported_symbol_relationships,
                                 file_definition_relationships,
@@ -195,7 +201,6 @@ impl PythonAnalyzer {
                         }
                     }
                     ReferenceTarget::Unresolved() => {
-                        // TODO: Handle references to symbols brought in via wildcard imports
                         continue;
                     }
                 }
@@ -211,6 +216,7 @@ impl PythonAnalyzer {
         reference: &PythonReferenceInfo,
         source_definition: &Option<DefinitionNode>,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
         definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
@@ -246,77 +252,10 @@ impl PythonAnalyzer {
             PythonTargetResolution::ImportedSymbol(target_import_info) => {
                 let mut results = Vec::new();
                 let mut visited = HashSet::new();
-
-                fn resolve_recursive(
-                    current_location: ImportedSymbolLocation,
-                    imported_symbol_to_imported_symbols: &HashMap<
-                        ImportedSymbolLocation,
-                        Vec<ImportedSymbolNode>,
-                    >,
-                    imported_symbol_to_definitions: &HashMap<
-                        ImportedSymbolLocation,
-                        Vec<DefinitionNode>,
-                    >,
-                    imported_symbol_to_files: &HashMap<ImportedSymbolLocation, Vec<String>>,
-                    results: &mut Vec<ResolvedTarget>,
-                    visited: &mut HashSet<ImportedSymbolLocation>,
-                ) {
-                    // Prevent infinite recursion
-                    if visited.contains(&current_location) {
-                        return;
-                    }
-                    visited.insert(current_location.clone());
-
-                    // Check imported_symbol_to_imported_symbols hashmap
-                    if let Some(matched_imported_symbols) =
-                        imported_symbol_to_imported_symbols.get(&current_location)
-                    {
-                        for matched_imported_symbol in matched_imported_symbols {
-                            // Check if this is a terminal imported symbol (no further resolution)
-                            let is_terminal = !imported_symbol_to_imported_symbols
-                                .contains_key(&matched_imported_symbol.location)
-                                && !imported_symbol_to_definitions
-                                    .contains_key(&matched_imported_symbol.location)
-                                && !imported_symbol_to_files
-                                    .contains_key(&matched_imported_symbol.location);
-
-                            if is_terminal {
-                                results.push(ResolvedTarget::ImportedSymbol(
-                                    matched_imported_symbol.clone(),
-                                ));
-                            } else {
-                                // Keep recursing
-                                resolve_recursive(
-                                    matched_imported_symbol.location.clone(),
-                                    imported_symbol_to_imported_symbols,
-                                    imported_symbol_to_definitions,
-                                    imported_symbol_to_files,
-                                    results,
-                                    visited,
-                                );
-                            }
-                        }
-                    }
-
-                    // Check imported_symbol_to_definitions hashmap
-                    if let Some(matched_definitions) =
-                        imported_symbol_to_definitions.get(&current_location)
-                    {
-                        for matched_definition in matched_definitions {
-                            results.push(ResolvedTarget::Definition(matched_definition.clone()));
-                        }
-                    }
-
-                    // Check imported_symbol_to_files hashmap
-                    if imported_symbol_to_files.contains_key(&current_location) {
-                        // Ignore and terminate search as this case is only possible for wildcard imports or partial resolutions
-                        // todo!()
-                    }
-                }
-
                 let imported_symbol_location =
                     self.create_imported_symbol_location(target_import_info, file_path);
-                resolve_recursive(
+
+                Self::recursively_resolve_imported_symbol(
                     imported_symbol_location.clone(),
                     imported_symbol_to_imported_symbols,
                     imported_symbol_to_definitions,
@@ -350,12 +289,369 @@ impl PythonAnalyzer {
                                 file_definition_relationships,
                                 is_ambiguous,
                             ),
+                        _ => {}
                     }
                 }
             }
-            PythonTargetResolution::PartialResolution(_symbol_chain) => {
-                // TODO
+            PythonTargetResolution::PartialResolution(partial_resolution) => {
+                // Only imported symbols can be targets of a partial resolution
+                if let PythonTargetResolution::ImportedSymbol(target_import_info) =
+                    &*partial_resolution.target
+                {
+                    // Get all possible starting targets
+                    let mut targets = Vec::new();
+                    match target_import_info.import_type {
+                        PythonImportType::Import | PythonImportType::AliasedImport => {
+                            let mut results = Vec::new();
+                            let mut visited = HashSet::new();
+                            let imported_symbol_location =
+                                self.create_imported_symbol_location(target_import_info, file_path);
+
+                            Self::recursively_resolve_imported_symbol(
+                                imported_symbol_location.clone(),
+                                imported_symbol_to_imported_symbols,
+                                imported_symbol_to_definitions,
+                                imported_symbol_to_files,
+                                &mut results,
+                                &mut visited,
+                            );
+
+                            targets.extend(results);
+                        }
+                        PythonImportType::FromImport
+                        | PythonImportType::AliasedFromImport
+                        | PythonImportType::RelativeImport
+                        | PythonImportType::AliasedRelativeImport => {
+                            let mut results = Vec::new();
+                            let mut visited = HashSet::new();
+                            let imported_symbol_location =
+                                self.create_imported_symbol_location(target_import_info, file_path);
+
+                            Self::recursively_resolve_imported_symbol(
+                                imported_symbol_location.clone(),
+                                imported_symbol_to_imported_symbols,
+                                imported_symbol_to_definitions,
+                                imported_symbol_to_files,
+                                &mut results,
+                                &mut visited,
+                            );
+
+                            for resolved_target in results {
+                                match &resolved_target {
+                                    ResolvedTarget::Definition(_) => {
+                                        targets.push(resolved_target);
+                                    }
+                                    ResolvedTarget::ImportedSymbol(imported_symbol_node) => {
+                                        // Non-local imported symbol - create a relationship
+                                        self.add_imported_symbol_reference_relationship(
+                                            file_path,
+                                            reference,
+                                            source_definition,
+                                            imported_symbol_node,
+                                            definition_imported_symbol_relationships,
+                                            file_import_relationships,
+                                            is_ambiguous,
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {
+                            // We ignore wildcard and __future__ imports
+                            return;
+                        }
+                    }
+
+                    // Process each possible initial target by creating branches for multiple matches
+                    for target in targets {
+                        self.process_partial_resolution_branch(
+                            target,
+                            partial_resolution,
+                            file_path,
+                            reference,
+                            source_definition,
+                            definition_map,
+                            imported_symbol_map,
+                            definition_relationships,
+                            definition_imported_symbol_relationships,
+                            file_definition_relationships,
+                            file_import_relationships,
+                            imported_symbol_to_imported_symbols,
+                            imported_symbol_to_definitions,
+                            imported_symbol_to_files,
+                            is_ambiguous,
+                        );
+                    }
+                }
             }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_partial_resolution_branch(
+        &self,
+        initial_target: ResolvedTarget,
+        partial_resolution: &PartialResolution,
+        file_path: &str,
+        reference: &PythonReferenceInfo,
+        source_definition: &Option<DefinitionNode>,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        imported_symbol_to_imported_symbols: &HashMap<
+            ImportedSymbolLocation,
+            Vec<ImportedSymbolNode>,
+        >,
+        imported_symbol_to_definitions: &HashMap<ImportedSymbolLocation, Vec<DefinitionNode>>,
+        imported_symbol_to_files: &HashMap<ImportedSymbolLocation, Vec<String>>,
+        is_ambiguous: bool,
+    ) {
+        let mut curr_target = initial_target;
+        let mut right_pointer = partial_resolution.index + 1;
+
+        // Expand the symbol chain
+        let mut is_terminated = false;
+        while right_pointer < partial_resolution.symbol_chain.symbols.len() {
+            let prev_symbol = &partial_resolution.symbol_chain.symbols[right_pointer - 1];
+            let curr_symbol = &partial_resolution.symbol_chain.symbols[right_pointer];
+
+            match curr_symbol {
+                Symbol::Identifier(identifier) => {
+                    // If identifier following identifier, then we break
+                    if let Symbol::Identifier(_) = prev_symbol {
+                        is_terminated = true;
+                        break;
+                    }
+
+                    match &curr_target {
+                        ResolvedTarget::File(curr_target_file) => {
+                            // Check if identifier is attribute of file
+                            if let Symbol::Connector(connector) = prev_symbol
+                                && *connector == Connector::Attribute
+                            {
+                                if let Some(matched_target) = self
+                                    .get_matching_definition_or_imported_symbol(
+                                        definition_map,
+                                        imported_symbol_map,
+                                        identifier,
+                                        curr_target_file,
+                                    )
+                                {
+                                    match matched_target {
+                                        ResolvedTarget::ImportedSymbol(imported_symbol_node) => {
+                                            let mut results = Vec::new();
+                                            let mut visited = HashSet::new();
+
+                                            Self::recursively_resolve_imported_symbol(
+                                                imported_symbol_node.location.clone(),
+                                                imported_symbol_to_imported_symbols,
+                                                imported_symbol_to_definitions,
+                                                imported_symbol_to_files,
+                                                &mut results,
+                                                &mut visited,
+                                            );
+
+                                            // Create branches for each resolved match
+                                            for resolved_match in results {
+                                                self.process_partial_resolution_branch(
+                                                    resolved_match,
+                                                    partial_resolution,
+                                                    file_path,
+                                                    reference,
+                                                    source_definition,
+                                                    definition_map,
+                                                    imported_symbol_map,
+                                                    definition_relationships,
+                                                    definition_imported_symbol_relationships,
+                                                    file_definition_relationships,
+                                                    file_import_relationships,
+                                                    imported_symbol_to_imported_symbols,
+                                                    imported_symbol_to_definitions,
+                                                    imported_symbol_to_files,
+                                                    is_ambiguous,
+                                                );
+                                            }
+                                            return; // Exit this branch since we've created sub-branches
+                                        }
+                                        ResolvedTarget::Definition(_) => {
+                                            curr_target = matched_target;
+                                        }
+                                        _ => {}
+                                    }
+                                } else {
+                                    // No match found, terminate search
+                                    is_terminated = true;
+                                    break;
+                                }
+                            }
+                        }
+                        ResolvedTarget::Definition(definition_node) => {
+                            let fqn = format!("{}.{}", definition_node.fqn, &identifier);
+                            if let Some(matched_target) = self
+                                .get_matching_definition_or_imported_symbol(
+                                    definition_map,
+                                    imported_symbol_map,
+                                    &fqn,
+                                    &definition_node.location.file_path,
+                                )
+                            {
+                                match matched_target {
+                                    ResolvedTarget::ImportedSymbol(imported_symbol_node) => {
+                                        let mut results = Vec::new();
+                                        let mut visited = HashSet::new();
+
+                                        Self::recursively_resolve_imported_symbol(
+                                            imported_symbol_node.location.clone(),
+                                            imported_symbol_to_imported_symbols,
+                                            imported_symbol_to_definitions,
+                                            imported_symbol_to_files,
+                                            &mut results,
+                                            &mut visited,
+                                        );
+
+                                        // Create branches for each resolved match
+                                        for resolved_match in results {
+                                            self.process_partial_resolution_branch(
+                                                resolved_match,
+                                                partial_resolution,
+                                                file_path,
+                                                reference,
+                                                source_definition,
+                                                definition_map,
+                                                imported_symbol_map,
+                                                definition_relationships,
+                                                definition_imported_symbol_relationships,
+                                                file_definition_relationships,
+                                                file_import_relationships,
+                                                imported_symbol_to_imported_symbols,
+                                                imported_symbol_to_definitions,
+                                                imported_symbol_to_files,
+                                                is_ambiguous,
+                                            );
+                                        }
+                                        return; // Exit this branch since we've created sub-branches
+                                    }
+                                    ResolvedTarget::Definition(_) => {
+                                        curr_target = matched_target;
+                                    }
+                                    _ => {}
+                                }
+                            } else {
+                                is_terminated = true;
+                                break;
+                            }
+                        }
+                        ResolvedTarget::ImportedSymbol(_) => {
+                            is_terminated = true;
+                            break;
+                        }
+                    }
+                }
+                // Decides whether to terminate the search
+                Symbol::Connector(connector) => {
+                    match connector {
+                        Connector::Index => {
+                            is_terminated = true;
+                            break;
+                        }
+                        Connector::Call => {
+                            // If call following call, then we break
+                            if let Symbol::Connector(prev_connector) = prev_symbol
+                                && *prev_connector == Connector::Call
+                            {
+                                is_terminated = true;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    match &curr_target {
+                        ResolvedTarget::Definition(definition_node) => {
+                            if let DefinitionType::Python(definition_type) =
+                                definition_node.definition_type
+                            {
+                                // Special handling for function definitions, since we don't track function outputs (for now)
+                                if !(definition_type == PythonDefinitionType::Class
+                                    || definition_type == PythonDefinitionType::DecoratedClass)
+                                {
+                                    // If not a function call, we terminate search
+                                    if *connector != Connector::Call {
+                                        is_terminated = true;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                // Non-Python definition, terminate search (shouldn't happen)
+                                is_terminated = true;
+                                break;
+                            }
+                        }
+                        ResolvedTarget::File(_) => {
+                            if let Symbol::Identifier(_) = prev_symbol
+                                && *connector != Connector::Attribute
+                            {
+                                is_terminated = true;
+                                break;
+                            }
+                        }
+                        ResolvedTarget::ImportedSymbol(_) => {
+                            // Terminate search for attributes of non-local imported symbols
+                            if *connector != Connector::Call {
+                                is_terminated = true;
+                                break;
+                            } else if let Symbol::Connector(prev_connector) = prev_symbol
+                                && *prev_connector == Connector::Call
+                            {
+                                is_terminated = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                Symbol::Receiver() => {
+                    // We ignore receivers until cross-file inheritance is implemented
+                    is_terminated = true;
+                    break;
+                }
+            }
+
+            right_pointer += 1;
+        }
+
+        if is_terminated {
+            return;
+        }
+
+        // Create a relationship
+        match &curr_target {
+            ResolvedTarget::Definition(definition_node) => {
+                self.add_definition_reference_relationship(
+                    file_path,
+                    reference,
+                    source_definition,
+                    definition_node,
+                    definition_relationships,
+                    file_definition_relationships,
+                    is_ambiguous,
+                );
+            }
+            ResolvedTarget::ImportedSymbol(imported_symbol_node) => {
+                self.add_imported_symbol_reference_relationship(
+                    file_path,
+                    reference,
+                    source_definition,
+                    imported_symbol_node,
+                    definition_imported_symbol_relationships,
+                    file_import_relationships,
+                    is_ambiguous,
+                );
+            }
+            _ => {}
         }
     }
 
@@ -416,50 +712,23 @@ impl PythonAnalyzer {
                                 let mut matched_definitions = vec![];
                                 let mut matched_imported_symbols = vec![];
                                 for possible_file in possible_files {
-                                    // Get matching definition and imported symbol (if either exist)
-                                    let matched_definition_node = definition_map
-                                        .get(&(name.clone(), possible_file.clone()))
-                                        .map(|(definition_node, _)| definition_node.clone());
-                                    let matched_imported_symbol_node =
-                                        if let Some(imported_symbol_nodes) = imported_symbol_map
-                                            .get(&("".to_string(), possible_file.clone()))
-                                        {
-                                            imported_symbol_nodes
-                                                .iter()
-                                                .filter(|node| {
-                                                    if let Some(identifier) = &node.identifier {
-                                                        if let Some(alias) = &identifier.alias {
-                                                            alias == &name
-                                                        } else {
-                                                            identifier.name == name
-                                                        }
-                                                    } else {
-                                                        false
-                                                    }
-                                                })
-                                                .max_by_key(|node| node.location.start_byte)
-                                        } else {
-                                            None
-                                        };
-
-                                    // Prefer the most recent symbol: imported symbol if it exists and is more recent, otherwise definition, otherwise imported symbol
-                                    match (matched_definition_node, matched_imported_symbol_node) {
-                                        (Some(def_node), Some(imp_node)) => {
-                                            if imp_node.location.start_byte
-                                                > def_node.location.start_byte
-                                            {
-                                                matched_imported_symbols.push(imp_node.clone());
-                                            } else {
+                                    if let Some(matched_target) = self
+                                        .get_matching_definition_or_imported_symbol(
+                                            definition_map,
+                                            imported_symbol_map,
+                                            &name,
+                                            &possible_file,
+                                        )
+                                    {
+                                        match matched_target {
+                                            ResolvedTarget::Definition(def_node) => {
                                                 matched_definitions.push(def_node);
                                             }
+                                            ResolvedTarget::ImportedSymbol(imp_node) => {
+                                                matched_imported_symbols.push(imp_node);
+                                            }
+                                            _ => {}
                                         }
-                                        (Some(def_node), None) => {
-                                            matched_definitions.push(def_node);
-                                        }
-                                        (None, Some(imp_node)) => {
-                                            matched_imported_symbols.push(imp_node.clone());
-                                        }
-                                        (None, None) => {}
                                     }
                                 }
 
@@ -530,6 +799,117 @@ impl PythonAnalyzer {
         }
     }
 
+    fn recursively_resolve_imported_symbol(
+        current_location: ImportedSymbolLocation,
+        imported_symbol_to_imported_symbols: &HashMap<
+            ImportedSymbolLocation,
+            Vec<ImportedSymbolNode>,
+        >,
+        imported_symbol_to_definitions: &HashMap<ImportedSymbolLocation, Vec<DefinitionNode>>,
+        imported_symbol_to_files: &HashMap<ImportedSymbolLocation, Vec<String>>,
+        results: &mut Vec<ResolvedTarget>,
+        visited: &mut HashSet<ImportedSymbolLocation>,
+    ) {
+        // Prevent infinite recursion
+        if visited.contains(&current_location) {
+            return;
+        }
+        visited.insert(current_location.clone());
+
+        // Check imported_symbol_to_imported_symbols hashmap
+        if let Some(matched_imported_symbols) =
+            imported_symbol_to_imported_symbols.get(&current_location)
+        {
+            for matched_imported_symbol in matched_imported_symbols {
+                // Check if this is a terminal imported symbol (no further resolution)
+                let is_terminal = !imported_symbol_to_imported_symbols
+                    .contains_key(&matched_imported_symbol.location)
+                    && !imported_symbol_to_definitions
+                        .contains_key(&matched_imported_symbol.location)
+                    && !imported_symbol_to_files.contains_key(&matched_imported_symbol.location);
+
+                if is_terminal {
+                    results.push(ResolvedTarget::ImportedSymbol(
+                        matched_imported_symbol.clone(),
+                    ));
+                } else {
+                    // Keep recursing
+                    Self::recursively_resolve_imported_symbol(
+                        matched_imported_symbol.location.clone(),
+                        imported_symbol_to_imported_symbols,
+                        imported_symbol_to_definitions,
+                        imported_symbol_to_files,
+                        results,
+                        visited,
+                    );
+                }
+            }
+        }
+
+        // Check imported_symbol_to_definitions hashmap
+        if let Some(matched_definitions) = imported_symbol_to_definitions.get(&current_location) {
+            for matched_definition in matched_definitions {
+                results.push(ResolvedTarget::Definition(matched_definition.clone()));
+            }
+        }
+
+        // Check imported_symbol_to_files hashmap
+        if let Some(matched_files) = imported_symbol_to_files.get(&current_location) {
+            for matched_file in matched_files {
+                results.push(ResolvedTarget::File(matched_file.clone()));
+            }
+        }
+
+        // TODO: Should we just return the imported symbol if no other matches are found?
+    }
+
+    fn get_matching_definition_or_imported_symbol(
+        &self,
+        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
+        imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
+        name: &String,
+        file_path: &str,
+    ) -> Option<ResolvedTarget> {
+        // Get matching definition and imported symbol (if either exist)
+        let matched_definition_node = definition_map
+            .get(&(name.clone(), file_path.to_owned()))
+            .map(|(definition_node, _)| definition_node.clone());
+        let matched_imported_symbol_node = if let Some(imported_symbol_nodes) =
+            imported_symbol_map.get(&("".to_string(), file_path.to_owned()))
+        {
+            imported_symbol_nodes
+                .iter()
+                .filter(|node| {
+                    if let Some(identifier) = &node.identifier {
+                        if let Some(alias) = &identifier.alias {
+                            *alias == *name
+                        } else {
+                            identifier.name == *name
+                        }
+                    } else {
+                        false
+                    }
+                })
+                .max_by_key(|node| node.location.start_byte)
+        } else {
+            None
+        };
+
+        // Prefer the most recent symbol: imported symbol if it exists and is more recent, otherwise definition, otherwise imported symbol
+        match (matched_definition_node, matched_imported_symbol_node) {
+            (Some(def_node), Some(imp_node)) => {
+                if imp_node.location.start_byte > def_node.location.start_byte {
+                    Some(ResolvedTarget::ImportedSymbol(imp_node.clone()))
+                } else {
+                    Some(ResolvedTarget::Definition(def_node.clone()))
+                }
+            }
+            (Some(def_node), None) => Some(ResolvedTarget::Definition(def_node.clone())),
+            (None, Some(imp_node)) => Some(ResolvedTarget::ImportedSymbol(imp_node.clone())),
+            (None, None) => None,
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn add_definition_reference_relationship(
         &self,
@@ -541,6 +921,16 @@ impl PythonAnalyzer {
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
         is_ambiguous: bool,
     ) {
+        let source_location = Some(SourceLocation {
+            file_path: file_path.to_string(),
+            start_byte: reference.range.byte_offset.0 as i64,
+            end_byte: reference.range.byte_offset.1 as i64,
+            start_line: reference.range.start.line as i32,
+            end_line: reference.range.end.line as i32,
+            start_col: reference.range.start.column as i32,
+            end_col: reference.range.end.column as i32,
+        });
+
         if source_definition.is_none() {
             let relationship = FileDefinitionRelationship {
                 file_path: file_path.to_string(),
@@ -551,8 +941,8 @@ impl PythonAnalyzer {
                     RelationshipType::Calls
                 },
                 definition_location: target_definition_node.location.clone(),
+                source_location,
             };
-            // TODO: Add source location
             file_definition_relationships.push(relationship);
         } else {
             let source_definition = source_definition.as_ref().unwrap();
@@ -568,15 +958,7 @@ impl PythonAnalyzer {
                 } else {
                     RelationshipType::Calls
                 },
-                source_location: Some(SourceLocation {
-                    file_path: file_path.to_string(),
-                    start_byte: reference.range.byte_offset.0 as i64,
-                    end_byte: reference.range.byte_offset.1 as i64,
-                    start_line: reference.range.start.line as i32,
-                    end_line: reference.range.end.line as i32,
-                    start_col: reference.range.start.column as i32,
-                    end_col: reference.range.end.column as i32,
-                }),
+                source_location,
             };
             definition_relationships.push(relationship);
         }
@@ -593,6 +975,16 @@ impl PythonAnalyzer {
         file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
         is_ambiguous: bool,
     ) {
+        let source_location = Some(SourceLocation {
+            file_path: file_path.to_string(),
+            start_byte: reference.range.byte_offset.0 as i64,
+            end_byte: reference.range.byte_offset.1 as i64,
+            start_line: reference.range.start.line as i32,
+            end_line: reference.range.end.line as i32,
+            start_col: reference.range.start.column as i32,
+            end_col: reference.range.end.column as i32,
+        });
+
         if source_definition.is_none() {
             let relationship = FileImportedSymbolRelationship {
                 file_path: file_path.to_string(),
@@ -602,8 +994,8 @@ impl PythonAnalyzer {
                 } else {
                     RelationshipType::Calls
                 },
+                source_location,
             };
-            // TODO: Add source location
             file_import_relationships.push(relationship);
         } else {
             let source_definition = source_definition.as_ref().unwrap();
@@ -617,15 +1009,7 @@ impl PythonAnalyzer {
                     RelationshipType::Calls
                 },
                 definition_location: source_definition.location.clone(),
-                source_location: Some(SourceLocation {
-                    file_path: file_path.to_string(),
-                    start_byte: reference.range.byte_offset.0 as i64,
-                    end_byte: reference.range.byte_offset.1 as i64,
-                    start_line: reference.range.start.line as i32,
-                    end_line: reference.range.end.line as i32,
-                    start_col: reference.range.start.column as i32,
-                    end_col: reference.range.end.column as i32,
-                }),
+                source_location,
             };
             definition_imported_symbol_relationships.push(relationship);
         }
