@@ -54,6 +54,7 @@ impl KotlinAnalyzer {
                             definition_fqn: fqn_string.clone(),
                             relationship_type: RelationshipType::FileDefines,
                             definition_location: location.clone(),
+                            source_location: None,
                         });
                     }
 
@@ -101,6 +102,7 @@ impl KotlinAnalyzer {
                     file_path: relative_file_path.to_string(),
                     import_location: location.clone(),
                     relationship_type: RelationshipType::FileImports,
+                    source_location: None,
                 });
             }
         }

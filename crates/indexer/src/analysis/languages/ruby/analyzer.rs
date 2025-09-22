@@ -102,6 +102,7 @@ impl RubyAnalyzer {
                         definition_fqn: fqn_string.clone(),
                         relationship_type: RelationshipType::FileDefines,
                         definition_location: location.clone(),
+                        source_location: None,
                     });
 
                     // Add definition to expression resolver if available
