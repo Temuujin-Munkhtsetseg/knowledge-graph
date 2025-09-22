@@ -1,3 +1,24 @@
+## [0.16.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.15.0...v0.16.0) (2025-09-22)
+
+### :sparkles: Features
+
+* add webserver mode for deployed server ([4c173a9](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/4c173a92d37d85bde72b0eb4aa9eeda8c8b292c3)) by Jan Provaznik
+* **py:** partial resolution ([1ee302a](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1ee302a071d6890639c15bd319ef63ecff32c33a)) by Jonathan Shobrook
+
+### :bug: Fixes
+
+* **python:** remove todo from import search in analyzer ([6d8ab6f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6d8ab6f2fe3d255153bf1f71160caa6df12735ec)) by Jean-Gabriel Doyon
+* **windows:** use dunce to handle long paths in workspace-manager ([55c9492](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/55c9492c70991a126517615a63504bd0a71cb84f)) by Amr Zaher
+
+### :memo: Documentation
+
+* dix markdown for mcp declaration ([3a3d7f9](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3a3d7f9603003dddbb4dff656404e3a1348b8fee)) by Isaac Dawson
+
+### :repeat: Chore
+
+* **java:** add resolution debug logs for troubleshooting ([8559a5c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/8559a5c7acc6bc4f5660c0063f91e3fe26eb5cce)) by Jean-Gabriel Doyon
+* remove all go bindings code ([1e0f22f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1e0f22fbc505b9fa7bbe84ec7795b2de345fa79a)) by Jan Provaznik
+
 ## [0.15.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.14.0...v0.15.0) (2025-09-18)
 
 ### :sparkles: Features
