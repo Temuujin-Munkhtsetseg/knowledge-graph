@@ -276,7 +276,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Card class="w-full" :class="{ 'fixed inset-4 z-50': isFullscreen }">
+  <Card class="w-full" :class="{ 'fullscreen-card': isFullscreen }">
     <CardHeader>
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div class="flex-1">
@@ -300,6 +300,7 @@ onUnmounted(() => {
         <GraphControls
           :is-loading="isQueryLoading"
           :has-data="hasData || false"
+          :class="{ 'translate-x-[-300px] transition-transform duration-300': isSearchVisible }"
           @zoom-in="zoomIn"
           @zoom-out="zoomOut"
           @reset-view="resetView"
@@ -314,7 +315,7 @@ onUnmounted(() => {
       <div
         ref="graphContainer"
         class="w-full bg-card border border-border rounded-lg overflow-hidden transition-all graph-container"
-        :class="[isFullscreen ? 'h-[calc(100vh-12rem)]' : 'h-96', { 'opacity-20': isQueryLoading }]"
+        :class="[isFullscreen ? 'h-[calc(100vh-16rem)]' : 'h-96', { 'opacity-20': isQueryLoading }]"
       />
       <GraphStateOverlay
         :is-loading="isQueryLoading"
@@ -360,6 +361,15 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.fullscreen-card {
+  position: fixed;
+  inset: 1rem;
+  z-index: 50;
+  width: auto;
+  height: calc(100vh - 2rem);
+  overflow: hidden;
+}
+
 .fixed.inset-0 {
   background: hsl(var(--background)) !important;
   border: 1px solid hsl(var(--border));

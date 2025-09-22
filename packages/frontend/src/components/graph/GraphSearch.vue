@@ -135,7 +135,7 @@ const highlightSearchTerm = (text: string, term: string) => {
 <template>
   <div
     v-if="visible"
-    class="fixed right-4 top-4 bottom-4 w-80 z-40 transition-all duration-300 ease-out"
+    class="fixed right-4 top-4 bottom-4 w-80 z-60 transition-all duration-300 ease-out"
   >
     <Card class="h-full flex flex-col shadow-lg border-2 bg-background/95 backdrop-blur-sm">
       <CardHeader class="flex-shrink-0 pb-3">
