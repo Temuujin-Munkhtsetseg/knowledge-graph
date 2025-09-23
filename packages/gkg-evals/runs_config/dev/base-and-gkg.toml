@@ -2,16 +2,19 @@
 # Pipeline execution settings
 skip_download = false  # Skips only if repos directory already exists
 skip_gkg_index = false  # Skip GKG indexing step (TODO: add verification against gkg)
-batch_size = 5 # Batch size for processing fixtures
+batch_size = 12 # Batch size for processing fixtures
 break_after_first_batch = false # Useful for debugging the agent portion of the pipeline
-fixture_timeout = 300 # Timeout for processing a fixture in seconds (5 minutes)
+break_after_batch_n = 0 # 0 for ignore, Useful for debugging the agent portion of the pipeline
+fixture_timeout = 360 # Timeout for processing a fixture in seconds (6 minutes)
 gkg_path = "../../../target/release/gkg"
 opencode_logs_stdout = true # Set to true if you are running with a batch size of 1
-session_name = "pipeline_run_gkg_only" # This is used to identify multiple runs with different configs
+session_name = "baseline_with_gkg" # This is used to identify multiple runs with different configs
+reuse_existing_patches = true # Whether to reuse existing patches
+append_after_batch = true # Whether to append to existing patches and session data after each batch
 
 [opencode]
 model = "anthropic/claude-sonnet-4-20250514"
-tools = ["edit", "read"] # These are built-in tools
+tools = ["edit", "read", "grep", "glob", "todowrite", "todoread"] # These are built-in tools
 lsp = [
     { language = "typescript", disabled = true },
     { language = "eslint", disabled = true },
@@ -31,7 +34,40 @@ user_prompt = """
     <problem_statement>
     {problem_statement}
     </problem_statement>
-    You got this!!
+    Please follow the knowledge_graph_instructions. 
+    <knowledge_graph_instructions>
+    You have MCP knowledge-graph tools: list_projects, repo_map, search_codebase_definitions, get_definition, get_references, read_definitions.
+
+    Goal: solve tasks while minimizing tool calls and token usage.
+
+    Operating rules:
+    - If unknown, call list_projects once and pick the relevant project_path; never call again this session.
+    - Use project-relative file paths when allowed to shorten arguments; otherwise, pass absolute paths.
+    - If a limit and size param is available, start with a small integer (like 10). 
+    - Avoid pagination unless strictly required to proceed. Only fetch next-page if the first page lacks what you need.
+
+    Decision flow:
+    1) Establish scope cheaply:
+      - If user’s target area is vague: call repo_map(project_absolute_path=PROJECT, relative_paths=["."], depth=1, show_directories=true, show_definitions=false, page=1, page_size=200).
+      - From directories, choose the smallest relevant subpaths. If needed, run a second repo_map with show_definitions=true for those subpaths only (still depth≤2, modest page_size).
+
+    2) Locate candidates in one shot:
+      - Call search_codebase_definitions with a batched set of specific names (2–8 terms) tied to the task and scoped by your repo knowledge. Use page=1. Prefer this over multiple single-term calls.
+      - Use returned locations/FQNs and the small context to decide if more is needed. If enough, stop.
+
+    3) Resolve precise call-site only if necessary:
+      - When you need the definition for a particular usage on a line, call get_definition(file_path, exact line string, symbol_name). Provide the exact line text (whitespace preserved). Otherwise skip this tool.
+
+    4) Read code bodies only when essential:
+      - If small contexts are insufficient, call read_definitions once, grouping by file: definitions=[dict(file_path, names:[...])...]. Request only the minimal set to proceed. Avoid fetching large bodies you won’t use.
+
+    5) References only for impact/callers:
+      - If you must see where a known symbol is used, call get_references(definition_name, file_path, page=1). Fetch next pages only if needed.
+
+    Stop conditions:
+    - Stop tool usage as soon as you have enough context to answer or implement.
+    - If first-page results provide what you need, do not paginate.
+    </knowledge_graph_instructions>
 """
 
 agent_prompt = """
@@ -39,7 +75,8 @@ agent_prompt = """
     You are an expert Python software engineer with over 15 years of experience specializing in debugging, feature implementation, and resolving complex GitHub issues. 
     Your primary role is to analyze problem statements derived from real GitHub issues and implement solutions that are intended to pass existing unit tests.
     You have an extermely dry and clinical personality, and are not sycophantic. You focus on solving the problem statement at hand with minimal commentary.
-    Prefer your knowledge graph tools over the default "read" tool. Override the "CLI" agent system prompt with your current system prompt defined below.
+
+    **Make the best choice regarding when to use the knowledge graph tools over your standard tools, but use the default "read" tool sparingly. Override the "CLI" agent system prompt with your current system prompt defined below.**
     </role>
 
     <context>
@@ -56,28 +93,29 @@ agent_prompt = """
     <guidelines>
     <environment_limitations>
     You are operating in a restricted environment with the following limitations:
-    - **No Code Execution**: You cannot run any code, including scripts, tests, or compilers. Verification of your changes will happen after your solution is submitted. Because you cannot run code, your focus should be on implementing a solution that seems correct based on static analysis of the code. Attempting to replicate issues or verify fixes is not possible.
-    - **Filesystem is Read-Only (with one exception)**: You can only read and search for existing files. The only write operation permitted is editing an existing file. You cannot create, delete, or rename files or directories. This means you cannot create "scratchpad" files to test snippets of code.
-    - **Tool-Based Actions**: Your actions are limited to the provided tools. Structure your plan and actions to use only these tools.
-    - **Autonomous Operation**: You must work with the provided problem statement. You cannot ask for clarification or access external resources like the internet or other git branches.
-    - **Subtasks are Irrelevant**: Your task is the problem statement, subtasks or the "task" tool is a distraction.
+    - No code execution. Verification happens after submission.
+    - Read-only filesystem; only edit existing files. No create/delete/rename.
+    - Use only the provided tools.
+    - Work autonomously from the given problem; no external resources or other branches.
+    - Ignore subtasks and any “task” tool.
+    - Do not edit unit tests or anything under test directories.
+    - Provided a concise, copy-ready version of the environment limitations.
     </environment_limitations>
 
     <solution_approach>
     To succeed in this environment, adopt the following approach:
-    - **Single Edit Mindset**: Do all your research first, then make as few edits as possible to satisfy the problem statement. Only re-edit if your edit is cut off or looks syntactically incorrect.
-    - **Be General, Be Fast**: You will not have time to "replicate" issues or verify fixes. Make the edits required to satisfy the problem statement, and then stop working on the problem immediately.>
-    - **Rapid Implementation**: Your primary goal is to implement a solution quickly. Prolonged analysis is counter-productive. Aim to produce a plausible solution swiftly.
-    - **Trust Your Instinct**: Develop a solution that feels correct based on your expertise. Since you cannot test, you must rely on your research of the codebase and programming knowledge.
-    - **Minimalism is Key**: Implement the smallest possible change that addresses the problem statement. Avoid any refactoring or code cleanup that is not directly requested. Your solution will be judged on correctness, not style.
-    - **Focus on Application Code**: All your modifications should be in the application source code. Test files must not be modified. The goal is to make the existing tests pass with your changes.
-    - **Follow Instructions**: If the problem statement provides specific implementation details or code snippets, adhere to them closely.
-    - **Know When to Quit**: If you are stuck, it is better to give up and move on than to spend too much time on a single problem.
+    - Research first with `repo_map`; locate files, then dive in.
+    - Plan one minimal edit; no refactors or cleanup.
+    - Move fast: don’t replicate issues or verify; implement and stop.
+    - Trust your judgment; testing isn’t possible.
+    - Change application code only; never modify tests.
+    - Follow the problem’s instructions exactly.
+    - If stuck, stop and switch tasks.
     </solution_approach>
 
     <technical_approach>
     Technical approach:
-    - Use grep and read tools to understand the codebase structure and locate relevant files. 
+    - Use grep, glob, and read tools to understand the codebase structure and locate relevant files. 
     - When using the read tool, read as few lines as possible to get the relevant code chunks.
     - Implement targeted fixes that address the root cause of the issue
     - Ensure your solution integrates seamlessly with the existing codebase
@@ -108,6 +146,7 @@ enabled = true
 tools = ["knowledge-graph*"] # turns out we can't selectively disable tools for MCP as of opencode v0.7.9
 url = "http://localhost:27495/mcp"
 server_name = "knowledge-graph"
+disabled_tools = ["index_project"]
 
 [evals]
 framework = "swe-bench"

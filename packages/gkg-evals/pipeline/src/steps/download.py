@@ -101,6 +101,10 @@ def remove_worktrees(fixtures: list[SweBenchFixtureMetadata]):
     Args:
         fixtures: List of FixtureMetadata objects containing worktree paths to remove
     """
+    if len(fixtures) == 0:
+        print("No fixtures to remove worktrees for")
+        return
+    
     for fixture in fixtures:
         if not fixture.worktree_path or not fixture.repo_path:
             print(f"Skipping worktree removal for {fixture.org}/{fixture.repo}")
@@ -154,7 +158,7 @@ def remove_worktrees(fixtures: list[SweBenchFixtureMetadata]):
     
     print("Worktree removal completed")
 
-def download(toml_config: TomlConfig):
+def threaded_download(toml_config: TomlConfig) -> list[SweBenchFixtureMetadata]:
     ### SWEBENCH ###
     ds = get_swebench_lite_dataset(toml_config)
     base_repos_dir = toml_config.pipeline.session_paths.swe_bench_repos_dir
@@ -185,11 +189,34 @@ def download(toml_config: TomlConfig):
     run_threaded(clone_repository, unique_fixtures)
     run_threaded(create_worktree, fixtures)
 
+    return fixtures
+
+def download(toml_config: TomlConfig):
     fixtures_metadata_path = toml_config.pipeline.session_paths.fixtures_metadata_path
-    if not fixtures_metadata_path.exists():
-        for f in fixtures:
-            if not f.worktree_path.exists():
-                raise ValueError(f"Worktree path does not exist: {f.worktree_path}")
+    if fixtures_metadata_path.exists():
+        print(f"Fixtures metadata already exists: {fixtures_metadata_path}")
+        return
+    
+    fixtures = threaded_download(toml_config)
+    print(f"Downloaded {len(fixtures)} fixtures")
+
+    bad_fixtures : list[SweBenchFixtureMetadata] = []
+    for f in fixtures:
+        if not f.worktree_path.exists():
+            print(f"Worktree path does not exist: {f.worktree_path}, adding to bad fixtures")
+            bad_fixtures.append(f)
+    remove_worktrees(bad_fixtures) # called just in case
+
+    # Retry creating worktrees if they don't exist
+    retry_count = 0
+    retry_limit = toml_config.pipeline.retry_limit_bad_worktree_creation
+    while bad_fixtures:
+        print(f"Retrying {len(bad_fixtures)} fixtures")
+        run_threaded(create_worktree, bad_fixtures)
+        bad_fixtures = [f for f in bad_fixtures if not f.worktree_path.exists()]
+        retry_count += 1
+        if retry_count > retry_limit:
+            raise ValueError(f"Failed to create worktree for {len(bad_fixtures)} fixtures after {retry_count} retries")
 
     with open(fixtures_metadata_path, "w") as f:
         json.dump([fx.to_dict() for fx in fixtures], f, indent=4)

@@ -2,12 +2,14 @@
 # Pipeline execution settings
 skip_download = false  # Skips only if repos directory already exists
 skip_gkg_index = false  # Skip GKG indexing step (TODO: add verification against gkg)
-batch_size = 15 # Batch size for processing fixtures
+batch_size = 12 # Batch size for processing fixtures
 break_after_first_batch = false # Useful for debugging the agent portion of the pipeline
-fixture_timeout = 300 # Timeout for processing a fixture in seconds (5 minutes)
+break_after_batch_n = 0 # 0 for ignore, Useful for debugging the agent portion of the pipeline
+fixture_timeout = 360 # Timeout for processing a fixture in seconds (6 minutes)
 gkg_path = "../../../target/release/gkg"
-opencode_logs_stdout = false # Set to true if you are running with a batch size of 1
-session_name = "baseline_pipeline_run" # This is used to identify multiple runs with different configs
+opencode_logs_stdout = true # Set to true if you are running with a batch size of 1
+session_name = "test_split_baseline" # This is used to identify multiple runs with different configs
+reuse_existing_patches = true # Whether to reuse existing patches
 
 [opencode]
 model = "anthropic/claude-sonnet-4-20250514"
@@ -64,21 +66,24 @@ agent_prompt = """
     <guidelines>
     <environment_limitations>
     You are operating in a restricted environment with the following limitations:
-    - **No Code Execution**: You cannot run any code, including scripts, tests, or compilers. Verification of your changes will happen after your solution is submitted. Because you cannot run code, your focus should be on implementing a solution that seems correct based on static analysis of the code. Attempting to replicate issues or verify fixes is not possible.
-    - **Filesystem is Read-Only (with one exception)**: You can only read and search for existing files. The only write operation permitted is editing an existing file. You cannot create, delete, or rename files or directories. This means you cannot create "scratchpad" files to test snippets of code.
-    - **Tool-Based Actions**: Your actions are limited to the provided tools. Structure your plan and actions to use only these tools.
-    - **Autonomous Operation**: You must work with the provided problem statement. You cannot ask for clarification or access external resources like the internet or other git branches.
+    - No code execution. Verification happens after submission.
+    - Read-only filesystem; only edit existing files. No create/delete/rename.
+    - Use only the provided tools.
+    - Work autonomously from the given problem; no external resources or other branches.
+    - Ignore subtasks and any “task” tool.
+    - Do not edit unit tests or anything under test directories.
+    - Provided a concise, copy-ready version of the environment limitations.
     </environment_limitations>
 
     <solution_approach>
     To succeed in this environment, adopt the following approach:
-    - **Be General, Be Fast**: You will not have time to "replicate" issues or verify fixes. Make the edits required to satisfy the problem statement, and then stop working on the problem immediately.>
-    - **Rapid Implementation**: Your primary goal is to implement a solution quickly. Prolonged analysis is counter-productive. Aim to produce a plausible solution swiftly.
-    - **Trust Your Instinct**: Develop a solution that feels correct based on your expertise. Since you cannot test, you must rely on your surface level analysis of the codebase and programming knowledge.
-    - **Minimalism is Key**: Implement the smallest possible change that addresses the problem statement. Avoid any refactoring or code cleanup that is not directly requested. Your solution will be judged on correctness, not style.
-    - **Focus on Application Code**: All your modifications should be in the application source code. Test files must not be modified. The goal is to make the existing tests pass with your changes.
-    - **Follow Instructions**: If the problem statement provides specific implementation details or code snippets, adhere to them closely.
-    - **Know When to Quit**: If you are stuck, it is better to give up and move on than to spend too much time on a single problem.
+    - Research first with `repo_map`; locate files, then dive in.
+    - Plan one minimal edit; no refactors or cleanup.
+    - Move fast: don’t replicate issues or verify; implement and stop.
+    - Trust your judgment; testing isn’t possible.
+    - Change application code only; never modify tests.
+    - Follow the problem’s instructions exactly.
+    - If stuck, stop and switch tasks.
     </solution_approach>
 
     <technical_approach>
@@ -108,7 +113,10 @@ framework = "swe-bench"
 [evals.swe-bench]
 dataset_name = "princeton-nlp/SWE-bench_Lite"
 max_workers = 8 # docker workers
-split = "dev"
+split = "test"
+choose_on_split = "test"
+split_choose_n = 2
+split_choose_seed = 42
 force_rebuild = false
 
 # [evals.multiswebench]

@@ -34,6 +34,8 @@ class TomlSessionPaths:
     swe_bench_fixtures_dir_path: Path = field(default_factory=lambda: None)
     swe_bench_patches_path: Path = field(default_factory=lambda: None)
     swe_bench_report_dir: Path = field(default_factory=lambda: None)
+    swe_bench_report_path: Path = field(default_factory=lambda: None)
+    mcp_configuration_path: Path = field(default_factory=lambda: None)
 
     def pprint(self):
         print("Fixtures metadata path: ", self.fixtures_metadata_path.absolute())
@@ -45,6 +47,8 @@ class TomlSessionPaths:
         print("Swe bench fixtures dir path: ", self.swe_bench_fixtures_dir_path.absolute())
         print("Swe bench patches path: ", self.swe_bench_patches_path.absolute())
         print("Swe bench report dir: ", self.swe_bench_report_dir.absolute())
+        print("Swe bench report path: ", self.swe_bench_report_path.absolute())
+        print("MCP configuration path: ", self.mcp_configuration_path.absolute())
 
 @dataclass
 class TomlPipelineConfig:
@@ -52,17 +56,23 @@ class TomlPipelineConfig:
     skip_gkg_index: bool = False
     batch_size: int = 1
     break_after_first_batch: bool = False
+    break_after_batch_n: int = 0
     fixture_timeout: int = 240
+    reuse_existing_patches: bool = False
+    append_after_batch: bool = False
     gkg_path: str = GKG_PATH_DEBUG
     opencode_logs_stdout: bool = True
     session_name: str = "default"
     session_dir: str = field(default_factory=lambda: None)
     session_paths: TomlSessionPaths = field(default_factory=TomlSessionPaths)
+    retry_limit_bad_worktree_creation: int = 5
+    retry_limit_agent_phase: int = 5
 
 @dataclass
 class TomlOpencodeMcpConfig:
     enabled: bool = False
     tools: list[str] = field(default_factory=list)
+    disabled_tools: list[str] = field(default_factory=list)
     url: str = "http://localhost:27495/mcp"
     server_name: str = "knowledge-graph"
     type: str = "remote"
@@ -110,6 +120,9 @@ class TomlEvalsSweBenchConfig:
     namespace: str = "none"
     force_rebuild: bool = False
     report_dir: str = field(default_factory=lambda: None)
+    choose_on_split: str =  field(default_factory=lambda: None)
+    split_choose_n: int = 2
+    split_choose_seed: int = 42
 
 @dataclass
 class TomlEvalsConfig:

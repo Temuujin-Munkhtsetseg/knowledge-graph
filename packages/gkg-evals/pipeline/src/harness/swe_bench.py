@@ -5,6 +5,7 @@ import uuid
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass, field
+import random
 
 from utils import TomlConfig
 
@@ -73,11 +74,46 @@ class SweBenchPatch:
             model_patch=d.get("model_patch"),
         )
 
-def get_swebench_lite_dataset(toml_config: TomlConfig, split: str = "dev"):
+def get_swebench_lite_dataset(toml_config: TomlConfig):
+    split = toml_config.evals_swe_bench.split
     swe_bench_fixtures_dir_path = toml_config.pipeline.session_paths.swe_bench_fixtures_dir_path
     os.makedirs(swe_bench_fixtures_dir_path, exist_ok=True)
-    ds = datasets.load_dataset("SWE-bench/SWE-bench_Lite", cache_dir=swe_bench_fixtures_dir_path)
-    ds = ds[split]
+    ds = datasets.load_dataset(
+        "SWE-bench/SWE-bench_Lite", 
+        cache_dir=swe_bench_fixtures_dir_path,
+        split=split
+    )
+    if toml_config.evals_swe_bench.choose_on_split == split:
+        if toml_config.evals_swe_bench.split_choose_n == 0:
+            return ds
+        else:
+            if toml_config.evals_swe_bench.split_choose_seed is None:
+                raise ValueError("split_choose_seed is required when split_choose_n is not 0")
+            random.seed(toml_config.evals_swe_bench.split_choose_seed)
+            
+            # Group fixtures by repo
+            repo_fixtures = {}
+            for fixture in ds:
+                repo_key = fixture["repo"]
+                if repo_key not in repo_fixtures:
+                    repo_fixtures[repo_key] = []
+                repo_fixtures[repo_key].append(fixture)
+            
+            # Randomly select n fixtures per repo
+            selected_fixtures = []
+            for repo_key, fixtures in repo_fixtures.items():
+                n_to_select = min(toml_config.evals_swe_bench.split_choose_n, len(fixtures))
+                selected = random.sample(fixtures, n_to_select)
+                selected_fixtures.extend(selected)
+                print(f"Selected {n_to_select}/{len(fixtures)} fixtures from repo: {repo_key}")
+            
+            # Convert back to dataset
+            ds = datasets.Dataset.from_list(selected_fixtures)
+            print("Selected fixtures using split_choose_n:")
+            for fixture in ds:
+                print(fixture['repo'])
+    
+    print(f"Loaded {len(ds)} fixtures from {split} split")
     return ds
 
 
@@ -92,18 +128,41 @@ class SweBenchConfig:
     force_rebuild: bool = False
     report_dir: str = field(default_factory=lambda: None)
 
-    def to_subprocess_args(self, rand_run_id: bool = True):
+    def to_subprocess_args(self, split: str = None, rand_run_id: bool = True):
         run_id = self.run_id if not rand_run_id else str(uuid.uuid4())
         return [
             "--dataset_name", self.dataset_name,
             "--predictions_path", self.predictions_path,
-            "--split", self.split,
+            "--split", split if split else self.split,
             "--namespace", self.namespace,
             "--force_rebuild", str(self.force_rebuild),
             "--max_workers", str(self.max_workers),
             "--run_id", run_id,
             "--report_dir", self.report_dir,
         ]
+
+
+@dataclass
+class SweBenchCorrectPatch:
+    instance_id: str
+    patch: str
+
+    def to_dict(self):
+        return {
+            "instance_id": self.instance_id,
+            "patch": self.patch,
+        }
+
+def get_reference_patches(toml_config: TomlConfig) -> list[SweBenchCorrectPatch]:
+    ds = get_swebench_lite_dataset(toml_config)
+    correct_patches = []
+    for fixture in ds:
+        correct_patches.append(SweBenchCorrectPatch(
+            instance_id=fixture["instance_id"],
+            patch=fixture["patch"],
+        ))
+    return correct_patches
+
 
 def prepare_swebench_images(swebench_config: SweBenchConfig, toml_config: TomlConfig):
     cwd = toml_config.pipeline.session_paths.swe_bench_harness_location_dir.absolute().resolve().__str__()
@@ -136,6 +195,6 @@ def clone_swebench_repository(toml_config: TomlConfig):
 def run_swebench(config: SweBenchConfig, toml_config: TomlConfig):
     # https://github.com/SWE-bench/SWE-bench?tab=readme-ov-file#-usage
     cwd = toml_config.pipeline.session_paths.swe_bench_harness_location_dir.absolute().resolve().__str__()
-    command = [sys.executable, "-m", "swebench.harness.run_evaluation", *config.to_subprocess_args()]
+    command = [sys.executable, "-m", "swebench.harness.run_evaluation", *config.to_subprocess_args(split=toml_config.evals_swe_bench.split)]
     print(f"Running swebench evaluation command: {' '.join(command)}")
     subprocess.run(command, cwd=cwd)

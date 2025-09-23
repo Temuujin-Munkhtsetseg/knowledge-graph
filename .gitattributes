@@ -1,2 +1,2 @@
 lib/*/libindexer_c_bindings.a filter=lfs diff=lfs merge=lfs -text
-packages/gkg-evals/globals/fixtures/* filter=lfs diff=lfs merge=lfs -text
+packages/gkg-evals/run_artifacts/* filter=lfs diff=lfs merge=lfs -text
