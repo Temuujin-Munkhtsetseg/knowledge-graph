@@ -203,10 +203,13 @@ run_local() {
     
     # Handle different phases
     case "$phase" in
-        noop|download|index|agent|report)
+        download|index|agent|report)
             run_pipeline_step "$local_mode" "$config_abs_path" $phase "."
             ;;
         evals)
+            run_pipeline_step "$local_mode" "$config_abs_path" $phase "."
+            ;;
+        archive|noop)
             run_pipeline_step "$local_mode" "$config_abs_path" $phase "."
             ;;
         all)
@@ -272,10 +275,10 @@ fi
 
 # Validate phase
 case "$phase" in
-    noop|download|index|agent|evals|report|all)
+    noop|archive|download|index|agent|evals|report|all)
         ;;
     *)
-        echo "Error: Invalid phase '$phase'. Valid phases: noop, download, index, agent, evals, report, all"
+        echo "Error: Invalid phase '$phase'. Valid phases: noop, archive, download, index, agent, evals, report, all"
         exit 1
         ;;
 esac

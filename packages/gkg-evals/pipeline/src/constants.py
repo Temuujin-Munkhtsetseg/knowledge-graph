@@ -11,6 +11,9 @@ LOCAL = os.getenv("LOCAL") == "1"
 GKG_EVALS_DIR = Path("./../").absolute()
 DATA_DIR = Path("./../data").absolute()
 RUNS_DIR = DATA_DIR / "runs"
+RUNS_CONFIG_DIR = GKG_EVALS_DIR / "runs_config"
+ARCHIVE_DIR = GKG_EVALS_DIR / "run_artifacts"
+ASSETS_DIR = GKG_EVALS_DIR / "assets"
 
 # These paths are relative to a gkg-evals/pipeline/runs/<session_name> subdirectory
 FIXTURES_METADATA_PATH = "fixtures_metadata.json"
@@ -32,10 +35,14 @@ BASE_REPOS_DIR_SWEBENCH = "repos/swebench"
 SWEBENCH_FIXTURES_DIR_PATH = "fixtures/swebench"
 SWEBENCH_PATCHES_PATH = "swebench_patches.jsonl"
 SWEBENCH_REPORT_DIR = "swebench_report"
+SWEBENCH_REPORT_PATH = "swebench_report.json"
 
 # Executables, relative to the gkg-evals subdirectory
 GKG_PATH_RELEASE = Path("./../../../target/release/gkg").absolute()
 GKG_PATH_DEBUG = Path("./../../../target/debug/gkg").absolute()
+
+# GKG
+MCP_CONFIGURATION_PATH = "mcp_configuration.json"
 
 # OpenCode
 OPENCODE_BASE_PATH = Path("~/.local/share/opencode").expanduser().absolute()

@@ -336,6 +336,17 @@ def extract_parts(messages: List[MessageOrPart]) -> List[MessagePart]:
             parts.append(item)
     return parts
 
+
+def extract_tool_calls(messages: List[MessageOrPart]) -> List[ToolPart]:
+    """Extract completed tool call parts from the messages, ordered by time"""
+    tool_calls = []
+    for item in messages:
+        if isinstance(item, ToolPart):
+            if isinstance(item.state, ToolStateCompleted):
+                tool_calls.append(item)
+    tool_calls.sort(key=lambda x: x.state.time.get('start', 0))
+    return tool_calls
+
 class SessionData(BaseModel):
     """Complete session metrics structure"""
     model_config = ConfigDict(populate_by_name=True)

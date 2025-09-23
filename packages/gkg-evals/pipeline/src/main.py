@@ -6,6 +6,8 @@ from src.utils import load_toml_config
 from src.harness.swe_bench import clone_swebench_repository
 
 from src.steps.noop import noop
+from src.steps.archive import archive_runs
+
 from src.steps.download import download
 from src.steps.gkg import index_worktrees, stop_gkg_server
 from src.steps.agent import run_agent
@@ -25,7 +27,9 @@ from src.constants import (
     SWEBENCH_FIXTURES_DIR_PATH,
     SWEBENCH_PATCHES_PATH,
     SWEBENCH_REPORT_DIR,
+    SWEBENCH_REPORT_PATH,
     SWEBENCH_HARNESS_LOCATION_DIR,
+    MCP_CONFIGURATION_PATH,
 )
 
 # MULTISWEBENCH
@@ -69,7 +73,7 @@ class GkgEvalsPipeline:
 
     def create_pipeline_session_dir(self):
         """Create a session directory for the pipeline"""
-        session_dir = RUNS_DIR / f"session_{self.config.pipeline.session_name}"
+        session_dir = RUNS_DIR / self.config.pipeline.session_name
         session_dir.mkdir(parents=True, exist_ok=True)
         return session_dir
 
@@ -83,7 +87,9 @@ class GkgEvalsPipeline:
         self.config.pipeline.session_paths.swe_bench_fixtures_dir_path = self.session_dir / SWEBENCH_FIXTURES_DIR_PATH
         self.config.pipeline.session_paths.swe_bench_patches_path = self.session_dir / SWEBENCH_PATCHES_PATH
         self.config.pipeline.session_paths.swe_bench_report_dir = self.session_dir / SWEBENCH_REPORT_DIR
+        self.config.pipeline.session_paths.swe_bench_report_path = self.session_dir / SWEBENCH_REPORT_PATH
         self.config.pipeline.session_paths.swe_bench_harness_location_dir = self.session_dir / SWEBENCH_HARNESS_LOCATION_DIR
+        self.config.pipeline.session_paths.mcp_configuration_path = self.session_dir / MCP_CONFIGURATION_PATH
         self.config.pipeline.session_paths.pprint()
     
     def check_repos_cache(self) -> bool:
@@ -103,6 +109,12 @@ class GkgEvalsPipeline:
         print("Running noop phase...")
         noop(self.config)
         print("Noop completed successfully!")
+
+    def run_archive_phase(self):
+        """Run the archive phase"""
+        print("Running archive phase...")
+        archive_runs()
+        print("Archive completed successfully!")
     
     def run_download_phase(self):
         """Run the download phase"""
@@ -144,6 +156,8 @@ class GkgEvalsPipeline:
         """Run a specific phase of the pipeline"""
         if phase == "noop":
             self.run_noop_phase()
+        elif phase == "archive":
+            self.run_archive_phase()
         elif phase == "download":
             self.run_download_phase()
         elif phase == "index":

@@ -4,9 +4,9 @@ import time
 import subprocess
 import json
 from typing import List, TextIO
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from src.harness.swe_bench import SweBenchFixtureMetadata, SweBenchPatch
+from src.harness.swe_bench import SweBenchFixtureMetadata, SweBenchPatch, SweBenchCorrectPatch
 from src.steps.download import rollback_worktree
 from src.opencode.models import SessionData, MessageOrPart
 from src.opencode.models import parse_message_or_part
@@ -55,6 +55,11 @@ class OpencodeRunSessionData:
     messages: list[MessageOrPart]
     killed: bool = False
     killed_reason: str = ""
+    reference_patch: SweBenchCorrectPatch = None
+    
+    ## This is used for cross run analysis
+    file_access_order: list[str] = field(default_factory=list)
+    patch_paths: list[str] = field(default_factory=list)
 
     def to_dict(self):
         serialized_messages = []

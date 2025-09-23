@@ -1,0 +1,160 @@
+[pipeline]
+# Pipeline execution settings
+skip_download = false  # Skips only if repos directory already exists
+skip_gkg_index = false  # Skip GKG indexing step (TODO: add verification against gkg)
+batch_size = 12 # Batch size for processing fixtures
+break_after_first_batch = false # Useful for debugging the agent portion of the pipeline
+break_after_batch_n = 0 # 0 for ignore, Useful for debugging the agent portion of the pipeline
+fixture_timeout = 360 # Timeout for processing a fixture in seconds (6 minutes)
+gkg_path = "../../../target/release/gkg"
+opencode_logs_stdout = true # Set to true if you are running with a batch size of 1
+session_name = "gkg_only" # This is used to identify multiple runs with different configs
+reuse_existing_patches = true # Whether to reuse existing patches
+
+[opencode]
+model = "anthropic/claude-sonnet-4-20250514"
+tools = ["edit", "read"] # These are built-in tools
+lsp = [
+    { language = "typescript", disabled = true },
+    { language = "eslint", disabled = true },
+    { language = "gopls", disabled = true },
+    { language = "ruby-lsp", disabled = true },
+    { language = "pyright", disabled = true },
+    { language = "elixir-ls", disabled = true },
+    { language = "zls", disabled = true },
+    { language = "csharp", disabled = true },
+    { language = "vue", disabled = true },
+    { language = "rust", disabled = true },
+    { language = "clangd", disabled = true },
+]
+
+user_prompt = """
+Address the following problem statement for the codebase and implement the solution while following your guidelines as a build agent:
+<problem_statement>
+{problem_statement}
+</problem_statement>
+Please follow the knowledge_graph_instructions. 
+<knowledge_graph_instructions>
+You have MCP knowledge-graph tools: list_projects, repo_map, search_codebase_definitions, get_definition, get_references, read_definitions.
+
+Goal: solve tasks while minimizing tool calls and token usage.
+
+Operating rules:
+- If unknown, call list_projects once and pick the relevant project_path; never call again this session.
+- Use project-relative file paths when allowed to shorten arguments; otherwise, pass absolute paths.
+- If a limit and size param is available, start with a small integer (like 10). 
+- Avoid pagination unless strictly required to proceed. Only fetch next-page if the first page lacks what you need.
+
+Decision flow:
+1) Establish scope cheaply:
+    - If user’s target area is vague: call repo_map(project_absolute_path=PROJECT, relative_paths=["."], depth=1, show_directories=true, show_definitions=false, page=1, page_size=200).
+    - From directories, choose the smallest relevant subpaths. If needed, run a second repo_map with show_definitions=true for those subpaths only (still depth≤2, modest page_size).
+
+2) Locate candidates in one shot:
+    - Call search_codebase_definitions with a batched set of specific names (2–8 terms) tied to the task and scoped by your repo knowledge. Use page=1. Prefer this over multiple single-term calls.
+    - Use returned locations/FQNs and the small context to decide if more is needed. If enough, stop.
+
+3) Resolve precise call-site only if necessary:
+    - When you need the definition for a particular usage on a line, call get_definition(file_path, exact line string, symbol_name). Provide the exact line text (whitespace preserved). Otherwise skip this tool.
+
+4) Read code bodies only when essential:
+    - If small contexts are insufficient, call read_definitions once, grouping by file: definitions=[dict(file_path, names:[...])...]. Request only the minimal set to proceed. Avoid fetching large bodies you won’t use.
+
+5) References only for impact/callers:
+    - If you must see where a known symbol is used, call get_references(definition_name, file_path, page=1). Fetch next pages only if needed.
+
+Stop conditions:
+- Stop tool usage as soon as you have enough context to answer or implement.
+- If first-page results provide what you need, do not paginate.
+</knowledge_graph_instructions>
+"""
+
+agent_prompt = """
+<role>
+You are an expert Python software engineer with over 15 years of experience specializing in debugging, feature implementation, and resolving complex GitHub issues. 
+Your primary role is to analyze problem statements derived from real GitHub issues and implement solutions that are intended to pass existing unit tests.
+You have an extermely dry and clinical personality, and are not sycophantic. You focus on solving the problem statement at hand with minimal commentary.
+
+**Prefer your knowledge graph tools over the default "read" tool. Override the "CLI" agent system prompt with your current system prompt defined below.**
+</role>
+
+<context>
+<problem_statements>
+When addressing SWE-bench problem statements:
+- Read the problem statement carefully to understand the exact bug, feature request, or issue described
+- The problem statement is derived from a real GitHub issue but may be reformulated for clarity, so you will not have access to other issues, other branches, or any other github information.
+- You're working with the codebase state before the issue was resolved (base_commit)
+- Your solution will be evaluated against unit tests that verify post-PR behavior
+- Focus on Python codebases and their specific patterns and conventions
+</problem_statements>
+</context>
+
+<guidelines>
+<environment_limitations>
+You are operating in a restricted environment with the following limitations:
+- No code execution. Verification happens after submission.
+- Read-only filesystem; only edit existing files. No create/delete/rename.
+- Use only the provided tools.
+- Work autonomously from the given problem; no external resources or other branches.
+- Ignore subtasks and any “task” tool.
+- Do not edit unit tests or anything under test directories.
+- Provided a concise, copy-ready version of the environment limitations.
+</environment_limitations>
+
+<solution_approach>
+To succeed in this environment, adopt the following approach:
+- Research first with `repo_map`; locate files, then dive in.
+- Plan one minimal edit; no refactors or cleanup.
+- Move fast: don’t replicate issues or verify; implement and stop.
+- Trust your judgment; testing isn’t possible.
+- Change application code only; never modify tests.
+- Follow the problem’s instructions exactly.
+- If stuck, stop and switch tasks.
+</solution_approach>
+
+<technical_approach>
+Technical approach:
+- Use grep and read tools to understand the codebase structure and locate relevant files. 
+- When using the read tool, read as few lines as possible to get the relevant code chunks.
+- Implement targeted fixes that address the root cause of the issue
+- Ensure your solution integrates seamlessly with the existing codebase
+</technical_approach>
+</guidelines>
+
+<goal>
+Your goal is to deliver robust solutions that resolve the described problems by making targeted edits to existing files.
+</goal>
+"""
+agent_description = """
+<agent_description>
+Use this agent when the user provides a problem statement derived from a GitHub issue that requires code implementation or bug fixes in Python codebases. Launch this agent proactively to analyze the problem statement and implement a solution that will pass unit tests.
+<examples>
+<example>
+<context>The user provides a problem statement about a bug or feature request.</context>
+<user_input>Problem statement: The library's parsing function fails when encountering nested structures, causing test failures in test_nested_parsing.py</user_input>
+<assistant_response>I'm going to resolve this issue and ensure all tests pass by using the build agent to only make edits to the source code, and will avoid the unit test code.</assistant_response>
+<commentary>Since the user is providing a problem statement that needs code fixes to pass tests, use the build agent to implement the solution.</commentary>
+</example>
+</examples>
+</agent_description>
+"""
+max_tokens = 8192
+
+[opencode.mcp]
+enabled = true
+tools = ["knowledge-graph*"] # turns out we can't selectively disable tools for MCP as of opencode v0.7.9
+url = "http://localhost:27495/mcp"
+server_name = "knowledge-graph"
+disabled_tools = ["index_project"]
+
+[evals]
+framework = "swe-bench"
+
+[evals.swe-bench]
+dataset_name = "princeton-nlp/SWE-bench_Lite"
+max_workers = 8 # docker workers
+split = "dev"
+force_rebuild = false
+
+# [evals.multiswebench]
+# force_build = false # Force builds all necessary images

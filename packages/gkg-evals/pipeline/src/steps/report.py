@@ -226,6 +226,27 @@ def get_session_statistics(session_data: OpencodeRunSessionData) -> SessionStati
         }
     )
 
+def find_swe_bench_internal_report(toml_config: TomlConfig) -> dict | None:
+    harness_location_dir = toml_config.pipeline.session_paths.swe_bench_harness_location_dir
+    json_files = []
+
+    time_created = 0
+    
+    # Find only top-level JSON files (not in subdirectories)
+    for file in harness_location_dir.glob("*.json"):
+        if file.is_file():
+            json_files.append(file)
+            time_created = max(time_created, file.stat().st_ctime)
+    
+    if not json_files:
+        return None
+
+    for file in json_files:
+        if file.stat().st_ctime == time_created:
+            with open(file, "r") as f:
+                return json.load(f)
+    return None
+
 def generate_report(toml_config: TomlConfig):
     try:
         with open(toml_config.pipeline.session_paths.session_data_path, "r") as f:
@@ -245,8 +266,16 @@ def generate_report(toml_config: TomlConfig):
         avg_session_statistics.session_id = toml_config.pipeline.session_name
         print(json.dumps(avg_session_statistics.to_dict(), indent=4))
 
-        # with open(SWEBENCH_REPORT_DIR / "report.json", "r") as f:
-        #     json.dump(metrics, f, indent=4)
+        report_path = toml_config.pipeline.session_paths.swe_bench_report_path
+        with open(report_path, "w") as f:
+            report = {
+                "stats": [s.to_dict() for s in session_stats],
+                "avg_stats": avg_session_statistics.to_dict(),
+                "swe_bench_internal_report": find_swe_bench_internal_report(toml_config),
+            }
+            report_as_json = json.dumps(report, indent=4)
+            print(report_as_json)
+            f.write(report_as_json)
     except Exception as e:
         import traceback
         traceback.print_exc()
