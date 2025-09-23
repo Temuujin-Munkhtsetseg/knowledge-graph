@@ -1,3 +1,13 @@
+## [0.17.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.16.0...v0.17.0) (2025-09-23)
+
+### :sparkles: Features
+
+* **evals:** local evaluation framework for gkg pt6 - fixes + cross-run analysis ([257dc6c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/257dc6c1baafc5df62fc9726794151b512040a96)) by Michael Usachenko
+
+### :bug: Fixes
+
+* **ui:** correctly display GraphControls, GraphSearch and GraphLegend ([5481b71](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5481b717eefeb3fecf6b0eab6791750929625eac)) by Dennis Meister
+
 ## [0.16.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.15.0...v0.16.0) (2025-09-22)
 
 ### :sparkles: Features
