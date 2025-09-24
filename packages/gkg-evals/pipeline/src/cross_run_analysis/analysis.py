@@ -101,11 +101,13 @@ class CrossRunMetadata:
     sum_log_proportions: float
     original_proportions: dict
     tools_used_dict: dict
+    pass_counts: dict[str, int]
     session_data: list[OpencodeRunSessionData]
     is_agg: bool = False
 
     def pprint(self):
         print("--------------------------------")
+        print(f"{self.run_name} pass counts: {json.dumps(self.pass_counts, indent=4)}")
         print(f"{self.run_name} pass rate: {self.pass_rate}%")
         print(f"{self.run_name} timeout rate: {self.timeout_rate}%")
         print(f"{self.run_name} avg duration: {self.avg_duration_in_minutes} minutes")
@@ -131,6 +133,7 @@ class CrossRunMetadata:
         all_original_proportion_keys = set()
         all_tools_used_dict_keys = set()
         all_resolved_instances_counts_keys = set()
+        all_pass_counts_keys = set()
         
         for item in cross_run_metadata:
             all_tool_proportion_keys.update(item.tool_proportions.keys())
@@ -138,6 +141,7 @@ class CrossRunMetadata:
             all_original_proportion_keys.update(item.original_proportions.keys())
             all_tools_used_dict_keys.update(item.tools_used_dict.keys())
             all_resolved_instances_counts_keys.update(item.resolved_instances_counts.keys())
+            all_pass_counts_keys.update(item.pass_counts.keys())
 
         # Sum the resolved instances counts
         resolved_instances_counts = {k: sum(item.resolved_instances_counts.get(k, 0) for item in cross_run_metadata) for k in all_resolved_instances_counts_keys}
@@ -156,9 +160,9 @@ class CrossRunMetadata:
             tools_used_dict={k: sum(item.tools_used_dict.get(k, 0) for item in cross_run_metadata) / len(cross_run_metadata) for k in all_tools_used_dict_keys},
             timeout_rate=sum(item.timeout_rate for item in cross_run_metadata) / len(cross_run_metadata),
             pass_rate=sum(item.pass_rate for item in cross_run_metadata) / len(cross_run_metadata),
+            pass_counts={k: sum(item.pass_counts.get(k, 0) for item in cross_run_metadata) for k in all_pass_counts_keys},
             session_data = flatten([sd.session_data for sd in cross_run_metadata]),
             is_agg=True,
-
         )
         
 
@@ -182,7 +186,7 @@ def parse_data(path: Path) -> tuple[dict, list[OpencodeRunSessionData], float]:
                             if path_word in word.lower():
                                 session.file_access_order.append(tool_call.state.input[word])
                                 break
-                case "knowledge-graph_list_projects" | "knowledge-graph_index_project":
+                case "knowledge-graph_list_projects" | "knowledge-graph_index_project" | "knowledge-graph_repo_map":
                     continue
                 case _:
                     # Filter to only include paths that actually contain /worktrees/
@@ -212,7 +216,10 @@ def analyze_cross_run(pinned_run: str = None) -> dict[str, CrossRunMetadata]:
     archive_paths : list[Path] = []
     for archive_path in archive_dirs:
         for archive_dir in archive_path:
-            archive_paths.append(archive_dir)
+            if archive_dir.is_dir():
+                for sub_dir in archive_dir.iterdir():
+                    if sub_dir.is_dir():
+                        archive_paths.append(sub_dir)
 
     for p in archive_paths:
         print(p)
@@ -238,6 +245,7 @@ def analyze_cross_run(pinned_run: str = None) -> dict[str, CrossRunMetadata]:
         resolved_instances = swe_bench_internal_report["resolved_instances"]
         resolved_ids = swe_bench_internal_report["resolved_ids"]
         resolved_instances_counts = {k: 1 for k in resolved_ids}
+        pass_counts = {resolved_instances : 1}
         pass_rate = (resolved_instances / swe_bench_internal_report["total_instances"]) * 100
         pass_rate = round(pass_rate, 1)
         avg_stats = report["avg_stats"]
@@ -249,6 +257,7 @@ def analyze_cross_run(pinned_run: str = None) -> dict[str, CrossRunMetadata]:
         if "invalid" in tools_used_dict:
             tools_used_dict.pop("invalid")
         tools_used = round(sum(tools_used_dict.values()), 1)
+
         # Calculate log-based proportions for better visualization of small values
         tool_proportions_log = {}
         for k, v in tools_used_dict.items():
@@ -276,6 +285,7 @@ def analyze_cross_run(pinned_run: str = None) -> dict[str, CrossRunMetadata]:
             original_proportions=original_proportions,
             timeout_rate=timeout_rate,
             pass_rate=pass_rate,
+            pass_counts=pass_counts,
             session_data=session_data,
         )
         cross_run_metadata[path.name].append(cross_run_metadata_item)

@@ -132,43 +132,51 @@ def plot_cross_run_results(cross_run_metadata: dict[str, CrossRunMetadata]):
     """Plot cross run results showing pass rates for each run"""
     
     # Extract and sort data by pass rate (descending)
-    data_tuples = [(key, metadata.pass_rate, metadata.avg_duration_in_minutes) 
+    data_tuples = [(key, metadata.pass_rate, metadata.avg_duration_in_minutes, metadata.avg_tokens) 
                    for key, metadata in cross_run_metadata.items()]
     data_tuples.sort(key=lambda x: x[1], reverse=False)  # Sort by pass rate descending
     
     run_names_raw = [item[0] for item in data_tuples]
     pass_rates = [item[1] for item in data_tuples]
     durations = [item[2] for item in data_tuples]
+    token_usage = [item[3] for item in data_tuples]  # Token usage in kTokens
     run_names = [NAME_MAP[name] for name in run_names_raw]
 
     # Create figure
     fig = go.Figure()
 
-    # Scale duration to match the visual proportions
-    # Find max duration to normalize the scale
+    # Scale duration and token usage to match the visual proportions
+    # Find max values to normalize the scales
     max_duration = max(durations)
-    # Scale durations to be proportional (normalize to max pass rate for visual balance)
+    max_tokens = max(token_usage)
     max_pass_rate = max(pass_rates)
-    duration_scale_factor = max_pass_rate / max_duration * 0.6  # 0.6 to keep durations reasonable
+    
+    # Scale factors to keep proportions reasonable
+    duration_scale_factor = max_pass_rate / max_duration * 0.4  # Reduced to 0.4 to make room for tokens
+    token_scale_factor = max_pass_rate / max_tokens * 0.3  # 0.3 for token usage
     
     # Bottom bars represent duration (scaled)
-    without_thinking = [duration * duration_scale_factor for duration in durations]
+    duration_bars = [duration * duration_scale_factor for duration in durations]
+    # Middle bars represent token usage (scaled)
+    token_bars = [tokens * token_scale_factor for tokens in token_usage]
     # Top bars represent the remaining pass rate
-    with_thinking = [pass_rate - duration_scaled for pass_rate, duration_scaled in zip(pass_rates, without_thinking)]
+    pass_rate_bars = [pass_rate - duration_scaled - token_scaled 
+                      for pass_rate, duration_scaled, token_scaled 
+                      in zip(pass_rates, duration_bars, token_bars)]
     
-    # Add "Without thinking" bars (bottom layer)
-    for i, (name, rate) in enumerate(zip(run_names, without_thinking)):
+    # Add duration bars (bottom layer)
+    for i, (name, rate) in enumerate(zip(run_names, duration_bars)):
         if name == "GKG":
             # Solid color for GKG
             marker_style = dict(
-                color='#FCA326',  # Pastel orange
+                color='#FCA326',  # GitLab orange
                 line=dict(width=0)
             )
         else:
             # Hollow with border for Baseline Tools and GKG + Baseline Tools
             marker_style = dict(
                 color='#FCA326',
-                line=dict(color='#FCA326', width=2)  # Pastel orange border
+                line=dict(color='#FCA326', width=2)  # GitLab orange border
             )
         
         fig.add_trace(go.Bar(
@@ -177,22 +185,46 @@ def plot_cross_run_results(cross_run_metadata: dict[str, CrossRunMetadata]):
             name='Average Completion Time per Problem' if i == 0 else '',
             marker=marker_style,
             showlegend=True if i == 0 else False,
-            legendgroup='without'
+            legendgroup='duration'
         ))
     
-    # Add "With thinking" bars (top layer)
-    for i, (name, rate) in enumerate(zip(run_names, with_thinking)):
+    # Add token usage bars (middle layer)
+    for i, (name, rate) in enumerate(zip(run_names, token_bars)):
         if name == "GKG":
-            # Solid orange for GKG top layer
+            # Solid light orange for GKG
             marker_style = dict(
-                color='#FC6D26',  # Solid orange
+                color='#FDBC5C',  # GitLab light orange
+                line=dict(width=0)
+            )
+        else:
+            # Hollow with border for Baseline Tools and GKG + Baseline Tools
+            marker_style = dict(
+                color='#FDBC5C',
+                line=dict(color='#FDBC5C', width=2)  # GitLab light orange border
+            )
+        
+        fig.add_trace(go.Bar(
+            x=[name],
+            y=[rate],
+            name='Average Token Usage (kTokens)' if i == 0 else '',
+            marker=marker_style,
+            showlegend=True if i == 0 else False,
+            legendgroup='tokens'
+        ))
+    
+    # Add pass rate bars (top layer)
+    for i, (name, rate) in enumerate(zip(run_names, pass_rate_bars)):
+        if name == "GKG":
+            # Solid dark orange for GKG top layer
+            marker_style = dict(
+                color='#FC6D26',  # GitLab dark orange
                 line=dict(width=0)
             )
         else:
             # Hollow with border for Baseline Tools and GKG + Baseline Tools
             marker_style = dict(
                 color='#FC6D26',
-                line=dict(color='#FC6D26', width=2)  # Solid orange border
+                line=dict(color='#FC6D26', width=2)  # GitLab dark orange border
             )
         
         fig.add_trace(go.Bar(
@@ -201,7 +233,7 @@ def plot_cross_run_results(cross_run_metadata: dict[str, CrossRunMetadata]):
             name='SWE-Bench Score' if i == 0 else '',
             marker=marker_style,
             showlegend=True if i == 0 else False,
-            legendgroup='with'
+            legendgroup='pass_rate'
         ))
     
     # Add total percentage labels on top
@@ -214,12 +246,22 @@ def plot_cross_run_results(cross_run_metadata: dict[str, CrossRunMetadata]):
             font=dict(color='white', size=84, family='GitLab Sans, Arial, sans-serif', weight='bold')
         )
     
-    # Add duration labels on top of pastel bars (bottom layer)
-    for i, (name, pastel_rate, duration) in enumerate(zip(run_names, without_thinking, durations)):
+    # Add duration labels on duration bars (bottom layer)
+    for i, (name, duration_rate, duration) in enumerate(zip(run_names, duration_bars, durations)):
         fig.add_annotation(
             x=name,
-            y=pastel_rate - 2.5,
+            y=duration_rate / 2,  # Center the label in the duration bar
             text=f'{duration:.1f} min',
+            showarrow=False,
+            font=dict(color='#171321', size=63, family='GitLab Sans, Arial, sans-serif', weight=600)
+        )
+    
+    # Add token usage labels on token bars (middle layer)
+    for i, (name, token_rate, tokens) in enumerate(zip(run_names, token_bars, token_usage)):
+        fig.add_annotation(
+            x=name,
+            y=duration_bars[i] + token_rate / 2,  # Center the label in the token bar
+            text=f'{tokens:.1f}k tokens',
             showarrow=False,
             font=dict(color='#171321', size=63, family='GitLab Sans, Arial, sans-serif', weight=600)
         )
@@ -248,7 +290,7 @@ def plot_cross_run_results(cross_run_metadata: dict[str, CrossRunMetadata]):
             # itemsizing='constant'
         ),
         yaxis=dict(
-            title='Accuracy (%)',
+            title='Average Accuracy (%)',
             title_font=dict(size=76, family='GitLab Sans, Arial, sans-serif', color='white', weight=500),
             title_standoff=75,
             showticklabels=False,
@@ -275,12 +317,12 @@ def tool_usage_comparison_chart(cross_run_metadata: dict[str, CrossRunMetadata])
     # Collect all unique tools across runs
     all_tools = set()
     for metadata in cross_run_metadata.values():
-        all_tools.update(metadata.original_proportions.keys())
+        all_tools.update(metadata.tools_used_dict.keys())
     
     # Sort tools by maximum usage across all runs for better ordering
     tool_max_usage = {}
     for tool in all_tools:
-        max_usage = max(metadata.original_proportions.get(tool, 0) 
+        max_usage = max(metadata.tools_used_dict.get(tool, 0) 
                        for metadata in cross_run_metadata.values())
         tool_max_usage[tool] = max_usage
     
@@ -310,11 +352,11 @@ def tool_usage_comparison_chart(cross_run_metadata: dict[str, CrossRunMetadata])
     for i, tool in enumerate(sorted_tools):
         values = []
         for run_name in cross_run_metadata.keys():
-            value = cross_run_metadata[run_name].original_proportions.get(tool, 0)
+            value = cross_run_metadata[run_name].tools_used_dict.get(tool, 0)
             values.append(value)
         
-        # Only show tools that have at least 1% usage in at least one run
-        if max(values) >= 1.0:
+        # Only show tools that have at least 1 usage in at least one run
+        if max(values) >= 0.05:
             clean_tool_name = TOOL_NAME_MAP.get(tool, tool.replace('_', ' ').replace('-', ' ').title())
             
             fig.add_trace(go.Bar(
@@ -326,16 +368,16 @@ def tool_usage_comparison_chart(cross_run_metadata: dict[str, CrossRunMetadata])
                     color=colors[i % len(colors)],
                     line=dict(color='#171321', width=2)
                 ),
-                text=[f'{v:.1f}%' if v >= 3 else '' for v in values],  # Only show text for larger segments
-                textposition='inside',
-                textfont=dict(size=42, family='GitLab Sans, Arial, sans-serif', color='white', weight='bold'),
-                hovertemplate='<b>%{fullData.name}</b><br>%{x:.1f}%<extra></extra>'
+                text=[f'{v:.1f}' if v >= 0.5 else '' for v in values],  # Only show text for segments >= 0.8
+                textposition=['inside' if v >= 2.0 else 'outside' for v in values],
+                textfont=dict(size=32, family='GitLab Sans, Arial, sans-serif', color='white', weight='bold'),
+                hovertemplate='<b>%{fullData.name}</b><br>Avg per fixture: %{x:.2f}<extra></extra>'
             ))
     
     # Update layout
     fig.update_layout(
         title={
-            'text': 'Tool Usage Distribution Across Runs',
+            'text': 'Average Tool Calls Per Fixture, Across Runs',
             'font': {'size': 101, 'family': 'GitLab Sans, Arial, sans-serif', 'color': 'white', 'weight': 600},
             'x': 0.5,
             'y': 0.95
@@ -343,13 +385,12 @@ def tool_usage_comparison_chart(cross_run_metadata: dict[str, CrossRunMetadata])
         barmode='stack',
         barcornerradius=15,
         xaxis=dict(
-            title='Percentage of Tool Usage (%)',
-            title_font=dict(size=76, family='GitLab Sans, Arial, sans-serif', color='white', weight=500),
+            title='# of Tool Calls',
+            title_font=dict(size=66, family='GitLab Sans, Arial, sans-serif', color='white', weight=500),
             title_standoff=75,
             tickfont=dict(size=56, family='GitLab Sans, Arial, sans-serif', color='white'),
             showgrid=True,
-            gridcolor='rgba(255,255,255,0.1)',
-            range=[0, 100]
+            gridcolor='rgba(255,255,255,0.1)'
         ),
         yaxis=dict(
             tickfont=dict(size=67, family='GitLab Sans, Arial, sans-serif', color='white'),
@@ -357,6 +398,7 @@ def tool_usage_comparison_chart(cross_run_metadata: dict[str, CrossRunMetadata])
             categoryorder='array',
             categoryarray=y_labels[::-1]  # Reverse order so baseline is at top
         ),
+        bargap=0.5,  # Increase space between bars (0-1, where 1 = maximum space)
         legend=dict(
             orientation="v",
             yanchor="top",
@@ -385,8 +427,9 @@ def tool_usage_comparison_chart(cross_run_metadata: dict[str, CrossRunMetadata])
         print(f"\n{clean_name}:")
         print(f"  Total tools used: {metadata.total_tools_used}")
         print(f"  Average tools per session: {metadata.avg_tools_used:.1f}")
-        top_tools = sorted(metadata.original_proportions.items(), key=lambda x: x[1], reverse=True)[:3]
-        print(f"  Top 3 tools: {', '.join([f'{TOOL_NAME_MAP.get(tool, tool)}({pct:.1f}%)' for tool, pct in top_tools])}")
+        # Get top tools by raw count for this run
+        top_tools = sorted(metadata.tools_used_dict.items(), key=lambda x: x[1], reverse=True)[:3]
+        print(f"  Top 3 tools: {', '.join([f'{TOOL_NAME_MAP.get(tool, tool)}({count:.1f})' for tool, count in top_tools])}")
 
 def fixture_passes_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
     """Create a stacked bar chart showing fixture passes per run"""
@@ -447,7 +490,7 @@ def fixture_passes_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
     # Update layout
     fig.update_layout(
         title={
-            'text': 'Fixture Passes by Run<br><span style="font-size: 67px; font-weight: 400;">Number of Successful Resolutions per SWE-Bench Instance</span>',
+            'text': 'Fixture Passes by Run<br><span style="font-size: 67px; font-weight: 400;">Number of Successful Resolutions per Fixture</span>',
             'font': {'size': 101, 'family': 'GitLab Sans, Arial, sans-serif', 'color': 'white', 'weight': 600},
             'x': 0.5,
             'y': 0.95
@@ -455,7 +498,7 @@ def fixture_passes_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
         barmode='stack',
         barcornerradius=8,
         xaxis=dict(
-            title='SWE-Bench Fixtures',
+            title='',
             title_font=dict(size=76, family='GitLab Sans, Arial, sans-serif', color='white', weight=500),
             title_standoff=75,
             tickfont=dict(size=42, family='GitLab Sans, Arial, sans-serif', color='white'),
@@ -465,13 +508,12 @@ def fixture_passes_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
             tickvals=sorted_fixtures
         ),
         yaxis=dict(
-            title='Number of Passes',
+            title='# of Passes',
             title_font=dict(size=76, family='GitLab Sans, Arial, sans-serif', color='white', weight=500),
             title_standoff=75,
             tickfont=dict(size=56, family='GitLab Sans, Arial, sans-serif', color='white'),
             showgrid=True,
-            gridcolor='rgba(255,255,255,0.1)',
-            dtick=1  # Show integer ticks only
+            gridcolor='rgba(255,255,255,0.1)'
         ),
         legend=dict(
             orientation="v",
@@ -505,6 +547,159 @@ def fixture_passes_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
         print(f"  Unique fixtures resolved: {unique_fixtures}")
         print(f"  Pass rate: {metadata.pass_rate}%")
 
+def file_access_metrics_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
+    """Create a stacked bar chart showing file access metrics similar to the accuracy chart"""
+    
+    # Extract and sort data by avg files accessed (ascending for consistency)
+    data_tuples = []
+    for key, metadata in cross_run_metadata.items():
+        avg_files_accessed = sum(len(session.file_access_order) for session in metadata.session_data) / len(metadata.session_data)
+        avg_patch_accesses = sum(len([f for f in session.file_access_order if f in session.patch_paths]) for session in metadata.session_data) / len(metadata.session_data)
+        patch_access_rate = sum(1 for session in metadata.session_data if any(f in session.patch_paths for f in session.file_access_order)) / len(metadata.session_data) * 100
+        data_tuples.append((key, avg_files_accessed, avg_patch_accesses, patch_access_rate))
+    
+    data_tuples.sort(key=lambda x: x[1], reverse=False)  # Sort by patch access success rate ascending
+    
+    run_names_raw = [item[0] for item in data_tuples]
+    avg_files = [item[1] for item in data_tuples]
+    avg_patches = [item[2] for item in data_tuples]
+    patch_rates = [item[3] for item in data_tuples]
+    run_names = [NAME_MAP[name] for name in run_names_raw]
+
+    # Create figure
+    fig = go.Figure()
+
+    # Simple two-bar approach: patch files (bottom) and total files (top)
+    patches_bars = avg_patches  
+    files_bars = avg_files
+    
+    # Add patch files bars (bottom layer)
+    for i, (name, patches) in enumerate(zip(run_names, patches_bars)):
+        if name == "GKG Only":
+            # Solid color for GKG Only
+            marker_style = dict(
+                color='#FDBC5C',  # GitLab light orange
+                line=dict(width=0)
+            )
+        else:
+            # Hollow with border for others
+            marker_style = dict(
+                color='#FDBC5C',
+                line=dict(color='#FDBC5C', width=2)  # GitLab light orange border
+            )
+        
+        fig.add_trace(go.Bar(
+            x=[name],
+            y=[patches],
+            name='Avg Patch Files Accessed per Session' if i == 0 else '',
+            marker=marker_style,
+            showlegend=True if i == 0 else False,
+            legendgroup='patches'
+        ))
+    
+    # Add files accessed bars (top layer)
+    for i, (name, files) in enumerate(zip(run_names, files_bars)):
+        if name == "GKG Only":
+            # Solid dark orange for GKG Only top layer
+            marker_style = dict(
+                color='#FC6D26',  # GitLab dark orange
+                line=dict(width=0)
+            )
+        else:
+            # Hollow with border for others
+            marker_style = dict(
+                color='#FC6D26',
+                line=dict(color='#FC6D26', width=2)  # GitLab dark orange border
+            )
+        
+        fig.add_trace(go.Bar(
+            x=[name],
+            y=[files],
+            name='Avg Files Accessed per Session' if i == 0 else '',
+            marker=marker_style,
+            showlegend=True if i == 0 else False,
+            legendgroup='files'
+        ))
+    
+    # Add total file count labels on top
+    for i, (name, total_height) in enumerate(zip(run_names, [pa + fi for pa, fi in zip(patches_bars, files_bars)])):
+        fig.add_annotation(
+            x=name,
+            y=total_height + 4.5,
+            text=f'{avg_files[i]:.1f} files',
+            showarrow=False,
+            font=dict(color='white', size=84, family='GitLab Sans, Arial, sans-serif', weight='bold')
+        )
+    
+    # Add patch files labels on patch bars (bottom layer)
+    for i, (name, patches) in enumerate(zip(run_names, patches_bars)):
+        fig.add_annotation(
+            x=name,
+            y=patches / 2,
+            text=f'{patches:.1f} patches',
+            showarrow=False,
+            font=dict(color='#171321', size=63, family='GitLab Sans, Arial, sans-serif', weight=600)
+        )
+    
+    # # Add files accessed labels on files bars (top layer)
+    # for i, (name, files) in enumerate(zip(run_names, files_bars)):
+    #     fig.add_annotation(
+    #         x=name,
+    #         y=patches_bars[i] + files / 2,
+    #         text=f'{files:.1f} files',
+    #         showarrow=False,
+    #         font=dict(color='#171321', size=63, family='GitLab Sans, Arial, sans-serif', weight=600)
+    #     )
+
+    # Update layout with improved styling
+    fig.update_layout(
+        title={
+            'text': 'Precision, Across Runs<br><span style="font-size: 67px; font-weight: 400;"></span>',
+            'font': {'size': 101, 'family': 'GitLab Sans, Arial, sans-serif', 'color': 'white', 'weight': 600},
+            'x': 0.155,
+            'y': 0.9
+        },
+        barmode='stack',
+        barcornerradius=15,
+        bargap=0.3,  # Add spacing between bars
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=1.2,
+            xanchor="left",
+            x=0,
+            xref="paper",
+            font=dict(size=50, family='GitLab Sans, Arial, sans-serif', color='white'),
+            bgcolor='rgba(255,255,255,0)',
+            borderwidth=0,
+            itemwidth=150,
+        ),
+        yaxis=dict(
+            title='# of Files Accessed',
+            title_font=dict(size=76, family='GitLab Sans, Arial, sans-serif', color='white', weight=500),
+            title_standoff=75,
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+            range=[0, max([pa + fi for pa, fi in zip(patches_bars, files_bars)]) * 1.2],
+        ),
+        xaxis=dict(
+            tickfont=dict(size=67, family='GitLab Sans, Arial, sans-serif', color='white'),
+            showgrid=False,
+        ),
+        font=dict(size=50, family='GitLab Sans, Arial, sans-serif'),
+        plot_bgcolor='#171321',
+        paper_bgcolor='#171321',
+        width=DEFAULT_PLOT_WIDTH,
+        height=DEFAULT_PLOT_HEIGHT,
+        margin=dict(l=504, r=168, t=504, b=504)  # Extra left margin to match reference style
+    )
+
+    for (name, rate, avg_file, avg_patch) in zip(run_names, patch_rates, avg_files, avg_patches):
+        print(f"{name}: patch rate {rate:.1f}% avg files {avg_file:.1f} avg patches {avg_patch:.1f}")
+    export_plot(fig, show=True, export_path=None)
+
+
 def file_access_timeline_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
     """Create line charts showing file access patterns over time with patch file highlights"""
     
@@ -533,7 +728,7 @@ def file_access_timeline_chart(cross_run_metadata: dict[str, CrossRunMetadata]):
             # Extract fixture name from session data
             fixture_name = session.fixture.instance_id if hasattr(session, 'fixture') and hasattr(session.fixture, 'instance_id') else f'Session {session_idx + 1}'
             
-            print(f"DEBUG: Processing {fixture_name} with {len(session.file_access_order)} file accesses")
+            # print(f"DEBUG: Processing {fixture_name} with {len(session.file_access_order)} file accesses")
             
             # Skip sessions with no file accesses
             if len(session.file_access_order) == 0:
