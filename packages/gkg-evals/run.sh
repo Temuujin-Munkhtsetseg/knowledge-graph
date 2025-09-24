@@ -209,7 +209,7 @@ run_local() {
         evals)
             run_pipeline_step "$local_mode" "$config_abs_path" $phase "."
             ;;
-        archive|noop)
+        archive|noop|analysis)
             run_pipeline_step "$local_mode" "$config_abs_path" $phase "."
             ;;
         all)
@@ -236,7 +236,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: $0 <config.toml> [phase] [--local]"
             echo "  config.toml       Path to TOML configuration file"
-            echo "  phase             Optional phase: noop, download, index, agent, evals, report, all (default: all)"
+            echo "  phase             Optional phase: noop, download, index, agent, evals, report, analysis, all (default: all)"
             echo "  --local           Run in local mode"
             echo "  --help, -h        Show this help message"
             exit 0
@@ -275,10 +275,10 @@ fi
 
 # Validate phase
 case "$phase" in
-    noop|archive|download|index|agent|evals|report|all)
+    noop|archive|download|index|agent|evals|report|analysis|all)
         ;;
     *)
-        echo "Error: Invalid phase '$phase'. Valid phases: noop, archive, download, index, agent, evals, report, all"
+        echo "Error: Invalid phase '$phase'. Valid phases: noop, archive, download, index, agent, evals, report, analysis, all"
         exit 1
         ;;
 esac

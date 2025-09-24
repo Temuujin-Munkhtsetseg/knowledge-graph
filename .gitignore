@@ -41,6 +41,7 @@ __pycache__/
 
 # Evals
 packages/gkg-evals/data
+packages/gkg-evals/run_artifacts
 
 # Summarization
 git_diff_full.txt

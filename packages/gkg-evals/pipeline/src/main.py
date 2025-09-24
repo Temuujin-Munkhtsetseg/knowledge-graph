@@ -13,6 +13,7 @@ from src.steps.gkg import index_worktrees, stop_gkg_server
 from src.steps.agent import run_agent
 from src.steps.evals import run_evals_swebench
 from src.steps.report import generate_report
+from src.steps.analysis import cross_run_analysis
 
 from dotenv import load_dotenv
 
@@ -151,6 +152,12 @@ class GkgEvalsPipeline:
         print("Running report phase...")
         generate_report(self.config)
         print("Report completed successfully!")
+
+    def run_cross_run_analysis_phase(self):
+        """Run the cross run analysis phase"""
+        print("Running cross run analysis phase...")
+        cross_run_analysis(self.config)
+        print("Cross run analysis completed successfully!")
     
     def run_phase(self, phase: str):
         """Run a specific phase of the pipeline"""
@@ -158,6 +165,8 @@ class GkgEvalsPipeline:
             self.run_noop_phase()
         elif phase == "archive":
             self.run_archive_phase()
+        elif phase == "analysis":
+            self.run_cross_run_analysis_phase()
         elif phase == "download":
             self.run_download_phase()
         elif phase == "index":
