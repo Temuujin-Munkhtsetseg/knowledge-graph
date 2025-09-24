@@ -29,7 +29,7 @@ fn read_server_info_line(child_stdout: ChildStdout) -> String {
 
 #[test]
 #[serial]
-fn server_start_foreground_and_stop() {
+fn server_start_foreground_unix_socket_and_stop() {
     let temp_home = TempDir::new().expect("temp home");
     let socket_path = temp_home.path().join("socket");
 
@@ -59,4 +59,30 @@ fn server_start_foreground_and_stop() {
 
     // Socket should be removed on ctrl+c or SIGTERM
     assert!(!socket_path.exists());
+}
+
+#[test]
+#[serial]
+fn server_start_foreground_tcp_socket_and_stop() {
+    let bind_addr = "127.0.0.1:8833";
+
+    // Start foreground server
+    let mut cmd =
+        Command::cargo_bin("http-server-deployed").expect("cargo bin http-server-deployed");
+    cmd.arg("-b")
+        .arg(bind_addr)
+        .env("RUST_LOG", "info")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn().expect("spawn server start");
+    let child_stdout = child.stdout.take().expect("capture stdout");
+    let line = read_server_info_line(child_stdout);
+    let message = format!("HTTP server listening on {}", bind_addr);
+
+    assert!(line.ends_with(&message));
+
+    signal::kill(Pid::from_raw(child.id() as i32), Signal::SIGTERM)
+        .expect("failed to interrupt server");
+    child.wait().expect("failed to wait on server shutdown");
 }
