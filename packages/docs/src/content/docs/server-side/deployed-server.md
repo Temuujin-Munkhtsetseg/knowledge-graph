@@ -15,14 +15,14 @@ The `http-server-deployed` provides a HTTP server built with Axum that can opera
 
 ```bash
 # Start server in indexing mode on Unix socket
-cargo run --bin http-server-deployed -m indexer -s /tmp/gkg-indexer-http.sock
+cargo run --bin http-server-deployed -- -m indexer -s /tmp/gkg-indexer-http.sock
 
 # Start server in indexing mode on TCP socket
-cargo run --bin http-server-deployed -m indexer -b 0.0.0.0:3333
+cargo run --bin http-server-deployed -- -m indexer -b 0.0.0.0:3333
 
 # Start server in webserver mode on Unix socket
-cargo run --bin http-server-deployed -m webserver -s /tmp/gkg-webserver-http.sock
+cargo run --bin http-server-deployed -- -m webserver -s /tmp/gkg-webserver-http.sock
 
 # Start server in webserver mode on TCP socket
-cargo run --bin http-server-deployed -m webserver -b 0.0.0.0:3334
+cargo run --bin http-server-deployed -- -m webserver -b 0.0.0.0:3334
 ```
