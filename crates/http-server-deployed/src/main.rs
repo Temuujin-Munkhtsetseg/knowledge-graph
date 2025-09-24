@@ -1,8 +1,9 @@
 mod endpoints;
 
+use axum::Router;
 use clap::Parser;
 use std::error::Error;
-use tokio::net::UnixListener;
+use tokio::net::{TcpListener, UnixListener};
 use tokio::signal;
 use tracing::info;
 
@@ -12,6 +13,9 @@ struct Args {
     // Socket file path to use
     #[arg(short, long, default_value = "/tmp/gkg-indexer-http.sock")]
     socket: String,
+    // Bind address to use
+    #[arg(short, long, default_value = "", conflicts_with = "socket")]
+    bind: String,
     // Server mode - server can run either in indexer or webserver mode
     #[arg(short, long, default_value = "indexer")]
     mode: String,
@@ -22,18 +26,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
     init_tracing();
 
     let args = Args::parse();
-    let listener = UnixListener::bind(&args.socket)?;
-
     let app = endpoints::get_routes(args.mode);
 
-    info!("HTTP server listening on {}", args.socket);
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(args.socket))
-        .await
-        .unwrap();
+    if args.bind.is_empty() {
+        serve_unix_socket(args.socket, app).await;
+    } else {
+        serve_tcp_socket(args.bind, app).await;
+    }
 
     info!("HTTP server shut down gracefully");
     Ok(())
+}
+
+async fn serve_unix_socket(socket: String, app: Router) {
+    let listener = UnixListener::bind(socket.clone()).unwrap();
+    info!("HTTP server listening on {}", socket);
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(socket))
+        .await
+        .unwrap();
+}
+
+async fn serve_tcp_socket(bind: String, app: Router) {
+    let listener = TcpListener::bind(bind.clone()).await.unwrap();
+    info!("HTTP server listening on {}", bind);
+    axum::serve(listener, app).await.unwrap();
 }
 
 fn init_tracing() {
