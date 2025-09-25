@@ -51,6 +51,39 @@ run = "cargo test"
 [tasks.nextest]
 run = "cargo nextest run"
 
+# Validation tasks (for CI)
+[tasks.rust-fmt]
+run = "cargo fmt --check"
+
+[tasks.rust-clippy]
+run = "cargo clippy --all-targets --all-features --features no-frontend -- -D warnings"
+
+[tasks.newlines-check]
+run = "gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs --directory ."
+
+[tasks.docs-lint]
+run = "npm run lint --workspace=docs"
+
+[tasks.rust-test]
+run = "cargo test export_bindings_ && cargo nextest run --profile ci 2>/dev/null || cargo test"
+
+# Auto-fix tasks (for hooks and local development)
+[tasks."rust-fmt:fix"]
+run = "cargo fmt"
+
+[tasks."rust-clippy:fix"]
+run = "cargo clippy --all-targets --all-features --features no-frontend --fix --allow-dirty"
+
+[tasks."newlines-check:fix"]
+run = "gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs --directory . --fix"
+
+[tasks."docs-lint:fix"]
+run = "npm run lint --workspace=docs -- --write"
+
+[tasks."frontend-lint:fix"]
+run = "npm run lint --workspace=@gitlab-org/gkg-frontend"
+
+# Legacy tasks (keeping for backward compatibility)
 [tasks.lint]
 run = "cargo clippy --all-targets --all-features -- -D warnings"
 

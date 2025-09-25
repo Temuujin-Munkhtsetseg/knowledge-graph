@@ -1,0 +1,62 @@
+pre-commit:
+  parallel: true
+  commands:
+    rust-fmt: &rust-fmt
+      tags: format
+      files: git diff --name-only --diff-filter=d --staged
+      glob: "*.rs"
+      run: mise run rust-fmt:fix
+    rust-clippy: &rust-clippy
+      tags: lint
+      files: git diff --name-only --diff-filter=d --staged
+      glob: "*.rs"
+      run: mise run rust-clippy:fix
+    verify-newlines: &verify-newlines
+      tags: lint
+      files: git diff --name-only --diff-filter=d --staged
+      glob: "*.{rs,md,yml,yaml,toml,astro,js,ts,json,mdx,vue,rb,css,mjs}"
+      run: mise run newlines-check:fix
+    frontend-lint:
+      tags: lint
+      files: git diff --name-only --diff-filter=d --staged
+      glob: "packages/frontend/**/*.{js,ts,vue,json}"
+      run: mise run frontend-lint:fix
+    docs-lint: &docs-lint
+      tags: lint
+      files: git diff --name-only --diff-filter=d --staged
+      glob: "packages/docs/src/**/*.{md,mdx,astro,js,ts,json}"
+      run: mise run docs-lint:fix
+    gitlab-ci: &gitlab-ci
+      tags: lint
+      files: git diff --name-only --diff-filter=d --staged
+      glob: ".gitlab-ci.yml"
+      run: ./scripts/check-gitlab-ci.sh
+
+pre-push:
+  parallel: true
+  commands:
+    rust-fmt:
+      <<: *rust-fmt
+      files: git diff --name-only --diff-filter=d $(git merge-base origin/main HEAD)..HEAD
+    rust-clippy:
+      <<: *rust-clippy
+      files: git diff --name-only --diff-filter=d $(git merge-base origin/main HEAD)..HEAD
+    verify-newlines:
+      <<: *verify-newlines
+      files: git diff --name-only --diff-filter=d $(git merge-base origin/main HEAD)..HEAD
+    rust-test:
+      tags: test
+      files: git diff --name-only --diff-filter=d $(git merge-base origin/main HEAD)..HEAD
+      glob: "*.rs"
+      run: mise run rust-test
+    frontend-build:
+      tags: build
+      files: git diff --name-only --diff-filter=d $(git merge-base origin/main HEAD)..HEAD
+      glob: "packages/**/*.{js,ts,astro,vue,json}"
+      run: mise run frontend-build
+    docs-lint:
+      <<: *docs-lint
+      files: git diff --name-only --diff-filter=d $(git merge-base origin/main HEAD)..HEAD
+    gitlab-ci:
+      <<: *gitlab-ci
+      files: git diff --name-only --diff-filter=d $(git merge-base origin/main HEAD)..HEAD
