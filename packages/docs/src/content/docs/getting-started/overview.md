@@ -25,7 +25,7 @@ All of this information is stored in a high-performance graph database called [`
 
 ## Project Status
 
-> **Note**: This project is under active development and is beta status.
+> **Note**: This project is in public beta status and ready for evaluation and feedback.
 
 You can follow our progress and contribute to the discussion in the [Knowledge Graph First Iteration epic](https://gitlab.com/groups/gitlab-org/-/epics/17514).
 
