@@ -3,7 +3,8 @@ use axum::{http::StatusCode, routing::post, Router};
 pub fn get_routes() -> Router {
     let routes = Router::new().route("/tool", post(handle_tool));
 
-    Router::new().nest("/v1", routes)
+    // Nest under /webserver for plug-and-play experience with the helm chart https://gitlab.com/gitlab-org/cloud-native/charts/gitlab-zoekt
+    Router::new().nest("/webserver/v1", routes)
 }
 
 async fn handle_tool() -> (StatusCode, String) {
@@ -20,7 +21,7 @@ mod tests {
         let app = get_routes();
         let server = TestServer::new(app).unwrap();
 
-        let response = server.post("/v1/tool").await;
+        let response = server.post("/webserver/v1/tool").await;
 
         response.assert_status(StatusCode::NOT_IMPLEMENTED);
     }
