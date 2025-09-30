@@ -13,16 +13,44 @@ The `http-server-deployed` provides a HTTP server built with Axum that can opera
 
 ## Usage
 
+All server modes require JWT authentication via a secret file:
+
 ```bash
 # Start server in indexing mode on Unix socket
-cargo run --bin http-server-deployed -- -m indexer -s /tmp/gkg-indexer-http.sock
+cargo run --bin http-server-deployed -- -m indexer --socket /tmp/gkg-indexer-http.sock --secret-path /path/to/jwt-secret
 
 # Start server in indexing mode on TCP socket
-cargo run --bin http-server-deployed -- -m indexer -b 0.0.0.0:3333
+cargo run --bin http-server-deployed -- -m indexer --bind 0.0.0.0:3333 --secret-path /path/to/jwt-secret
 
 # Start server in webserver mode on Unix socket
-cargo run --bin http-server-deployed -- -m webserver -s /tmp/gkg-webserver-http.sock
+cargo run --bin http-server-deployed -- -m webserver --socket /tmp/gkg-webserver-http.sock --secret-path /path/to/jwt-secret
 
 # Start server in webserver mode on TCP socket
-cargo run --bin http-server-deployed -- -m webserver -b 0.0.0.0:3334
+cargo run --bin http-server-deployed -- -m webserver --bind 0.0.0.0:3334 --secret-path /path/to/jwt-secret
 ```
+
+## Command Line Options
+
+- `--mode, -m`: Server mode - either `indexer` or `webserver` (default: `indexer`)
+- `--socket, -s`: Unix socket file path (default: `/tmp/gkg-indexer-http.sock`)
+- `--bind, -b`: TCP bind address (conflicts with `--socket`)
+- `--secret-path`: Path to JWT secret file (required)
+
+## JWT Authentication
+
+The server uses JWT authentication for all endpoints except `/health` and `/metrics`. Requests must include a valid JWT token in the `Authorization` header:
+
+```bash
+# Example API request with JWT authentication
+curl -H "Authorization: Bearer <jwt-token>" http://localhost:3334/webserver/v1/tool
+```
+
+### Public Endpoints (No Authentication Required)
+
+- `/health` - Health check endpoint
+- `/metrics` - Prometheus metrics endpoint
+
+### Protected Endpoints
+
+- `/webserver/v1/*` - Webserver API endpoints (when in webserver mode)
+- `/indexer/v1/*` - Indexer API endpoints (when in indexer mode)

@@ -1,11 +1,11 @@
-mod endpoints;
+use http_server_deployed::{authentication, endpoints};
 
-use axum::Router;
+use axum::{middleware, Router};
 use clap::Parser;
 use std::error::Error;
 use tokio::net::{TcpListener, UnixListener};
 use tokio::signal;
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -19,6 +19,9 @@ struct Args {
     // Server mode - server can run either in indexer or webserver mode
     #[arg(short, long, default_value = "indexer")]
     mode: String,
+    // Path to JWT secret file for authentication (required)
+    #[arg(long)]
+    secret_path: String,
 }
 
 #[tokio::main]
@@ -26,7 +29,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     init_tracing();
 
     let args = Args::parse();
-    let app = endpoints::get_routes(args.mode);
+
+    // Initialize JWT authentication
+    let auth = match authentication::Auth::new(&args.secret_path) {
+        Ok(auth) => auth,
+        Err(e) => {
+            error!("Failed to initialize authentication: {}", e);
+            return Err(e);
+        }
+    };
+
+    // Create routes and apply JWT middleware to all endpoints
+    let app = endpoints::get_routes(args.mode.clone()).layer(middleware::from_fn_with_state(
+        auth,
+        authentication::jwt_middleware_for_all,
+    ));
 
     if args.bind.is_empty() {
         serve_unix_socket(args.socket, app).await;
