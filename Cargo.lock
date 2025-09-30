@@ -1298,6 +1298,19 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
+version = "5.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
+dependencies = [
+ "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
+name = "dashmap"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
@@ -2235,7 +2248,7 @@ dependencies = [
  "axum-embed",
  "axum-test",
  "chrono",
- "dashmap",
+ "dashmap 6.1.0",
  "database",
  "event-bus",
  "futures-util",
@@ -2618,6 +2631,19 @@ name = "integer-encoding"
 version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
+
+[[package]]
+name = "internment"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04e8e537b529b8674e97e9fb82c10ff168a290ac3867a0295f112061ffbca1ef"
+dependencies = [
+ "ahash",
+ "dashmap 5.5.3",
+ "hashbrown 0.14.5",
+ "once_cell",
+ "parking_lot",
+]
 
 [[package]]
 name = "io-uring"
@@ -3518,12 +3544,13 @@ dependencies = [
 
 [[package]]
 name = "parser-core"
-version = "0.19.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.19.0#e082c42dce07020a384ec3ead0ab4689c5d2efde"
+version = "0.19.1"
+source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.19.1#2121c5e808a0a78de27c9e41d278c8e5ada86972"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
  "ast-grep-language",
+ "internment",
  "mimalloc",
  "once_cell",
  "paste",

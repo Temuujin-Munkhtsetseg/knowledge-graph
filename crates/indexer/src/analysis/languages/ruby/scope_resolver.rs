@@ -623,26 +623,24 @@ mod tests {
         // Create a mock RubyFqn
         let ruby_fqn = RubyFqn {
             parts: std::sync::Arc::new(smallvec::SmallVec::from_vec(vec![
-                parser_core::ruby::types::RubyFqnPart {
-                    node_name: "User".to_string(),
-                    node_type: parser_core::ruby::types::RubyFqnPartType::Class,
-                    metadata: Default::default(),
-                    range: parser_core::utils::Range::new(
+                parser_core::ruby::types::RubyFqnPart::new(
+                    parser_core::ruby::types::RubyFqnPartType::Class,
+                    "User".to_string(),
+                    parser_core::utils::Range::new(
                         parser_core::utils::Position { line: 1, column: 0 },
                         parser_core::utils::Position { line: 1, column: 4 },
                         (0, 4),
                     ),
-                },
-                parser_core::ruby::types::RubyFqnPart {
-                    node_name: "save".to_string(),
-                    node_type: parser_core::ruby::types::RubyFqnPartType::Method,
-                    metadata: Default::default(),
-                    range: parser_core::utils::Range::new(
+                ),
+                parser_core::ruby::types::RubyFqnPart::new(
+                    parser_core::ruby::types::RubyFqnPartType::Method,
+                    "save".to_string(),
+                    parser_core::utils::Range::new(
                         parser_core::utils::Position { line: 2, column: 0 },
                         parser_core::utils::Position { line: 2, column: 4 },
                         (20, 24),
                     ),
-                },
+                ),
             ])),
         };
 
