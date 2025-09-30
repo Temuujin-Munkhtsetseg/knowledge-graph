@@ -4,31 +4,40 @@ use parser_core::kotlin::{
     ast::kotlin_fqn_to_string,
     types::{
         KotlinDefinitionInfo, KotlinDefinitionType, KotlinFqn, KotlinFqnPartType,
-        KotlinImportedSymbolInfo, KotlinReferenceTarget, KotlinReferenceType,
-        KotlinTargetResolution,
+        KotlinImportedSymbolInfo,
     },
 };
 
 use crate::{
-    analysis::types::{
-        DefinitionNode, DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-        FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType,
-        ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
+    analysis::{
+        languages::kotlin::{
+            expression_resolver::KotlinExpressionResolver, utils::full_import_path,
+        },
+        types::{
+            DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship,
+            DefinitionType, FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType,
+            ImportIdentifier, ImportType, ImportedSymbolLocation, ImportedSymbolNode,
+            SourceLocation,
+        },
     },
     parsing::processor::{FileProcessingResult, References},
 };
 use database::graph::RelationshipType;
 
 #[derive(Default)]
-pub struct KotlinAnalyzer;
+pub struct KotlinAnalyzer {
+    expression_resolver: KotlinExpressionResolver,
+}
 
 impl KotlinAnalyzer {
     pub fn new() -> Self {
-        Self
+        Self {
+            expression_resolver: KotlinExpressionResolver::default(),
+        }
     }
 
     pub fn process_definitions(
-        &self,
+        &mut self,
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
@@ -36,6 +45,12 @@ impl KotlinAnalyzer {
     ) {
         if let Some(defs) = file_result.definitions.iter_kotlin() {
             for definition in defs {
+                if matches!(definition.definition_type, KotlinDefinitionType::Package) {
+                    self.expression_resolver
+                        .add_file(definition.name.clone(), relative_file_path.to_string());
+                    continue;
+                }
+
                 if let Ok(Some((location, fqn))) =
                     self.create_definition_location(definition, relative_file_path)
                 {
@@ -46,6 +61,18 @@ impl KotlinAnalyzer {
                         DefinitionType::Kotlin(definition.definition_type),
                         location.clone(),
                     );
+
+                    self.expression_resolver.add_definition(
+                        relative_file_path.to_string(),
+                        definition.clone(),
+                        definition_node.clone(),
+                    );
+
+                    if definition.definition_type == KotlinDefinitionType::Parameter
+                        || definition.definition_type == KotlinDefinitionType::LocalVariable
+                    {
+                        continue;
+                    }
 
                     // Only add file definition relationship for top-level definitions
                     if self.is_top_level_definition(&fqn) {
@@ -69,7 +96,7 @@ impl KotlinAnalyzer {
 
     /// Process imported symbols from a file result and update the import map
     pub fn process_imports(
-        &self,
+        &mut self,
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
@@ -90,12 +117,10 @@ impl KotlinAnalyzer {
                     location.clone(),
                 );
 
+                let (_, full_import_path) = full_import_path(&imported_symbol_node);
                 imported_symbol_map.insert(
-                    (
-                        imported_symbol.import_path.clone(),
-                        relative_file_path.to_string(),
-                    ),
-                    vec![imported_symbol_node],
+                    (full_import_path, relative_file_path.to_string()),
+                    vec![imported_symbol_node.clone()],
                 );
 
                 file_import_relationships.push(FileImportedSymbolRelationship {
@@ -104,123 +129,26 @@ impl KotlinAnalyzer {
                     relationship_type: RelationshipType::FileImports,
                     source_location: None,
                 });
+
+                self.expression_resolver
+                    .add_import(relative_file_path.to_string(), &imported_symbol_node);
             }
         }
     }
 
     pub fn process_references(
         &self,
-        file_references: &Option<References>,
+        file_references: &References,
         relative_file_path: &str,
-        definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
+        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
-        let file_path = relative_file_path.to_string();
-        if let Some(references) = file_references
-            && let Some(references) = references.iter_kotlin()
-        {
-            for reference in references {
-                let source_definition_fqn = reference.scope.as_ref().map(kotlin_fqn_to_string);
-                if source_definition_fqn.is_none() {
-                    continue;
-                }
-
-                let source_definition =
-                    definition_map.get(&(source_definition_fqn.unwrap(), file_path.clone()));
-                if source_definition.is_none() {
-                    continue;
-                }
-
-                let source_definition = source_definition.unwrap();
-                match &reference.target {
-                    KotlinReferenceTarget::Resolved(KotlinTargetResolution::Definition(
-                        target_definition_info,
-                    )) => {
-                        let target_definition = definition_map.get(&(
-                            kotlin_fqn_to_string(&target_definition_info.fqn),
-                            relative_file_path.to_string(),
-                        ));
-                        if target_definition.is_none() {
-                            continue;
-                        }
-
-                        let mut relationship = self.create_definition_relationship(
-                            &source_definition.0,
-                            &target_definition.unwrap().0,
-                            match reference.reference_type {
-                                KotlinReferenceType::MethodCall => RelationshipType::Calls,
-                                KotlinReferenceType::PropertyReference => {
-                                    RelationshipType::PropertyReference
-                                }
-                            },
-                        );
-                        if matches!(reference.reference_type, KotlinReferenceType::MethodCall) {
-                            relationship.source_location = Some(SourceLocation {
-                                file_path: file_path.clone(),
-                                start_byte: reference.range.byte_offset.0 as i64,
-                                end_byte: reference.range.byte_offset.1 as i64,
-                                start_line: reference.range.start.line as i32,
-                                end_line: reference.range.end.line as i32,
-                                start_col: reference.range.start.column as i32,
-                                end_col: reference.range.end.column as i32,
-                            });
-                        }
-
-                        definition_relationships.push(relationship);
-                    }
-                    KotlinReferenceTarget::Resolved(KotlinTargetResolution::PartialResolution(
-                        expression,
-                    )) => {
-                        for part in &expression.parts {
-                            match &part.target {
-                                Some(KotlinReferenceTarget::Resolved(
-                                    KotlinTargetResolution::Definition(target_definition_info),
-                                )) => {
-                                    let target_definition = definition_map.get(&(
-                                        kotlin_fqn_to_string(&target_definition_info.fqn),
-                                        relative_file_path.to_string(),
-                                    ));
-                                    if target_definition.is_none() {
-                                        continue;
-                                    }
-
-                                    let mut relationship = self.create_definition_relationship(
-                                        &source_definition.0,
-                                        &target_definition.unwrap().0,
-                                        match reference.reference_type {
-                                            KotlinReferenceType::MethodCall => {
-                                                RelationshipType::Calls
-                                            }
-                                            KotlinReferenceType::PropertyReference => {
-                                                RelationshipType::PropertyReference
-                                            }
-                                        },
-                                    );
-                                    if matches!(
-                                        reference.reference_type,
-                                        KotlinReferenceType::MethodCall
-                                    ) {
-                                        relationship.source_location = Some(SourceLocation {
-                                            file_path: file_path.clone(),
-                                            start_byte: reference.range.byte_offset.0 as i64,
-                                            end_byte: reference.range.byte_offset.1 as i64,
-                                            start_line: reference.range.start.line as i32,
-                                            end_line: reference.range.end.line as i32,
-                                            start_col: reference.range.start.column as i32,
-                                            end_col: reference.range.end.column as i32,
-                                        });
-                                    }
-
-                                    definition_relationships.push(relationship);
-                                }
-                                _ => break,
-                            }
-                        }
-                    }
-                    _ => continue,
-                }
-            }
-        }
+        self.expression_resolver.resolve_expressions(
+            relative_file_path,
+            file_references,
+            definition_relationships,
+            definition_imported_symbol_relationships,
+        );
     }
 
     pub fn add_definition_relationships(
@@ -376,24 +304,6 @@ impl KotlinAnalyzer {
             DefinitionType::Kotlin(Property) => Some(DefinitionType::Kotlin(Property)),
             DefinitionType::Kotlin(Lambda) => Some(DefinitionType::Kotlin(Lambda)),
             _ => None,
-        }
-    }
-
-    fn create_definition_relationship(
-        &self,
-        from_definition: &DefinitionNode,
-        to_definition: &DefinitionNode,
-        relationship_type: RelationshipType,
-    ) -> DefinitionRelationship {
-        DefinitionRelationship {
-            from_file_path: from_definition.location.file_path.clone(),
-            to_file_path: to_definition.location.file_path.clone(),
-            from_definition_fqn: from_definition.fqn.clone(),
-            to_definition_fqn: to_definition.fqn.clone(),
-            from_location: from_definition.location.clone(),
-            to_location: to_definition.location.clone(),
-            relationship_type,
-            source_location: None,
         }
     }
 

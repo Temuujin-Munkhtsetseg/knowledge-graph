@@ -236,7 +236,7 @@ impl ExpressionResolver {
         resolutions: &mut Resolutions,
     ) -> Option<ResolvedType> {
         let relative_path = self.definition_nodes.get(target.fqn.as_str())?.file_path();
-        let file = self.files.get(relative_path)?;
+        let file = self.files.get(&relative_path)?;
 
         let class = file.classes.get(target.fqn.as_str())?;
         self.resolve_method_in_class_hierarchy(class, member, file, resolutions)
@@ -275,7 +275,7 @@ impl ExpressionResolver {
             {
                 let super_class_definition_file = match self.definition_nodes.get(&super_class.fqn)
                 {
-                    Some(definition) => self.files.get(definition.file_path()).unwrap(),
+                    Some(definition) => self.files.get(&definition.file_path()).unwrap(),
                     None => continue,
                 };
 
@@ -363,7 +363,7 @@ impl ExpressionResolver {
         );
 
         let relative_path = self.definition_nodes.get(target.fqn.as_str())?.file_path();
-        let file = self.files.get(relative_path)?;
+        let file = self.files.get(&relative_path)?;
 
         let potential_class_fqn = format!("{}.{}", target.fqn, member);
         if let Some(class) = file.classes.get(&potential_class_fqn) {
@@ -414,7 +414,7 @@ impl ExpressionResolver {
             {
                 let super_class_definition_file = match self.definition_nodes.get(&super_class.fqn)
                 {
-                    Some(definition) => self.files.get(definition.file_path()).unwrap(),
+                    Some(definition) => self.files.get(&definition.file_path()).unwrap(),
                     None => continue,
                 };
 
@@ -454,7 +454,7 @@ impl ExpressionResolver {
         if let Some(import_path) = file.imported_symbols.get(name) {
             if let Some(imported_definition) = self.definition_nodes.get(import_path) {
                 // If the imported symbol is a class, resolve to the class.
-                let imported_file = self.files.get(imported_definition.file_path()).unwrap();
+                let imported_file = self.files.get(&imported_definition.file_path()).unwrap();
                 if let Some(class) = imported_file.classes.get(&imported_definition.fqn) {
                     return Some(ResolvedType::Definition(DefinitionResolution {
                         name: class.name.clone(),
@@ -494,7 +494,7 @@ impl ExpressionResolver {
         for import_path in file.wildcard_imports.iter() {
             let potential_fqn = format!("{}.{}", import_path, name);
             if let Some(imported_file_path) = self.definition_nodes.get(&potential_fqn)
-                && let Some(imported_file) = self.files.get(imported_file_path.file_path())
+                && let Some(imported_file) = self.files.get(&imported_file_path.file_path())
                 && let Some(class) = imported_file.classes.get(&imported_file_path.fqn)
             {
                 return Some(ResolvedType::Definition(DefinitionResolution {
@@ -507,7 +507,7 @@ impl ExpressionResolver {
         // Quickly check the class index to validate if the identifier is a class name
         let potential_fqn = format!("{}.{}", file.package_name, name);
         if let Some(class_file_path) = self.definition_nodes.get(&potential_fqn)
-            && let Some(class_file) = self.files.get(class_file_path.file_path())
+            && let Some(class_file) = self.files.get(&class_file_path.file_path())
             && let Some(class) = class_file.classes.get(&class_file_path.fqn)
         {
             return Some(ResolvedType::Definition(DefinitionResolution {
@@ -718,7 +718,7 @@ impl ExpressionResolver {
             // Look at the imported symbols
             if let Some(import_path) = file.imported_symbols.get(*parent_symbol) {
                 if let Some(imported_definition) = self.definition_nodes.get(import_path)
-                    && let Some(file) = self.files.get(imported_definition.file_path())
+                    && let Some(file) = self.files.get(&imported_definition.file_path())
                 {
                     parent_symbol_file = Some(file);
                 } else {
@@ -738,7 +738,7 @@ impl ExpressionResolver {
 
                 let potential_fqn = format!("{}.{}", import_path, parent_symbol);
                 if let Some(definition) = self.definition_nodes.get(&potential_fqn) {
-                    if let Some(file) = self.files.get(definition.file_path()) {
+                    if let Some(file) = self.files.get(&definition.file_path()) {
                         parent_symbol_file = Some(file);
                     }
                     break;
@@ -748,7 +748,7 @@ impl ExpressionResolver {
             // Look at all the files in the same package
             let potential_fqn = format!("{}.{}", file.package_name, parent_symbol);
             if let Some(file_path) = self.definition_nodes.get(&potential_fqn)
-                && let Some(file) = self.files.get(file_path.file_path())
+                && let Some(file) = self.files.get(&file_path.file_path())
                 && parent_symbol_file.is_none()
             {
                 parent_symbol_file = Some(file);

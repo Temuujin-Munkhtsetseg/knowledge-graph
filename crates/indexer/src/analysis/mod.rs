@@ -491,7 +491,7 @@ impl AnalysisService {
                         imported_symbol_to_files,
                     );
                 }
-                SupportedLanguage::Ruby | SupportedLanguage::Java => {
+                SupportedLanguage::Ruby | SupportedLanguage::Java | SupportedLanguage::Kotlin => {
                     if let Some(references) = &file_result.references {
                         if language == SupportedLanguage::Ruby {
                             self.ruby_analyzer.process_references(
@@ -506,16 +506,15 @@ impl AnalysisService {
                                 definition_relationships,
                                 definition_imported_symbol_relationships,
                             );
+                        } else if language == SupportedLanguage::Kotlin {
+                            self.kotlin_analyzer.process_references(
+                                references,
+                                &relative_path,
+                                definition_relationships,
+                                definition_imported_symbol_relationships,
+                            );
                         }
                     }
-                }
-                SupportedLanguage::Kotlin => {
-                    self.kotlin_analyzer.process_references(
-                        &file_result.references,
-                        &relative_path,
-                        definition_map,
-                        definition_relationships,
-                    );
                 }
                 SupportedLanguage::TypeScript => {
                     self.typescript_analyzer.process_references(
