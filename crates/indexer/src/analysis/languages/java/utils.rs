@@ -1,13 +1,5 @@
-use crate::analysis::types::{DefinitionNode, ImportType, ImportedSymbolNode};
+use crate::analysis::types::{ImportType, ImportedSymbolNode};
 use parser_core::java::types::JavaImportType;
-
-// Definitions
-
-impl DefinitionNode {
-    pub fn file_path(&self) -> &str {
-        self.location.file_path.as_str()
-    }
-}
 
 // Imports
 

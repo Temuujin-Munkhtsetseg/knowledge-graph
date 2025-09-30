@@ -228,6 +228,10 @@ impl DefinitionNode {
             location,
         }
     }
+
+    pub fn file_path(&self) -> String {
+        self.location.file_path.clone()
+    }
 }
 
 /// Implementation of NodeFieldAccess for DefinitionNode

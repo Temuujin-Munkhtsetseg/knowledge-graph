@@ -3497,8 +3497,8 @@ dependencies = [
 
 [[package]]
 name = "parser-core"
-version = "0.18.1"
-source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.18.1#44b9569ca7a98f0228f2a5cb7c5e236f34a96e17"
+version = "0.19.0"
+source = "git+https://gitlab.com/gitlab-org/rust/gitlab-code-parser.git?tag=v0.19.0#e082c42dce07020a384ec3ead0ab4689c5d2efde"
 dependencies = [
  "ast-grep-config",
  "ast-grep-core",
