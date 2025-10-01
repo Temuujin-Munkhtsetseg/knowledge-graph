@@ -47,7 +47,6 @@ use parser_core::ruby::{
     },
 };
 use rustc_hash::FxHashMap;
-use smallvec::SmallVec;
 use std::sync::Arc;
 
 /// Result of resolving a single expression symbol with type inference.
@@ -352,7 +351,7 @@ impl ExpressionResolver {
     /// Resolve a chain of symbols sequentially with type inference
     fn resolve_symbol_chain(
         &mut self,
-        symbols: &SmallVec<[RubyExpressionSymbol; 4]>,
+        symbols: &[RubyExpressionSymbol],
         context: &mut ResolutionContext,
         resolved_relationships: &mut Vec<DefinitionRelationship>,
     ) -> InferredType {
