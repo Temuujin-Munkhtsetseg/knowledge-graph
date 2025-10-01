@@ -170,7 +170,7 @@ impl<'a> GraphMapper<'a> {
     }
 
     /// Pre-assign integer IDs to all nodes
-    fn assign_node_ids(&mut self) {
+    pub fn assign_node_ids(&mut self) {
         // Assign directory IDs
         for dir_node in &self.graph_data.directory_nodes {
             self.node_id_generator
@@ -198,25 +198,8 @@ impl<'a> GraphMapper<'a> {
         }
     }
 
-    /// Map the graph data to the integer IDs
-    pub fn map_graph_data(&mut self) -> Result<ConsolidatedRelationships, anyhow::Error> {
-        // Pre-assign IDs to all nodes
-        self.assign_node_ids();
-
-        // Write consolidated relationship tables
-        Self::consolidate_relationships(
-            self.graph_data,
-            self.node_id_generator,
-            self.relationship_mapping,
-        )
-    }
-
     /// Consolidate all relationships into four categories with integer IDs and types
-    fn consolidate_relationships(
-        graph_data: &GraphData,
-        id_generator: &mut NodeIdGenerator,
-        relationship_mapping: &mut RelationshipTypeMapping,
-    ) -> Result<ConsolidatedRelationships, anyhow::Error> {
+    pub fn consolidate_relationships(&self) -> Result<ConsolidatedRelationships, anyhow::Error> {
         let mut relationships = ConsolidatedRelationships::default();
         let mut dir_not_found = 0;
         let mut file_not_found = 0;
@@ -227,8 +210,9 @@ impl<'a> GraphMapper<'a> {
         let mut missing_target_fqns = HashSet::new();
 
         // Process directory-to-directory and directory-to-file relationships
-        for dir_rel in &graph_data.directory_relationships {
-            let Some(source_id) = id_generator.get_directory_id(&dir_rel.from_path) else {
+        for dir_rel in &self.graph_data.directory_relationships {
+            let Some(source_id) = self.node_id_generator.get_directory_id(&dir_rel.from_path)
+            else {
                 dir_not_found += 1;
                 warn!(
                     "(DIR_CONTAINS_DIR) Source directory ID not found: Directory({})",
@@ -237,10 +221,13 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.get_type_id(dir_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(dir_rel.relationship_type);
 
             if dir_rel.relationship_type == RelationshipType::DirContainsDir {
-                let Some(target_id) = id_generator.get_directory_id(&dir_rel.to_path) else {
+                let Some(target_id) = self.node_id_generator.get_directory_id(&dir_rel.to_path)
+                else {
                     dir_not_found += 1;
                     warn!(
                         "(DIR_CONTAINS_DIR) Target directory ID not found: Directory({})",
@@ -263,7 +250,7 @@ impl<'a> GraphMapper<'a> {
                         end_column: None,
                     });
             } else if dir_rel.relationship_type == RelationshipType::DirContainsFile {
-                let Some(target_id) = id_generator.get_file_id(&dir_rel.to_path) else {
+                let Some(target_id) = self.node_id_generator.get_file_id(&dir_rel.to_path) else {
                     file_not_found += 1;
                     warn!(
                         "(DIR_CONTAINS_FILE) Target file ID not found: File({})",
@@ -289,14 +276,14 @@ impl<'a> GraphMapper<'a> {
         }
 
         // Process file-to-definition relationships
-        for file_rel in &graph_data.file_definition_relationships {
+        for file_rel in &self.graph_data.file_definition_relationships {
             if file_rel.relationship_type == RelationshipType::Calls
                 || file_rel.relationship_type == RelationshipType::AmbiguouslyCalls
             {
                 calls_count += 1;
             }
 
-            let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
+            let Some(source_id) = self.node_id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
                 warn!(
                     "(FILE_DEFINITION_RELATIONSHIPS) Source file ID not found: File({})",
@@ -305,7 +292,7 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) = id_generator.get_definition_id(
+            let Some(target_id) = self.node_id_generator.get_definition_id(
                 &file_rel.definition_location.file_path,
                 &file_rel.definition_location.to_range(),
             ) else {
@@ -316,7 +303,9 @@ impl<'a> GraphMapper<'a> {
                 );
                 continue;
             };
-            let relationship_type = relationship_mapping.get_type_id(file_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(file_rel.relationship_type);
 
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = file_rel.source_location.as_ref() {
@@ -348,14 +337,14 @@ impl<'a> GraphMapper<'a> {
         }
 
         // Process file-to-imported-symbol relationships
-        for file_rel in &graph_data.file_imported_symbol_relationships {
+        for file_rel in &self.graph_data.file_imported_symbol_relationships {
             if file_rel.relationship_type == RelationshipType::Calls
                 || file_rel.relationship_type == RelationshipType::AmbiguouslyCalls
             {
                 calls_count += 1;
             }
 
-            let Some(source_id) = id_generator.get_file_id(&file_rel.file_path) else {
+            let Some(source_id) = self.node_id_generator.get_file_id(&file_rel.file_path) else {
                 file_not_found += 1;
                 warn!(
                     "(FILE_IMPORT_RELATIONSHIPS) Source file ID not found: File({})",
@@ -364,7 +353,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) = id_generator.get_imported_symbol_id(&file_rel.import_location)
+            let Some(target_id) = self
+                .node_id_generator
+                .get_imported_symbol_id(&file_rel.import_location)
             else {
                 import_not_found += 1;
                 warn!(
@@ -373,7 +364,9 @@ impl<'a> GraphMapper<'a> {
                 );
                 continue;
             };
-            let relationship_type = relationship_mapping.get_type_id(file_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(file_rel.relationship_type);
 
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = file_rel.source_location.as_ref() {
@@ -405,14 +398,15 @@ impl<'a> GraphMapper<'a> {
         }
 
         // Process definition-to-definition relationships
-        for def_rel in &graph_data.definition_relationships {
+        for def_rel in &self.graph_data.definition_relationships {
             if def_rel.relationship_type == RelationshipType::Calls
                 || def_rel.relationship_type == RelationshipType::AmbiguouslyCalls
             {
                 calls_count += 1;
             }
 
-            let Some(source_id) = id_generator
+            let Some(source_id) = self
+                .node_id_generator
                 .get_definition_id(&def_rel.from_file_path, &def_rel.from_location.to_range())
             else {
                 def_not_found += 1;
@@ -427,7 +421,8 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) = id_generator
+            let Some(target_id) = self
+                .node_id_generator
                 .get_definition_id(&def_rel.to_file_path, &def_rel.to_location.to_range())
             else {
                 def_not_found += 1;
@@ -442,7 +437,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.get_type_id(def_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(def_rel.relationship_type);
 
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = def_rel.source_location.as_ref() {
@@ -474,14 +471,15 @@ impl<'a> GraphMapper<'a> {
         }
 
         // Process definition-to-imported-symbol relationships
-        for def_rel in &graph_data.definition_imported_symbol_relationships {
+        for def_rel in &self.graph_data.definition_imported_symbol_relationships {
             if def_rel.relationship_type == RelationshipType::Calls
                 || def_rel.relationship_type == RelationshipType::AmbiguouslyCalls
             {
                 calls_count += 1;
             }
 
-            let Some(source_id) = id_generator
+            let Some(source_id) = self
+                .node_id_generator
                 .get_definition_id(&def_rel.file_path, &def_rel.definition_location.to_range())
             else {
                 def_not_found += 1;
@@ -494,8 +492,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) =
-                id_generator.get_imported_symbol_id(&def_rel.imported_symbol_location)
+            let Some(target_id) = self
+                .node_id_generator
+                .get_imported_symbol_id(&def_rel.imported_symbol_location)
             else {
                 import_not_found += 1;
                 warn!(
@@ -505,7 +504,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.get_type_id(def_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(def_rel.relationship_type);
 
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = def_rel.source_location.as_ref() {
@@ -537,8 +538,10 @@ impl<'a> GraphMapper<'a> {
         }
 
         // Process definition-to-imported-symbol relationships
-        for import_rel in &graph_data.imported_symbol_definition_relationships {
-            let Some(source_id) = id_generator.get_imported_symbol_id(&import_rel.source_location)
+        for import_rel in &self.graph_data.imported_symbol_definition_relationships {
+            let Some(source_id) = self
+                .node_id_generator
+                .get_imported_symbol_id(&import_rel.source_location)
             else {
                 debug!(
                     "(IMPORT_DEFINITION_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
@@ -547,7 +550,7 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) = id_generator.get_definition_id(
+            let Some(target_id) = self.node_id_generator.get_definition_id(
                 &import_rel.target_location.file_path,
                 &import_rel.target_location.to_range(),
             ) else {
@@ -558,7 +561,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.get_type_id(import_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(import_rel.relationship_type);
 
             relationships
                 .imported_symbol_to_definition
@@ -576,8 +581,13 @@ impl<'a> GraphMapper<'a> {
         }
 
         // Process imported-symbol-to-imported-symbol relationships
-        for import_rel in &graph_data.imported_symbol_imported_symbol_relationships {
-            let Some(source_id) = id_generator.get_imported_symbol_id(&import_rel.source_location)
+        for import_rel in &self
+            .graph_data
+            .imported_symbol_imported_symbol_relationships
+        {
+            let Some(source_id) = self
+                .node_id_generator
+                .get_imported_symbol_id(&import_rel.source_location)
             else {
                 debug!(
                     "(IMPORT_IMPORT_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
@@ -586,7 +596,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) = id_generator.get_imported_symbol_id(&import_rel.target_location)
+            let Some(target_id) = self
+                .node_id_generator
+                .get_imported_symbol_id(&import_rel.target_location)
             else {
                 warn!(
                     "(IMPORT_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
@@ -595,7 +607,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.get_type_id(import_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(import_rel.relationship_type);
 
             relationships
                 .imported_symbol_to_imported_symbol
@@ -613,8 +627,10 @@ impl<'a> GraphMapper<'a> {
         }
 
         // Process imported-symbol-to-file relationships
-        for import_rel in &graph_data.imported_symbol_file_relationships {
-            let Some(source_id) = id_generator.get_imported_symbol_id(&import_rel.source_location)
+        for import_rel in &self.graph_data.imported_symbol_file_relationships {
+            let Some(source_id) = self
+                .node_id_generator
+                .get_imported_symbol_id(&import_rel.source_location)
             else {
                 debug!(
                     "(IMPORT_FILE_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
@@ -623,7 +639,10 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let Some(target_id) = id_generator.get_file_id(&import_rel.target_location) else {
+            let Some(target_id) = self
+                .node_id_generator
+                .get_file_id(&import_rel.target_location)
+            else {
                 warn!(
                     "(IMPORT_FILE_RELATIONSHIPS) Target file ID not found: {:?}",
                     import_rel.target_location
@@ -631,7 +650,9 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = relationship_mapping.get_type_id(import_rel.relationship_type);
+            let relationship_type = self
+                .relationship_mapping
+                .get_type_id(import_rel.relationship_type);
 
             relationships
                 .imported_symbol_to_file

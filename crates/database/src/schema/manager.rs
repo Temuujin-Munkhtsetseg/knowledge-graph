@@ -210,8 +210,8 @@ impl<'a> SchemaManager<'a> {
         parquet_dir: &str,
     ) -> Result<(), DatabaseError> {
         for table in RELATIONSHIP_TABLES.iter() {
-            for (from_to_pair, filename) in table.get_parquet_filenames_from_pairs() {
-                let (from, to) = from_to_pair;
+            for (from, to) in table.from_to_pairs {
+                let filename = from.relationship_filename(to);
                 let file_path = std::path::Path::new(parquet_dir).join(filename);
                 if file_path.exists() {
                     // On Windows, `std::fs::canonicalize` can return a UNC path that is not

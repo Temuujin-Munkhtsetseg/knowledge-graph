@@ -4,14 +4,12 @@ use crate::analysis::types::{
 use crate::mutation::types::ConsolidatedRelationship;
 use crate::mutation::utils::{GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Error, Result};
-use arrow::{
-    array::{Int32Array, Int64Array, UInt8Array, UInt32Array},
-    datatypes::{DataType, Field, Schema},
-    record_batch::RecordBatch,
-};
+use arrow::{datatypes::Schema, record_batch::RecordBatch};
 use database::graph::RelationshipTypeMapping;
 use database::schema::init::RELATIONSHIP_TABLES;
-use database::schema::types::{ArrowBatchConverter, ToArrowBatch};
+use database::schema::types::{
+    ArrowBatchConverter, RelationshipTable, ToArrowBatch, ToArrowRelationshipBatch,
+};
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 use std::{
     fs::File,
@@ -122,7 +120,18 @@ impl WriterService {
 
         let mut graph_mapper =
             GraphMapper::new(graph_data, node_id_generator, &mut relationship_mapping);
-        let relationships = graph_mapper.map_graph_data()?;
+
+        // Pre-assign IDs to all nodes
+        graph_mapper.assign_node_ids();
+
+        // Consolidate relationships into a single struct
+        let relationships = match graph_mapper.consolidate_relationships() {
+            Ok(relationships) => relationships,
+            Err(e) => {
+                log::error!("Error consolidating relationships: {}", e);
+                return Err(e);
+            }
+        };
 
         // WRITE ALL NODES to PARQUET
         let batches = [
@@ -210,61 +219,19 @@ impl WriterService {
             }
         }
 
-        // WRITE ALL RELATIONSHIPS to PARQUET
         for table in RELATIONSHIP_TABLES.iter() {
-            for (from_to, filename) in table.get_parquet_filenames_from_pairs() {
-                let (from, to) = from_to;
-                let relationships = match (from.name, to.name) {
-                    // Write directory-to-directory relationships
-                    ("DirectoryNode", "DirectoryNode") => {
-                        (&relationships.directory_to_directory, &filename)
+            for (from, to) in table.from_to_pairs {
+                let (filename, relationships) = relationships.get_relationships_for_pair(from, to);
+                if let Some(filename) = &filename {
+                    let file_path = self.output_directory.join(filename);
+                    if relationships.is_empty() {
+                        continue;
                     }
-                    // Write directory-to-file relationships
-                    ("DirectoryNode", "FileNode") => (&relationships.directory_to_file, &filename),
-                    // Write file-to-definition relationships (FILE_DEFINES)
-                    ("FileNode", "DefinitionNode") => {
-                        (&relationships.file_to_definition, &filename)
-                    }
-                    // Write file-to-imported-symbol relationships (FILE_IMPORTS)
-                    ("FileNode", "ImportedSymbolNode") => {
-                        (&relationships.file_to_imported_symbol, &filename)
-                    }
-                    // Write definition-to-definition relationships (all MODULE_TO_*, CLASS_TO_*, METHOD_*)
-                    ("DefinitionNode", "DefinitionNode") => {
-                        (&relationships.definition_to_definition, &filename)
-                    }
-                    // Write definition-to-imported-symbol relationships (all DEFINES_IMPORTED_SYMBOL)
-                    ("DefinitionNode", "ImportedSymbolNode") => {
-                        (&relationships.definition_to_imported_symbol, &filename)
-                    }
-                    // Write imported-to-imported-symbol relationships
-                    ("ImportedSymbolNode", "ImportedSymbolNode") => {
-                        (&relationships.imported_symbol_to_imported_symbol, &filename)
-                    }
-                    // Write imported-to-definition relationships
-                    ("ImportedSymbolNode", "DefinitionNode") => {
-                        (&relationships.imported_symbol_to_definition, &filename)
-                    }
-                    // Write imported-to-file relationships
-                    ("ImportedSymbolNode", "FileNode") => {
-                        (&relationships.imported_symbol_to_file, &filename)
-                    }
-                    _ => (&Vec::new(), &filename),
-                };
-
-                if !relationships.0.is_empty() {
-                    let file_path = self.output_directory.join(filename.clone());
-                    // DIRECTORY_RELATIONSHIPS keeps minimal schema; others have extended optional location columns
-                    let with_location = table.name != "DIRECTORY_RELATIONSHIPS";
-                    self.write_consolidated_relationships(
-                        &file_path,
-                        relationships.0,
-                        with_location,
-                    )?;
+                    self.write_consolidated_relationships(&file_path, relationships, table)?;
                     files_written.push(WrittenFile {
                         file_path: file_path.clone(),
                         file_type: filename.clone(),
-                        record_count: relationships.0.len(),
+                        record_count: relationships.len(),
                         file_size_bytes: self.get_file_size(&file_path)?,
                     });
                 }
@@ -305,119 +272,18 @@ impl WriterService {
         &self,
         file_path: &Path,
         relationships: &[ConsolidatedRelationship],
-        with_location: bool,
+        table: &RelationshipTable,
     ) -> Result<()> {
         log::info!(
-            "Writing {} consolidated relationships to Parquet: {} (with_location={})",
+            "Writing {} consolidated relationships to Parquet: {}",
             relationships.len(),
             file_path.display(),
-            with_location
-        );
-        // Define Arrow schema for consolidated relationships
-        let schema = if with_location {
-            Arc::new(Schema::new(vec![
-                Field::new("source_id", DataType::UInt32, false),
-                Field::new("target_id", DataType::UInt32, false),
-                Field::new("type", DataType::UInt8, false),
-                Field::new("source_start_byte", DataType::Int64, true),
-                Field::new("source_end_byte", DataType::Int64, true),
-                Field::new("source_start_line", DataType::Int32, true),
-                Field::new("source_end_line", DataType::Int32, true),
-                Field::new("source_start_col", DataType::Int32, true),
-                Field::new("source_end_col", DataType::Int32, true),
-            ]))
-        } else {
-            Arc::new(Schema::new(vec![
-                Field::new("source_id", DataType::UInt32, false),
-                Field::new("target_id", DataType::UInt32, false),
-                Field::new("type", DataType::UInt8, false),
-            ]))
-        };
-
-        // Convert data to Arrow arrays
-        let source_id_array = UInt32Array::from(
-            relationships
-                .iter()
-                .map(|r| r.source_id)
-                .collect::<Vec<_>>(),
-        );
-        let target_id_array = UInt32Array::from(
-            relationships
-                .iter()
-                .map(|r| r.target_id)
-                .collect::<Vec<_>>(),
-        );
-        let type_array = UInt8Array::from(
-            relationships
-                .iter()
-                .map(|r| r.relationship_type)
-                .collect::<Vec<_>>(),
         );
 
-        let batch = if with_location {
-            let start_byte_array = Int64Array::from(
-                relationships
-                    .iter()
-                    .map(|r| r.start_byte.map(|v| v as i64))
-                    .collect::<Vec<_>>(),
-            );
-            let end_byte_array = Int64Array::from(
-                relationships
-                    .iter()
-                    .map(|r| r.end_byte.map(|v| v as i64))
-                    .collect::<Vec<_>>(),
-            );
-            let start_line_array = Int32Array::from(
-                relationships
-                    .iter()
-                    .map(|r| r.start_line.map(|v| v as i32))
-                    .collect::<Vec<_>>(),
-            );
-            let end_line_array = Int32Array::from(
-                relationships
-                    .iter()
-                    .map(|r| r.end_line.map(|v| v as i32))
-                    .collect::<Vec<_>>(),
-            );
-            let start_col_array = Int32Array::from(
-                relationships
-                    .iter()
-                    .map(|r| r.start_column.map(|v| v as i32))
-                    .collect::<Vec<_>>(),
-            );
-            let end_col_array = Int32Array::from(
-                relationships
-                    .iter()
-                    .map(|r| r.end_column.map(|v| v as i32))
-                    .collect::<Vec<_>>(),
-            );
+        let batch = ArrowBatchConverter::to_relationship_record_batch(relationships, table)
+            .map_err(|e| anyhow::anyhow!("Failed to create Arrow batch: {}", e))?;
 
-            RecordBatch::try_new(
-                schema.clone(),
-                vec![
-                    Arc::new(source_id_array),
-                    Arc::new(target_id_array),
-                    Arc::new(type_array),
-                    Arc::new(start_byte_array),
-                    Arc::new(end_byte_array),
-                    Arc::new(start_line_array),
-                    Arc::new(end_line_array),
-                    Arc::new(start_col_array),
-                    Arc::new(end_col_array),
-                ],
-            )?
-        } else {
-            RecordBatch::try_new(
-                schema.clone(),
-                vec![
-                    Arc::new(source_id_array),
-                    Arc::new(target_id_array),
-                    Arc::new(type_array),
-                ],
-            )?
-        };
-
-        self.write_batch_to_parquet(file_path, schema, &batch)?;
+        self.write_batch_to_parquet(file_path, table.to_arrow_schema(), &batch)?;
 
         log::info!(
             "✅ Successfully wrote {} consolidated relationships to Parquet",
