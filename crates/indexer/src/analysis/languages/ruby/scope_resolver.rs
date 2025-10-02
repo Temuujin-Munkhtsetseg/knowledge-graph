@@ -76,34 +76,21 @@ pub struct DefinitionMap {
     constants: FxHashMap<Arc<str>, SmallVec<[Arc<str>; 4]>>,
 }
 
-impl DefinitionMap {
-    pub fn new(estimated_definitions: usize) -> Self {
-        // Pre-allocate based on typical Ruby project ratios
-        let classes_estimate = estimated_definitions / 10; // ~10% classes
-        let _methods_estimate = estimated_definitions * 7 / 10; // ~70% methods
+impl Default for DefinitionMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
+impl DefinitionMap {
+    pub fn new() -> Self {
         Self {
-            definitions: FxHashMap::with_capacity_and_hasher(
-                estimated_definitions,
-                Default::default(),
-            ),
-            instance_methods: FxHashMap::with_capacity_and_hasher(
-                classes_estimate,
-                Default::default(),
-            ),
-            singleton_methods: FxHashMap::with_capacity_and_hasher(
-                classes_estimate,
-                Default::default(),
-            ),
-            inheritance_chain: FxHashMap::with_capacity_and_hasher(
-                classes_estimate,
-                Default::default(),
-            ),
-            included_modules: FxHashMap::with_capacity_and_hasher(
-                classes_estimate,
-                Default::default(),
-            ),
-            constants: FxHashMap::with_capacity_and_hasher(classes_estimate, Default::default()),
+            definitions: FxHashMap::with_hasher(Default::default()),
+            instance_methods: FxHashMap::with_hasher(Default::default()),
+            singleton_methods: FxHashMap::with_hasher(Default::default()),
+            inheritance_chain: FxHashMap::with_hasher(Default::default()),
+            included_modules: FxHashMap::with_hasher(Default::default()),
+            constants: FxHashMap::with_hasher(Default::default()),
         }
     }
 
@@ -317,11 +304,17 @@ pub struct ScopeResolver {
     type_map: TypeMap,
 }
 
+impl Default for ScopeResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScopeResolver {
-    pub fn new(estimated_definitions: usize, estimated_scopes: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            definition_map: DefinitionMap::new(estimated_definitions),
-            type_map: TypeMap::new(estimated_scopes),
+            definition_map: DefinitionMap::new(),
+            type_map: TypeMap::new(),
         }
     }
 
@@ -587,12 +580,6 @@ impl ScopeResolver {
             Some(class_name)
         }
     }
-
-    /// Clear all data to free memory
-    pub fn clear(&mut self) {
-        self.type_map.clear();
-        // Note: DefinitionMap doesn't have clear() - it's meant to be persistent
-    }
 }
 
 #[cfg(test)]
@@ -602,7 +589,7 @@ mod tests {
 
     #[test]
     fn test_definition_map_method_lookup() {
-        let mut def_map = DefinitionMap::new(100);
+        let mut def_map = DefinitionMap::new();
 
         // Create a test definition
         let node = DefinitionNode::new(

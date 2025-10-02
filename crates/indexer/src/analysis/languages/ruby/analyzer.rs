@@ -49,16 +49,9 @@ impl Default for RubyAnalyzer {
 impl RubyAnalyzer {
     pub fn new() -> Self {
         Self {
-            expression_resolver: None,
+            expression_resolver: Some(ExpressionResolver::new()),
             stats: AnalyzerStats::default(),
         }
-    }
-
-    pub fn initialize_resolver(&mut self, estimated_definitions: usize, estimated_scopes: usize) {
-        self.expression_resolver = Some(ExpressionResolver::new(
-            estimated_definitions,
-            estimated_scopes,
-        ));
     }
 
     pub fn get_stats(&self) -> &AnalyzerStats {

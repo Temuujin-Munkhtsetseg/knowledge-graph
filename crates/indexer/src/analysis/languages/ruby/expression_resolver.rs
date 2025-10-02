@@ -108,16 +108,6 @@ pub struct ExpressionResolver {
     /// Scope resolver implementing Ruby's method lookup and variable resolution rules.
     scope_resolver: ScopeResolver,
 
-    /// Cache for recently resolved symbols to avoid redundant work.
-    ///
-    /// Maps (symbol_name, context_type) pairs to resolved definitions. This cache
-    /// is particularly effective for frequently called methods and common Ruby patterns.
-    ///
-    /// Cache key format:
-    /// - `(method_name, receiver_type)` for method calls (e.g., `("save", "User")`)
-    /// - `(symbol_name, "global")` for constants and global lookups
-    resolution_cache: FxHashMap<(String, String), Arc<DefinitionNode>>,
-
     /// Performance and accuracy statistics for monitoring resolver effectiveness.
     ///
     /// Includes metrics like resolution success rates, cache hit rates, and processing
@@ -125,15 +115,17 @@ pub struct ExpressionResolver {
     stats: ResolutionStats,
 }
 
+impl Default for ExpressionResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExpressionResolver {
     /// Create a new expression resolver with estimated capacity
-    pub fn new(estimated_definitions: usize, estimated_scopes: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            scope_resolver: ScopeResolver::new(estimated_definitions, estimated_scopes),
-            resolution_cache: FxHashMap::with_capacity_and_hasher(
-                estimated_definitions / 5, // Cache ~20% of methods (most frequently called)
-                Default::default(),
-            ),
+            scope_resolver: ScopeResolver::new(),
             stats: ResolutionStats::new(),
         }
     }
@@ -431,16 +423,6 @@ impl ExpressionResolver {
                 .inferred_type
                 .as_concrete()
                 .map(|s| s.to_string());
-
-            // Cache the resolution for future use
-            if let Some(ref definition) = resolution.resolved_definition {
-                let cache_key = if let Some(ref context_type) = current_type {
-                    (symbol.name.to_string(), context_type.clone())
-                } else {
-                    (symbol.name.to_string(), "global".to_string())
-                };
-                self.resolution_cache.insert(cache_key, definition.clone());
-            }
         }
 
         current_type
@@ -496,23 +478,6 @@ impl ExpressionResolver {
         context: &ResolutionContext,
         receiver_type: Option<&str>,
     ) -> SymbolResolution {
-        // Check cache first
-        let cache_key = if let Some(receiver) = receiver_type {
-            (symbol.name.to_string(), receiver.to_string())
-        } else {
-            (symbol.name.to_string(), "global".to_string())
-        };
-
-        if let Some(cached_definition) = self.resolution_cache.get(&cache_key) {
-            let inferred_type =
-                self.infer_symbol_type(symbol, receiver_type, Some(cached_definition));
-            return SymbolResolution {
-                symbol: symbol.clone(),
-                resolved_definition: Some(cached_definition.clone()),
-                inferred_type,
-            };
-        }
-
         // Resolve using scope resolver
         let resolved_definition = self
             .scope_resolver
@@ -626,17 +591,6 @@ impl ExpressionResolver {
         self.scope_resolver.add_definition(fqn, node, fqn_type);
     }
 
-    /// Clear caches to free memory
-    pub fn clear_caches(&mut self) {
-        self.resolution_cache.clear();
-        self.scope_resolver.clear();
-
-        // Shrink if over-allocated
-        if self.resolution_cache.capacity() > 1000 {
-            self.resolution_cache.shrink_to_fit();
-        }
-    }
-
     /// Get performance statistics
     pub fn get_stats(&self) -> &ResolutionStats {
         &self.stats
@@ -708,7 +662,7 @@ mod tests {
 
     #[test]
     fn test_expression_resolver_basic() {
-        let mut resolver = ExpressionResolver::new(100, 50);
+        let mut resolver = ExpressionResolver::new();
 
         // Add a test definition
         let node = DefinitionNode::new(

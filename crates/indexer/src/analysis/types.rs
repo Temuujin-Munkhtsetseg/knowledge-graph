@@ -521,15 +521,15 @@ pub struct OptimizedFileTree {
 }
 
 impl OptimizedFileTree {
-    pub fn new(files: Vec<String>) -> Self {
+    pub fn new<'a>(files: impl Iterator<Item = &'a String>) -> Self {
         let mut dirs = HashSet::new();
         let mut normalized_files = HashMap::new();
 
         // Precompute normalized files and directory structure
-        for file_path in &files {
+        for file_path in files {
             normalized_files.insert(file_path.to_lowercase(), file_path.clone());
 
-            let path = Path::new(file_path);
+            let path = Path::new(&file_path);
             if let Some(parent) = path.parent() {
                 dirs.insert(parent.to_path_buf());
             }

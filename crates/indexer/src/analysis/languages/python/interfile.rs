@@ -213,7 +213,7 @@ mod tests {
             "root_package/__init__.py".to_string(),
             "root_package/module.py".to_string(),
         ];
-        OptimizedFileTree::new(file_paths)
+        OptimizedFileTree::new(file_paths.iter())
     }
 
     #[test]
@@ -354,11 +354,11 @@ mod tests {
 
     #[test]
     fn test_case_insensitive_matching() {
-        let file_paths = vec![
+        let file_paths = [
             "src/Utils.py".to_string(),
             "src/Package/Module.py".to_string(),
         ];
-        let file_tree = OptimizedFileTree::new(file_paths);
+        let file_tree = OptimizedFileTree::new(file_paths.iter());
         let definition_map = HashMap::new();
 
         // Test with lowercase import path
@@ -373,11 +373,11 @@ mod tests {
 
     #[test]
     fn test_duplicate_removal() {
-        let file_paths = vec![
+        let file_paths = [
             "src/utils.py".to_string(),
             "src/utils.py".to_string(), // Duplicate
         ];
-        let file_tree = OptimizedFileTree::new(file_paths);
+        let file_tree = OptimizedFileTree::new(file_paths.iter());
         let definition_map = HashMap::new();
 
         let imported_symbol =
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     fn test_empty_file_tree() {
         let file_paths = Vec::new();
-        let file_tree = OptimizedFileTree::new(file_paths);
+        let file_tree = OptimizedFileTree::new(file_paths.iter());
         let definition_map = HashMap::new();
 
         let imported_symbol =

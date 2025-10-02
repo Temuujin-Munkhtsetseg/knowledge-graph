@@ -589,13 +589,16 @@ async fn test_new_indexer_with_gitalisk_file_source() {
         .expect("Failed to index files");
 
     assert!(
-        !result.file_results.is_empty(),
+        result.writer_result.as_ref().unwrap().total_files > 0,
         "Should have processed some files"
     );
     assert_eq!(result.errored_files.len(), 0, "Should have no errors");
 
     println!("✅ New indexer test completed successfully!");
-    println!("📊 Processed {} files", result.file_results.len());
+    println!(
+        "📊 Processed {} files",
+        result.writer_result.as_ref().unwrap().total_files
+    );
 }
 
 #[traced_test]
@@ -633,13 +636,16 @@ async fn test_new_indexer_with_path_file_source() {
         .expect("Failed to index files");
 
     assert!(
-        !result.file_results.is_empty(),
+        result.writer_result.as_ref().unwrap().total_files > 0,
         "Should have processed some files"
     );
     assert_eq!(result.errored_files.len(), 0, "Should have no errors");
 
     println!("✅ Path file source test completed successfully!");
-    println!("📊 Processed {} files", result.file_results.len());
+    println!(
+        "📊 Processed {} files",
+        result.writer_result.as_ref().unwrap().total_files
+    );
 }
 
 #[traced_test]
@@ -684,7 +690,7 @@ async fn test_full_indexing_pipeline() {
 
     // Verify we processed files
     assert!(
-        !result.file_results.is_empty(),
+        result.writer_result.as_ref().unwrap().total_files > 0,
         "Should have processed some files"
     );
     assert_eq!(result.errored_files.len(), 0, "Should have no errors");
@@ -738,7 +744,7 @@ async fn test_full_indexing_pipeline() {
     }
 
     println!("✅ Test completed successfully!");
-    println!("📊 Processed {} files", result.file_results.len());
+    println!("📊 Processed {} files", writer_result.total_files);
     println!(
         "📊 Created {} definition nodes",
         graph_data.definition_nodes.len()

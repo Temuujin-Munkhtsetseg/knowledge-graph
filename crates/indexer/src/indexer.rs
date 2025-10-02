@@ -75,7 +75,6 @@ pub struct RepositoryIndexingResult {
     pub total_processing_time: Duration,
     pub repository_name: String,
     pub repository_path: String,
-    pub file_results: Vec<FileProcessingResult>,
     pub skipped_files: Vec<SkippedFile>,
     pub errored_files: Vec<ErroredFile>,
     pub errors: Vec<(String, String)>, // Kept for backward compatibility
@@ -89,7 +88,6 @@ pub struct RepositoryReindexingResult {
     pub total_processing_time: Duration,
     pub repository_name: String,
     pub repository_path: String,
-    pub file_results: Vec<FileProcessingResult>,
     pub skipped_files: Vec<SkippedFile>,
     pub errored_files: Vec<ErroredFile>,
     pub errors: Vec<(String, String)>, // Kept for backward compatibility
@@ -174,14 +172,15 @@ impl RepositoryIndexer {
         let (file_results, skipped_files, errored_files, errors) =
             self.parse_files(files, config).await?;
 
+        let file_results_len = file_results.len();
+
         let (graph_data, writer_result) = self.analyze_and_write_graph_data(
             database,
-            &file_results,
+            file_results,
             output_directory,
             database_path,
         )?;
 
-        let file_results_len = file_results.len();
         let skipped_files_len = skipped_files.len();
         let errored_files_len = errored_files.len();
 
@@ -189,7 +188,6 @@ impl RepositoryIndexer {
             total_processing_time: start_time.elapsed(),
             repository_name: self.name.clone(),
             repository_path: self.path.clone(),
-            file_results,
             skipped_files,
             errored_files,
             errors,
@@ -387,7 +385,7 @@ impl RepositoryIndexer {
     pub fn analyze_and_write_graph_data(
         &self,
         database: &KuzuDatabase,
-        file_results: &Vec<FileProcessingResult>,
+        file_results: Vec<FileProcessingResult>,
         output_directory: &str,
         database_path: &str,
     ) -> Result<(GraphData, WriterResult), FatalIndexingError> {
@@ -397,7 +395,7 @@ impl RepositoryIndexer {
         );
         let start_time = Instant::now();
 
-        let mut analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
+        let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
         let graph_data = analysis_service
             .analyze_results(file_results)
@@ -493,7 +491,6 @@ impl RepositoryIndexer {
                 total_processing_time: start_time.elapsed(),
                 repository_name: self.name.clone(),
                 repository_path: self.path.clone(),
-                file_results: Vec::new(),
                 skipped_files: Vec::new(),
                 errored_files: Vec::new(),
                 errors: Vec::new(),
@@ -522,10 +519,10 @@ impl RepositoryIndexer {
         let (file_results, skipped_files, errored_files, errors) =
             self.parse_files(files, config).await?;
 
-        let mut analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
+        let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
         let graph_data = analysis_service
-            .analyze_results(&file_results)
+            .analyze_results(file_results)
             .map_err(|e| {
                 FatalIndexingError::FailedToAnalyze(AnalyzeAndWriteErrors::FailedToAnalyze(
                     e.to_string(),
@@ -547,7 +544,6 @@ impl RepositoryIndexer {
                 total_processing_time: start_time.elapsed(),
                 repository_name: self.name.clone(),
                 repository_path: self.path.clone(),
-                file_results,
                 skipped_files,
                 errored_files,
                 errors,
