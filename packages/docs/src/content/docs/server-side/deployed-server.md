@@ -13,20 +13,20 @@ The `http-server-deployed` provides a HTTP server built with Axum that can opera
 
 ## Usage
 
-All server modes require JWT authentication via a secret file:
+All server modes require JWT authentication via a secret file and a data directory for persistent storage:
 
 ```bash
 # Start server in indexing mode on Unix socket
-cargo run --bin http-server-deployed -- -m indexer --socket /tmp/gkg-indexer-http.sock --secret-path /path/to/jwt-secret
+cargo run --bin http-server-deployed -- -m indexer --socket /tmp/gkg-indexer-http.sock --secret-path /path/to/jwt-secret --data-dir /data/gkg
 
 # Start server in indexing mode on TCP socket
-cargo run --bin http-server-deployed -- -m indexer --bind 0.0.0.0:3333 --secret-path /path/to/jwt-secret
+cargo run --bin http-server-deployed -- -m indexer --bind 0.0.0.0:3333 --secret-path /path/to/jwt-secret --data-dir /data/gkg
 
 # Start server in webserver mode on Unix socket
-cargo run --bin http-server-deployed -- -m webserver --socket /tmp/gkg-webserver-http.sock --secret-path /path/to/jwt-secret
+cargo run --bin http-server-deployed -- -m webserver --socket /tmp/gkg-webserver-http.sock --secret-path /path/to/jwt-secret --data-dir /data/gkg
 
 # Start server in webserver mode on TCP socket
-cargo run --bin http-server-deployed -- -m webserver --bind 0.0.0.0:3334 --secret-path /path/to/jwt-secret
+cargo run --bin http-server-deployed -- -m webserver --bind 0.0.0.0:3334 --secret-path /path/to/jwt-secret --data-dir /data/gkg
 ```
 
 ## Command Line Options
@@ -35,6 +35,23 @@ cargo run --bin http-server-deployed -- -m webserver --bind 0.0.0.0:3334 --secre
 - `--socket, -s`: Unix socket file path (default: `/tmp/gkg-indexer-http.sock`)
 - `--bind, -b`: TCP bind address (conflicts with `--socket`)
 - `--secret-path`: Path to JWT secret file (required)
+- `--data-dir`: Data directory for persistent storage (required)
+
+## Data Directory
+
+The `--data-dir` argument specifies where the server stores persistent data including index files, databases, and metadata. This is particularly important for containerized deployments where data needs to be stored in mounted volumes.
+
+The server will:
+
+- Create the directory if it doesn't exist
+- Validate write permissions on startup
+- Exit with an error if the path exists but is not a directory
+
+Example for Kubernetes deployments:
+
+```bash
+./http-server-deployed -m indexer --bind 0.0.0.0:3333 --data-dir /data/gkg --secret-path /secrets/jwt
+```
 
 ## JWT Authentication
 

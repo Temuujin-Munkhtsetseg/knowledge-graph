@@ -3,9 +3,11 @@ use http_server_deployed::{authentication, endpoints, metrics};
 use axum::{middleware, Router};
 use clap::Parser;
 use std::error::Error;
+use std::path::PathBuf;
 use tokio::net::{TcpListener, UnixListener};
 use tokio::signal;
 use tracing::{error, info};
+use workspace_manager::DataDirectory;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -22,6 +24,9 @@ struct Args {
     // Path to JWT secret file for authentication (required)
     #[arg(long)]
     secret_path: String,
+    // Data directory for persistent storage (required)
+    #[arg(long)]
+    data_dir: PathBuf,
 }
 
 #[tokio::main]
@@ -29,6 +34,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     init_tracing();
 
     let args = Args::parse();
+
+    // Initialize data directory
+    let data_directory = match DataDirectory::new(args.data_dir) {
+        Ok(data_dir) => data_dir,
+        Err(e) => {
+            error!("Failed to initialize data directory: {}", e);
+            return Err(e.into());
+        }
+    };
+
+    info!(
+        "Using data directory: {}",
+        data_directory.root_path.display()
+    );
 
     // Initialize JWT authentication
     let auth = match authentication::Auth::new(&args.secret_path) {

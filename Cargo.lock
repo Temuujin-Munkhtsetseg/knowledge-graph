@@ -2239,6 +2239,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "workspace-manager",
 ]
 
 [[package]]
