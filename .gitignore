@@ -10,6 +10,7 @@ kuzu_db
 
 # Kuzu (old)
 db.kuzu
+*.db
 
 
 # TypeScript test files

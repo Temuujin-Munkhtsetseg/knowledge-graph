@@ -122,3 +122,6 @@ run = "gitlab-xtasks lint verify-newlines --file-extensions rs,md,yml,yaml,toml,
 # runs basic evaluation script
 [tasks.gkg-evals]
 run = "./packages/gkg-evals/run.sh"
+
+[tasks.measure-kuzu-db-size]
+run = "./scripts/devtools/measure_kuzu_db_size.sh"
