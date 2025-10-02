@@ -294,11 +294,10 @@ async fn test_ruby_call_relationship_has_location() {
     let conn = KuzuConnection::new(&database_instance).expect("conn");
 
     // Find the call: Application#test_authentication_flow -> AuthService::create_session
-    let mapping = database::graph::RelationshipTypeMapping::new();
-    let calls_id = mapping.get_type_id(RelationshipType::Calls);
+    let calls_id = RelationshipType::Calls.as_string();
     let query = format!(
         "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
-         WHERE target.fqn = 'AuthService::create_session' AND source.fqn = 'Application#test_authentication_flow' AND r.type = {calls_id} \
+         WHERE target.fqn = 'AuthService::create_session' AND source.fqn = 'Application#test_authentication_flow' AND r.type = '{calls_id}' \
          RETURN r.source_start_line, r.source_end_line, r.source_start_col, r.source_end_col"
     );
     let result = conn.query(&query).expect("query ok");

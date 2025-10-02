@@ -17,7 +17,7 @@ pub struct ReferenceQueryResult {
     pub definition_end_line: i64,
     pub reference_start_line: i64,
     pub reference_end_line: i64,
-    pub reference_type: u8,
+    pub reference_type: String,
 }
 
 pub struct GetReferencesRepository {
@@ -67,7 +67,7 @@ impl GetReferencesRepository {
             serde_json::Value::Array(
                 self.get_reference_relationship_type_ids()
                     .iter()
-                    .map(|id| serde_json::Value::from(*id))
+                    .map(|id| serde_json::Value::from(id.clone()))
                     .collect(),
             ),
         );
@@ -109,21 +109,20 @@ impl GetReferencesRepository {
                 definition_end_line: row.get_int_value(5).unwrap() + 1, // target_end_line, one-indexed
                 reference_start_line: row.get_int_value(6).unwrap() + 1, // reference_start_line, one-indexed
                 reference_end_line: row.get_int_value(7).unwrap() + 1, // reference_end_line, one-indexed
-                reference_type: row.get_uint_value(8).unwrap().try_into().unwrap(), // reference_type
+                reference_type: row.get_string_value(8).unwrap(),      // reference_type
             });
         }
 
         Ok(results)
     }
 
-    fn get_reference_relationship_type_ids(&self) -> Vec<u8> {
-        use database::graph::{RelationshipType, RelationshipTypeMapping};
+    fn get_reference_relationship_type_ids(&self) -> Vec<String> {
+        use database::graph::RelationshipType;
 
-        let mapping = RelationshipTypeMapping::new();
         vec![
-            mapping.get_type_id(RelationshipType::Calls),
-            mapping.get_type_id(RelationshipType::PropertyReference),
-            mapping.get_type_id(RelationshipType::AmbiguouslyCalls),
+            RelationshipType::Calls.as_string(),
+            RelationshipType::PropertyReference.as_string(),
+            RelationshipType::AmbiguouslyCalls.as_string(),
         ]
     }
 }

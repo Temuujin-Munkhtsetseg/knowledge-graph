@@ -11,7 +11,6 @@ use crate::tools::get_references::output::{
 };
 use crate::tools::get_references::repository::DEFAULT_PAGE_SIZE;
 use crate::tools::get_references::repository::GetReferencesRepository;
-use database::graph::RelationshipTypeMapping;
 
 const FILE_READ_TIMEOUT_SECONDS: u64 = 10;
 const SURROUNDING_LINES: i64 = 2;
@@ -107,9 +106,7 @@ impl GetReferencesService {
                     };
 
                     references.push(GetReferencesToolReferenceOutput {
-                        reference_type: RelationshipTypeMapping::new()
-                            .get_type_name(item.reference_type)
-                            .to_string(),
+                        reference_type: item.reference_type.to_string(),
                         location: format!(
                             "{}:L{}-{}",
                             item.definition_primary_file_path,

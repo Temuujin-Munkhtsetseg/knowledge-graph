@@ -6,7 +6,7 @@ use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
 use crate::project::source::{GitaliskFileSource, PathFileSource};
-use database::graph::{RelationshipType, RelationshipTypeMapping};
+use database::graph::RelationshipType;
 use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;
 use database::kuzu::service::NodeDatabaseService;
@@ -452,7 +452,7 @@ async fn test_full_reindexing_pipeline_git_status_typescript() {
 #[traced_test]
 #[tokio::test]
 async fn test_typescript_call_relationship_has_location() {
-    use database::graph::{RelationshipType, RelationshipTypeMapping};
+    use database::graph::RelationshipType;
     use database::kuzu::connection::KuzuConnection;
 
     let database = Arc::new(database::kuzu::database::KuzuDatabase::new());
@@ -488,12 +488,11 @@ async fn test_typescript_call_relationship_has_location() {
     let conn = KuzuConnection::new(&database_instance).expect("conn");
 
     // Validate known call: Authentication.createSession in Application.testTokenManagement at line 80 (0-based 79)
-    let mapping = RelationshipTypeMapping::new();
-    let calls_id = mapping.get_type_id(RelationshipType::Calls);
+    let calls_id = RelationshipType::Calls.as_string();
     // Assert a known internal call's location: Application::testTokenManagement -> Application::run at 0-based line 20
     let ts_query = format!(
         "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
-         WHERE source.fqn = 'Application::testTokenManagement' AND target.fqn = 'Application::run' AND r.type = {calls_id} \
+         WHERE source.fqn = 'Application::testTokenManagement' AND target.fqn = 'Application::run' AND r.type = '{calls_id}' \
          RETURN r.source_start_line, r.source_end_line"
     );
     let result = conn.query(&ts_query).expect("query ok");
@@ -906,7 +905,6 @@ async fn test_simple_end_to_end_kuzu() {
         .expect("Failed to create database");
     let connection = KuzuConnection::new(&database_instance).expect("Failed to create connection");
 
-    let relationship_type_map = RelationshipTypeMapping::new();
     let node_database_service = NodeDatabaseService::new(&database_instance);
 
     // Get definition node count
@@ -956,9 +954,9 @@ async fn test_simple_end_to_end_kuzu() {
     assert!(def_rel_count > 100);
 
     // Get all relationships in the definition_relationships table
-    let m2m_rel_type = relationship_type_map.get_type_id(RelationshipType::ClassToMethod);
+    let m2m_rel_type = RelationshipType::ClassToMethod.as_string();
     let query_class_to_method = format!(
-        "MATCH (d:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(c:DefinitionNode) WHERE r.type = {m2m_rel_type} RETURN d, c, r.type"
+        "MATCH (d:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(c:DefinitionNode) WHERE r.type = '{m2m_rel_type}' RETURN d, c, r.type"
     );
     println!("Query: {query_class_to_method}");
 
@@ -966,15 +964,14 @@ async fn test_simple_end_to_end_kuzu() {
         .query(&query_class_to_method)
         .expect("Failed to query class to method");
     for row in result {
-        if let (Some(from_node_value), Some(to_node_value), Some(kuzu::Value::UInt8(rel_type))) =
+        if let (Some(from_node_value), Some(to_node_value), Some(kuzu::Value::String(rel_type))) =
             (row.first(), row.get(1), row.get(2))
         {
             let from_node = DefinitionNodeFromKuzu::from_kuzu_node(from_node_value);
             let to_node = DefinitionNodeFromKuzu::from_kuzu_node(to_node_value);
-            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
             println!(
                 "Class to method relationship: {} -[type: {}]-> {}",
-                from_node.fqn, rel_type_name, to_node.fqn
+                from_node.fqn, rel_type, to_node.fqn
             );
             if from_node.fqn.as_str() == "Authentication::Providers::LdapProvider" {
                 match to_node.fqn.as_str() {
@@ -1008,34 +1005,33 @@ async fn test_simple_end_to_end_kuzu() {
     println!("--------------------------------");
 
     // Query file relationships
-    let file_rel_type = relationship_type_map.get_type_id(RelationshipType::FileDefines);
+    let file_rel_type = RelationshipType::FileDefines.as_string();
     let query_file_rels = format!(
-        "MATCH (f:FileNode)-[r:FILE_RELATIONSHIPS]->(d:DefinitionNode) WHERE r.type = {file_rel_type} RETURN f, d, r.type"
+        "MATCH (f:FileNode)-[r:FILE_RELATIONSHIPS]->(d:DefinitionNode) WHERE r.type = '{file_rel_type}' RETURN f, d, r.type"
     );
 
     let result = connection
         .query(&query_file_rels)
         .expect("Failed to query file relationships");
     for row in result {
-        if let (Some(file_value), Some(def_value), Some(kuzu::Value::UInt8(rel_type))) =
+        if let (Some(file_value), Some(def_value), Some(kuzu::Value::String(rel_type))) =
             (row.first(), row.get(1), row.get(2))
         {
             let file_node = FileNodeFromKuzu::from_kuzu_node(file_value);
             let def_node = DefinitionNodeFromKuzu::from_kuzu_node(def_value);
-            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
             println!(
                 "File relationship: {} -[type: {}]-> {}",
-                file_node.path, rel_type_name, def_node.fqn
+                file_node.path, rel_type, def_node.fqn
             );
             match file_node.path.as_str() {
                 "main.rb" => {
                     if def_node.fqn.as_str() == "Application::test_authentication_providers" {
-                        assert_eq!(rel_type_name, RelationshipType::FileDefines.as_str());
+                        assert_eq!(rel_type, RelationshipType::FileDefines.as_str());
                     }
                 }
                 "app/models/user_model.rb" => {
                     if def_node.fqn.as_str() == "UserModel::valid?" {
-                        assert_eq!(rel_type_name, RelationshipType::FileDefines.as_str());
+                        assert_eq!(rel_type, RelationshipType::FileDefines.as_str());
                     }
                 }
                 _ => {}
@@ -1046,36 +1042,35 @@ async fn test_simple_end_to_end_kuzu() {
     println!("--------------------------------");
 
     // Query directory relationships
-    let dir_file_rel_type = relationship_type_map.get_type_id(RelationshipType::DirContainsFile);
+    let dir_file_rel_type = RelationshipType::DirContainsFile.as_string();
 
     // Query directory -> file relationships
     let query_dir_file_rels = format!(
-        "MATCH (d:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]->(f:FileNode) WHERE r.type = {dir_file_rel_type} RETURN d, f, r.type"
+        "MATCH (d:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]->(f:FileNode) WHERE r.type = '{dir_file_rel_type}' RETURN d, f, r.type"
     );
 
     let result = connection
         .query(&query_dir_file_rels)
         .expect("Failed to query directory-file relationships");
     for row in result {
-        if let (Some(dir_value), Some(file_value), Some(kuzu::Value::UInt8(rel_type))) =
+        if let (Some(dir_value), Some(file_value), Some(kuzu::Value::String(rel_type))) =
             (row.first(), row.get(1), row.get(2))
         {
             let dir_node = DirectoryNodeFromKuzu::from_kuzu_node(dir_value);
             let file_node = FileNodeFromKuzu::from_kuzu_node(file_value);
-            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
             println!(
                 "Directory-File relationship: {} -[type: {}]-> {}",
-                dir_node.path, rel_type_name, file_node.path
+                dir_node.path, rel_type, file_node.path
             );
             if dir_node.path.as_str() == "app/models"
                 && file_node.path.as_str() == "app/models/user_model.rb"
             {
-                assert_eq!(rel_type_name, RelationshipType::DirContainsFile.as_str());
+                assert_eq!(rel_type, RelationshipType::DirContainsFile.as_str());
             }
             if dir_node.path.as_str() == "lib/authentication"
                 && file_node.path.as_str() == "lib/authentication/providers.rb"
             {
-                assert_eq!(rel_type_name, RelationshipType::DirContainsFile.as_str());
+                assert_eq!(rel_type, RelationshipType::DirContainsFile.as_str());
             }
         }
     }
@@ -1083,34 +1078,33 @@ async fn test_simple_end_to_end_kuzu() {
     println!("--------------------------------");
 
     // Query directory -> directory relationships
-    let dir_dir_rel_type = relationship_type_map.get_type_id(RelationshipType::DirContainsDir);
+    let dir_dir_rel_type = RelationshipType::DirContainsDir.as_string();
     let query_dir_dir_rels = format!(
-        "MATCH (d1:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]->(d2:DirectoryNode) WHERE r.type = {dir_dir_rel_type} RETURN d1, d2, r.type"
+        "MATCH (d1:DirectoryNode)-[r:DIRECTORY_RELATIONSHIPS]->(d2:DirectoryNode) WHERE r.type = '{dir_dir_rel_type}' RETURN d1, d2, r.type"
     );
 
     let result = connection
         .query(&query_dir_dir_rels)
         .expect("Failed to query directory-directory relationships");
     for row in result {
-        if let (Some(dir1_value), Some(dir2_value), Some(kuzu::Value::UInt8(rel_type))) =
+        if let (Some(dir1_value), Some(dir2_value), Some(kuzu::Value::String(rel_type))) =
             (row.first(), row.get(1), row.get(2))
         {
             let dir1_node = DirectoryNodeFromKuzu::from_kuzu_node(dir1_value);
             let dir2_node = DirectoryNodeFromKuzu::from_kuzu_node(dir2_value);
-            let rel_type_name = relationship_type_map.get_type_name(*rel_type);
             println!(
                 "Directory-Directory relationship: {} -[type: {}]-> {}",
-                dir1_node.path, rel_type_name, dir2_node.path
+                dir1_node.path, rel_type, dir2_node.path
             );
             match dir1_node.path.as_str() {
                 "lib" => {
                     if dir2_node.path.as_str() == "lib/authentication" {
-                        assert_eq!(rel_type_name, RelationshipType::DirContainsDir.as_str());
+                        assert_eq!(rel_type, RelationshipType::DirContainsDir.as_str());
                     }
                 }
                 "app" => {
                     if dir2_node.path.as_str() == "app/models" {
-                        assert_eq!(rel_type_name, RelationshipType::DirContainsDir.as_str());
+                        assert_eq!(rel_type, RelationshipType::DirContainsDir.as_str());
                     }
                 }
                 _ => {}

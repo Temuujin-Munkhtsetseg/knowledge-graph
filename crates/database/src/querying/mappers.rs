@@ -1,4 +1,3 @@
-use crate::graph::RelationshipTypeMapping;
 use crate::querying::QueryResultRow;
 use anyhow::Error;
 
@@ -13,10 +12,6 @@ pub const INT_MAPPER: QueryResultMapper = |row: &dyn QueryResultRow, index: usiz
 };
 
 pub const RELATIONSHIP_TYPE_MAPPER: QueryResultMapper = |row: &dyn QueryResultRow, index: usize| {
-    let value: u8 = row.get_uint_value(index)?.try_into()?;
-
-    let relationship_type_mapper = RelationshipTypeMapping::new();
-    let type_name = relationship_type_mapper.get_type_name(value);
-
-    Ok(serde_json::Value::String(type_name.to_string()))
+    let value: String = row.get_string_value(index)?;
+    Ok(serde_json::Value::String(value))
 };

@@ -1764,7 +1764,6 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gitalisk-core"
 version = "0.6.0"
-source = "git+https://gitlab.com/gitlab-org/rust/gitalisk.git?tag=v0.6.0#cb15b81ce168483cc74bd83302f95fc144cff9dd"
 dependencies = [
  "ignore",
  "serde",
@@ -6752,3 +6751,7 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "parser-core"
+version = "0.19.1"
