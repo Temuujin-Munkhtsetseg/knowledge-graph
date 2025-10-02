@@ -28,10 +28,7 @@ pub fn resolve_paths(
         found.ok_or_else(|| {
             rmcp::ErrorData::new(
                 ErrorCode::INVALID_REQUEST,
-                format!(
-                    "File not found in any registered project: {}",
-                    input_file_path
-                ),
+                format!("File not found in any registered project: {input_file_path}"),
                 None,
             )
         })?

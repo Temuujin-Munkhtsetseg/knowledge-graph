@@ -77,7 +77,7 @@ impl<'a> RepoMapService<'a> {
             .map_err(|e| {
                 rmcp::ErrorData::new(
                     ErrorCode::INVALID_REQUEST,
-                    format!("Database query failed: {}.", e),
+                    format!("Database query failed: {e}."),
                     None,
                 )
             })?;

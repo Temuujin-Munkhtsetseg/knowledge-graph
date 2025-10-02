@@ -492,14 +492,13 @@ mod tests {
         let fixture_json = format!(
             r#"{{
             "mcpServers": {{
-                "{}": {{
+                "{MCP_NAME}": {{
                     "type": "sse",
-                    "url": "{}",
+                    "url": "{server_url}",
                     "approvedTools": false
                 }}
             }}
-        }}"#,
-            MCP_NAME, server_url
+        }}"#
         );
         fs::write(mcp_config_path.clone(), fixture_json).unwrap();
 
@@ -527,12 +526,11 @@ mod tests {
         let fixture_json = format!(
             r#"{{
             "mcpServers": {{
-                "{}": {{
-                    "url": "{}"
+                "{MCP_NAME}": {{
+                    "url": "{server_url}"
                 }}
             }}
-        }}"#,
-            MCP_NAME, server_url
+        }}"#
         );
         fs::write(mcp_config_path.clone(), fixture_json).unwrap();
 

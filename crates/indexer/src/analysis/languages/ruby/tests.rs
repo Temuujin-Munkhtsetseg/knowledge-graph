@@ -75,7 +75,7 @@ async fn setup_ruby_reference_pipeline(database: &Arc<KuzuDatabase>) -> RubyRefe
         .as_nanos();
     let database_path: String = local_repo
         .workspace_path
-        .join(format!("database_{}_{}.kz", process_id, timestamp))
+        .join(format!("database_{process_id}_{timestamp}.kz"))
         .to_str()
         .unwrap()
         .to_string();
@@ -177,8 +177,7 @@ async fn test_notification_service_call_resolution() {
 
     assert!(
         notify_callers.contains(&"UsersController#destroy".to_string()),
-        "Should have call relationship from UsersController#destroy to NotificationService::notify. Found callers: {:?}",
-        notify_callers
+        "Should have call relationship from UsersController#destroy to NotificationService::notify. Found callers: {notify_callers:?}"
     );
 }
 
@@ -201,8 +200,7 @@ async fn test_send_welcome_email_resolution() {
     // Should find calls from UsersController#create and potentially other places
     assert!(
         create_calls.contains(&"User#send_welcome_email".to_string()),
-        "Should find call from UsersController#create to User#send_welcome_email. Found calls: {:?}",
-        create_calls
+        "Should find call from UsersController#create to User#send_welcome_email. Found calls: {create_calls:?}"
     );
 
     // Test that send_welcome_email method calls EmailService.send_welcome
@@ -264,22 +262,19 @@ async fn test_static_method_call_resolution() {
         calls_to_create_session
             .iter()
             .any(|caller| caller.contains("Application#test_authentication_flow")),
-        "AuthService::create_session should be called from Application#test_authentication_flow. Found callers: {:?}",
-        calls_to_create_session
+        "AuthService::create_session should be called from Application#test_authentication_flow. Found callers: {calls_to_create_session:?}"
     );
     assert!(
         calls_to_authenticate_token.iter().any(|caller| caller
             .contains("Application#test_authentication_flow")
             || caller.contains("UsersController")),
-        "AuthService::authenticate_token should be called from Application#test_authentication_flow or a controller. Found callers: {:?}",
-        calls_to_authenticate_token
+        "AuthService::authenticate_token should be called from Application#test_authentication_flow or a controller. Found callers: {calls_to_authenticate_token:?}"
     );
     assert!(
         calls_to_refresh_session
             .iter()
             .any(|caller| caller.contains("Application#test_authentication_flow")),
-        "AuthService::refresh_session should be called from Application#test_authentication_flow. Found callers: {:?}",
-        calls_to_refresh_session
+        "AuthService::refresh_session should be called from Application#test_authentication_flow. Found callers: {calls_to_refresh_session:?}"
     );
 
     database.drop_database(&setup.database_path);
@@ -303,9 +298,8 @@ async fn test_ruby_call_relationship_has_location() {
     let calls_id = mapping.get_type_id(RelationshipType::Calls);
     let query = format!(
         "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
-         WHERE target.fqn = 'AuthService::create_session' AND source.fqn = 'Application#test_authentication_flow' AND r.type = {} \
-         RETURN r.source_start_line, r.source_end_line, r.source_start_col, r.source_end_col",
-        calls_id
+         WHERE target.fqn = 'AuthService::create_session' AND source.fqn = 'Application#test_authentication_flow' AND r.type = {calls_id} \
+         RETURN r.source_start_line, r.source_end_line, r.source_start_col, r.source_end_col"
     );
     let result = conn.query(&query).expect("query ok");
 
@@ -356,8 +350,7 @@ async fn test_chained_method_call_resolution() {
             .iter()
             .any(|caller| caller.contains("UsersController"))
             || show_calls.contains(&"User#get_profile".to_string()),
-        "Should find call to User#get_profile from UsersController. Show calls: {:?}",
-        show_calls
+        "Should find call to User#get_profile from UsersController. Show calls: {show_calls:?}"
     );
 
     // Test that get_profile calls Profile.find_by_user_id
@@ -564,9 +557,7 @@ async fn test_service_method_call_patterns() {
     for expected_call in &expected_internal_calls {
         assert!(
             notify_method_calls.contains(&expected_call.to_string()),
-            "NotificationService::notify should call {}. Actual calls: {:?}",
-            expected_call,
-            notify_method_calls
+            "NotificationService::notify should call {expected_call}. Actual calls: {notify_method_calls:?}"
         );
     }
 
@@ -629,8 +620,7 @@ async fn test_controller_action_call_resolution() {
             create_method_calls
                 .iter()
                 .any(|callee| callee.contains(expected_call)),
-            "UsersController#create should call something with {}",
-            expected_call
+            "UsersController#create should call something with {expected_call}"
         );
     }
 
@@ -877,8 +867,7 @@ async fn test_ruby_private_method_calls() {
     // Check if we're detecting any method calls from activate! (it should call update and send_notification)
     assert!(
         !user_activate_calls.is_empty(),
-        "User#activate! should call some methods (send_notification, update, etc.). Found: {:?}",
-        user_activate_calls
+        "User#activate! should call some methods (send_notification, update, etc.). Found: {user_activate_calls:?}"
     );
 
     // Test private method calling other services

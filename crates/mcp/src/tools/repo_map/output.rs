@@ -85,9 +85,9 @@ fn build_directories_ascii_tree(directories: &[String]) -> String {
             out.push_str(name);
             out.push('\n');
             let new_prefix = if last {
-                format!("{}    ", prefix)
+                format!("{prefix}    ")
             } else {
-                format!("{}│   ", prefix)
+                format!("{prefix}│   ")
             };
             render(child, &new_prefix, out);
         }

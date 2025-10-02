@@ -142,7 +142,7 @@ fn get_possible_paths(base_path: &Path, module_parts: &[&str]) -> Vec<String> {
     let last_part = module_parts[module_parts.len() - 1];
 
     // Option 1: It's a Python file
-    let file_path = path.join(format!("{}.py", last_part));
+    let file_path = path.join(format!("{last_part}.py"));
     possible_files.push(file_path.to_string_lossy().to_string());
 
     // Option 2: It's a package with __init__.py

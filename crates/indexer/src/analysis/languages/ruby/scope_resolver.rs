@@ -212,9 +212,9 @@ impl DefinitionMap {
                 && methods.iter().any(|m| m.as_ref() == method_name)
             {
                 let method_fqn = if is_singleton {
-                    format!("{}::{}", class, method_name)
+                    format!("{class}::{method_name}")
                 } else {
-                    format!("{}#{}", class, method_name)
+                    format!("{class}#{method_name}")
                 };
                 return self.definitions.get(method_fqn.as_str());
             }
@@ -225,7 +225,7 @@ impl DefinitionMap {
                     if let Some(methods) = methods_map.get(module_fqn.as_ref())
                         && methods.iter().any(|m| m.as_ref() == method_name)
                     {
-                        let method_fqn = format!("{}#{}", module_fqn, method_name);
+                        let method_fqn = format!("{module_fqn}#{method_name}");
                         if let Some(def) = self.definitions.get(method_fqn.as_str()) {
                             return Some(def);
                         }

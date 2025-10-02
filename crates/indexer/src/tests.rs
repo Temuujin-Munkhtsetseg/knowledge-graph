@@ -493,9 +493,8 @@ async fn test_typescript_call_relationship_has_location() {
     // Assert a known internal call's location: Application::testTokenManagement -> Application::run at 0-based line 20
     let ts_query = format!(
         "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
-         WHERE source.fqn = 'Application::testTokenManagement' AND target.fqn = 'Application::run' AND r.type = {} \
-         RETURN r.source_start_line, r.source_end_line",
-        calls_id
+         WHERE source.fqn = 'Application::testTokenManagement' AND target.fqn = 'Application::run' AND r.type = {calls_id} \
+         RETURN r.source_start_line, r.source_end_line"
     );
     let result = conn.query(&ts_query).expect("query ok");
     let rows: Vec<_> = result.into_iter().collect();

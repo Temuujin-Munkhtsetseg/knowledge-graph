@@ -285,8 +285,8 @@ mod tests {
         let kuzu_database = KuzuDatabase::new();
         let temp_dir = tempfile::tempdir()?;
         let temp_dir_path = temp_dir.path().to_str().unwrap();
-        let dbpath = format!("{}/database.kz", temp_dir_path);
-        println!("dbpath: {}", dbpath);
+        let dbpath = format!("{temp_dir_path}/database.kz");
+        println!("dbpath: {dbpath}");
 
         let database = match kuzu_database.get_or_create_database(&dbpath, None) {
             Some(db) => db,
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(stats.relationship_tables, 4);
         assert_eq!(stats.total_nodes, 0);
         assert_eq!(stats.total_relationships, 0);
-        println!("{}", stats);
+        println!("{stats}");
 
         Ok(())
     }

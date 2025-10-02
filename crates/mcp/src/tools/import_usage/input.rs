@@ -57,7 +57,7 @@ impl ImportUsageInput {
             let obj = p.as_object().ok_or_else(|| {
                 rmcp::ErrorData::new(
                     ErrorCode::INVALID_PARAMS,
-                    format!("Package at index {} must be an object.", idx),
+                    format!("Package at index {idx} must be an object."),
                     None,
                 )
             })?;
@@ -68,7 +68,7 @@ impl ImportUsageInput {
                 .ok_or_else(|| {
                     rmcp::ErrorData::new(
                         ErrorCode::INVALID_PARAMS,
-                        format!("Missing 'import_path' in package index {}.", idx),
+                        format!("Missing 'import_path' in package index {idx}."),
                         None,
                     )
                 })?
@@ -76,7 +76,7 @@ impl ImportUsageInput {
             if import_path.trim().is_empty() {
                 return Err(rmcp::ErrorData::new(
                     ErrorCode::INVALID_PARAMS,
-                    format!("Empty 'import_path' in package index {}.", idx),
+                    format!("Empty 'import_path' in package index {idx}."),
                     None,
                 ));
             }

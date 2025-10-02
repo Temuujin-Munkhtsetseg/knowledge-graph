@@ -297,7 +297,7 @@ mod tests {
         );
         let index_result = index_tool.call(index_params).await;
         if let Err(e) = &index_result {
-            eprintln!("INDEX_DEBUG: indexing error={:?}", e);
+            eprintln!("INDEX_DEBUG: indexing error={e:?}");
         }
         assert!(index_result.is_ok(), "Indexing should succeed");
     }
@@ -338,7 +338,7 @@ mod tests {
             rmcp::model::RawContent::Text(t) => t.text.clone(),
             _ => panic!("Expected text content"),
         };
-        eprintln!("TS_REPO_MAP_E2E_XML=\n{}", xml);
+        eprintln!("TS_REPO_MAP_E2E_XML=\n{xml}");
 
         // Verify TypeScript file names and class declarations appear
         assert!(xml.contains("app/models/user_model.ts"));
