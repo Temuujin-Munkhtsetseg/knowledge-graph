@@ -90,6 +90,12 @@ import FeatureCard from "../../components/FeatureCard.astro";
    curl -fsSL https://gitlab.com/gitlab-org/rust/knowledge-graph/-/raw/main/install.sh | bash
    ```
 
+   ⚠️ **Note:** Ensure `$HOME/.local/bin` is in your `$PATH` environment variable. Add this line to your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`):
+
+   ```bash
+   export PATH="$HOME/.local/bin:$PATH"
+   ```
+
 2. **Index your first repository**
 
    Navigate to your project and create the knowledge graph:
