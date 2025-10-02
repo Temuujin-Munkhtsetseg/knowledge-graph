@@ -165,7 +165,7 @@ impl GetReferencesService {
                 .map(|_| {
                     Err(std::io::Error::new(
                         e.kind(),
-                        format!("Failed to read file chunks: {}.", e),
+                        format!("Failed to read file chunks: {e}."),
                     ))
                 })
                 .collect(),
@@ -195,7 +195,7 @@ impl GetReferencesService {
             if index == 0 {
                 message.push_str("Failed to read some some files:");
             }
-            message.push_str(&format!("\n- {}.", file_read_error));
+            message.push_str(&format!("\n- {file_read_error}."));
             if index == file_read_errors.len() - 1 {
                 message.push_str(
                     "\nPerhaps some files were deleted, moved or changed since the last indexing.",
@@ -206,7 +206,7 @@ impl GetReferencesService {
 
         // Document next page
         if let Some(next_page) = next_page {
-            message.push_str(&format!("There are more results on page {} if more context is needed for the current task.\n", next_page));
+            message.push_str(&format!("There are more results on page {next_page} if more context is needed for the current task.\n"));
         }
 
         // Document total results

@@ -21,7 +21,7 @@ impl KnowledgeGraphToolInput {
             .and_then(|v| v.as_array())
             .ok_or(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
-                format!("Missing array parameter: {}", key),
+                format!("Missing array parameter: {key}"),
                 None,
             ))?;
 
@@ -38,7 +38,7 @@ impl KnowledgeGraphToolInput {
             .and_then(|v| v.as_str())
             .ok_or(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
-                format!("Missing string parameter: {}", key),
+                format!("Missing string parameter: {key}"),
                 None,
             ))
     }
@@ -50,7 +50,7 @@ impl KnowledgeGraphToolInput {
             .map(|v| v as usize)
             .ok_or(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
-                format!("Missing usize parameter: {}", key),
+                format!("Missing usize parameter: {key}"),
                 None,
             ))
     }
@@ -61,7 +61,7 @@ impl KnowledgeGraphToolInput {
             .and_then(|v| v.as_u64())
             .ok_or(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
-                format!("Missing u64 parameter: {}", key),
+                format!("Missing u64 parameter: {key}"),
                 None,
             ))
     }
@@ -72,7 +72,7 @@ impl KnowledgeGraphToolInput {
             .and_then(|v| v.as_bool())
             .ok_or(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_REQUEST,
-                format!("Missing boolean parameter: {}", key),
+                format!("Missing boolean parameter: {key}"),
                 None,
             ))
     }

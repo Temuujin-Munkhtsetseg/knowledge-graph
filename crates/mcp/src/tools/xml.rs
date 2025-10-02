@@ -74,11 +74,11 @@ impl XmlBuilder {
         let formatted_content = if content.starts_with('\n') && content.ends_with('\n') {
             content.to_string()
         } else if content.starts_with('\n') {
-            format!("{}\n", content)
+            format!("{content}\n")
         } else if content.ends_with('\n') {
-            format!("\n{}", content)
+            format!("\n{content}")
         } else {
-            format!("\n{}\n", content)
+            format!("\n{content}\n")
         };
 
         let cdata = Event::CData(BytesCData::new(formatted_content));

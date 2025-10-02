@@ -193,7 +193,7 @@ impl SearchCodebaseDefinitionsTool {
             .query_service
             .execute_query(database_path.to_path_buf(), query.query, query_params)
             .map_err(|e| SearchError {
-                message: format!("Database query failed: {}.", e),
+                message: format!("Database query failed: {e}."),
                 source: None,
             })?;
 
@@ -250,7 +250,7 @@ impl SearchCodebaseDefinitionsTool {
             source: None,
         })?
         .map_err(|e| SearchError {
-            message: format!("Failed to read file chunks: {}.", e),
+            message: format!("Failed to read file chunks: {e}."),
             source: None,
         })?;
 
@@ -276,7 +276,7 @@ impl SearchCodebaseDefinitionsTool {
                         name,
                         fqn,
                         definition_type,
-                        location: format!("{}:L{}-{}", file_path, start_line, end_line),
+                        location: format!("{file_path}:L{start_line}-{end_line}"),
                         context,
                     }
                 },
@@ -317,12 +317,12 @@ impl SearchCodebaseDefinitionsTool {
             if index == 0 {
                 message.push_str("Failed to read some some files:");
             }
-            message.push_str(&format!("\n- {}.", file_read_error));
+            message.push_str(&format!("\n- {file_read_error}."));
             if index == file_read_errors.len() - 1 {
                 message.push_str(
                     "\nPerhaps some files were deleted, moved or changed since the last indexing.",
                 );
-                message.push_str(&format!("\nIf the missing context is important, use the `index_project` tool to re-index the project {} and try again.\n", project_absolute_path));
+                message.push_str(&format!("\nIf the missing context is important, use the `index_project` tool to re-index the project {project_absolute_path} and try again.\n"));
             }
         }
 
@@ -353,8 +353,7 @@ impl SearchCodebaseDefinitionsTool {
 
         if let Some(next_page) = next_page {
             message.push_str(&format!(
-                "There are more results on page {} if more context is needed for the current task.",
-                next_page
+                "There are more results on page {next_page} if more context is needed for the current task."
             ));
         }
 
@@ -423,7 +422,7 @@ impl KnowledgeGraphTool for SearchCodebaseDefinitionsTool {
         let xml_output = output.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Failed to convert output to XML: {}", e),
+                format!("Failed to convert output to XML: {e}"),
                 None,
             )
         })?;

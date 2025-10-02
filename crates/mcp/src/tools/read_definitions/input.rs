@@ -53,7 +53,7 @@ impl ReadDefinitionsToolInput {
             let def_object = def_value.as_object().ok_or_else(|| {
                 rmcp::ErrorData::new(
                     ErrorCode::INVALID_PARAMS,
-                    format!("Definition at index {} must be an object.", index),
+                    format!("Definition at index {index} must be an object."),
                     None,
                 )
             })?;
@@ -64,10 +64,7 @@ impl ReadDefinitionsToolInput {
                 .ok_or_else(|| {
                     rmcp::ErrorData::new(
                         ErrorCode::INVALID_PARAMS,
-                        format!(
-                            "Missing or invalid 'names' array in definition at index {}.",
-                            index
-                        ),
+                        format!("Missing or invalid 'names' array in definition at index {index}."),
                         None,
                     )
                 })?;
@@ -75,7 +72,7 @@ impl ReadDefinitionsToolInput {
             if names_array.is_empty() {
                 return Err(rmcp::ErrorData::new(
                     ErrorCode::INVALID_PARAMS,
-                    format!("Names array cannot be empty at index {}.", index),
+                    format!("Names array cannot be empty at index {index}."),
                     None,
                 ));
             }
@@ -87,8 +84,7 @@ impl ReadDefinitionsToolInput {
                     rmcp::ErrorData::new(
                         ErrorCode::INVALID_PARAMS,
                         format!(
-                            "Missing or invalid 'file_path' field in definition at index {}.",
-                            index
+                            "Missing or invalid 'file_path' field in definition at index {index}."
                         ),
                         None,
                     )
@@ -104,8 +100,7 @@ impl ReadDefinitionsToolInput {
                     rmcp::ErrorData::new(
                         ErrorCode::INVALID_PARAMS,
                         format!(
-                            "Name at index {} in names array at definition index {} must be a string.",
-                            name_index, index
+                            "Name at index {name_index} in names array at definition index {index} must be a string."
                         ),
                         None,
                     )
@@ -115,8 +110,7 @@ impl ReadDefinitionsToolInput {
                     return Err(rmcp::ErrorData::new(
                         ErrorCode::INVALID_PARAMS,
                         format!(
-                            "Definition name cannot be empty at name index {} in definition index {}.",
-                            name_index, index
+                            "Definition name cannot be empty at name index {name_index} in definition index {index}."
                         ),
                         None,
                     ));

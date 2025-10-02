@@ -67,7 +67,7 @@ impl KnowledgeGraphTool for GetDefinitionTool {
         let xml_output = result.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Failed to convert output to XML: {}", e),
+                format!("Failed to convert output to XML: {e}"),
                 None,
             )
         })?;

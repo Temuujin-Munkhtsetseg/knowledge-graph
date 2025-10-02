@@ -67,7 +67,7 @@ impl ExpressionResolver {
         definition_relationships: &mut Vec<DefinitionRelationship>,
         definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
     ) {
-        debug!("Resolving Java references in file {}.", file_path);
+        debug!("Resolving Java references in file {file_path}.");
         if let Some(java_iterator) = references.iter_java() {
             for reference in java_iterator {
                 let range = (
@@ -392,7 +392,7 @@ impl ExpressionResolver {
         member: &str,
         file: &JavaFile,
     ) -> Option<ResolvedType> {
-        debug!("Resolving Java field {} in class hierarchy.", member);
+        debug!("Resolving Java field {member} in class hierarchy.");
 
         // Check in current class first
         let scope = file.scopes.get(&class.fqn)?;
@@ -444,10 +444,7 @@ impl ExpressionResolver {
         range: (u64, u64),
         name: &str,
     ) -> Option<ResolvedType> {
-        debug!(
-            "Resolving Java identifier expression {} in file {}.",
-            name, file_path
-        );
+        debug!("Resolving Java identifier expression {name} in file {file_path}.");
         let file = self.files.get(file_path).unwrap();
 
         // Look up if the identifier is a class name the imported symbols
@@ -492,7 +489,7 @@ impl ExpressionResolver {
 
         // Look up the file wildward imports
         for import_path in file.wildcard_imports.iter() {
-            let potential_fqn = format!("{}.{}", import_path, name);
+            let potential_fqn = format!("{import_path}.{name}");
             if let Some(imported_file_path) = self.definition_nodes.get(&potential_fqn)
                 && let Some(imported_file) = self.files.get(&imported_file_path.file_path())
                 && let Some(class) = imported_file.classes.get(&imported_file_path.fqn)
@@ -525,10 +522,7 @@ impl ExpressionResolver {
         range: (u64, u64),
         name: &str,
     ) -> Option<ResolvedType> {
-        debug!(
-            "Resolving Java identifier type {} in file {} at range.",
-            name, file_path
-        );
+        debug!("Resolving Java identifier type {name} in file {file_path} at range.");
 
         let file = self.files.get(file_path).unwrap();
         let file_scope = file.get_scope_at_offset(range.0);
@@ -594,10 +588,7 @@ impl ExpressionResolver {
         type_name: &str,
         resolutions: &mut Resolutions,
     ) -> Option<ResolvedType> {
-        debug!(
-            "Resolving Java constructor call {} in file {}.",
-            type_name, file_path
-        );
+        debug!("Resolving Java constructor call {type_name} in file {file_path}.");
 
         match self.resolve_type(file_path, None, type_name) {
             Some(ResolvedType::Definition(java_type)) => {
@@ -608,7 +599,7 @@ impl ExpressionResolver {
 
                 let constructor_resolution = DefinitionResolution {
                     name: name.clone(),
-                    fqn: format!("{}.{}", fqn, name),
+                    fqn: format!("{fqn}.{name}"),
                 };
 
                 let class_resolution = DefinitionResolution { name, fqn };
@@ -736,7 +727,7 @@ impl ExpressionResolver {
                     break;
                 }
 
-                let potential_fqn = format!("{}.{}", import_path, parent_symbol);
+                let potential_fqn = format!("{import_path}.{parent_symbol}");
                 if let Some(definition) = self.definition_nodes.get(&potential_fqn) {
                     if let Some(file) = self.files.get(&definition.file_path()) {
                         parent_symbol_file = Some(file);

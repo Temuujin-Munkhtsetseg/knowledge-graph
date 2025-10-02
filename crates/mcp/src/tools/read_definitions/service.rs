@@ -113,7 +113,7 @@ impl ReadDefinitionsService {
                 .map(|_| {
                     Err(std::io::Error::new(
                         e.kind(),
-                        format!("Failed to read file chunks: {}.", e),
+                        format!("Failed to read file chunks: {e}."),
                     ))
                 })
                 .collect(),
@@ -144,7 +144,7 @@ impl ReadDefinitionsService {
             if index == 0 {
                 message.push_str("Failed to read some definition bodies:");
             }
-            message.push_str(&format!("\n- {}.", file_read_error));
+            message.push_str(&format!("\n- {file_read_error}."));
             if index == file_read_errors.len() - 1 {
                 message.push_str(
                     "\nPerhaps some files were deleted, moved or changed since the last indexing.",
@@ -156,14 +156,12 @@ impl ReadDefinitionsService {
         // Document results summary
         let total_requested = input.definition_requests.len();
         message.push_str(&format!(
-            "Processed {} definition requests, found {} definitions.\n",
-            total_requested, total_found
+            "Processed {total_requested} definition requests, found {total_found} definitions.\n"
         ));
 
         if total_found > 0 {
             message.push_str(&format!(
-                "Successfully read {} definition bodies, {} had errors.\n",
-                total_with_body, total_with_errors
+                "Successfully read {total_with_body} definition bodies, {total_with_errors} had errors.\n"
             ));
 
             message.push_str("\nDecision Framework:\n");

@@ -42,20 +42,14 @@ pub fn read_mcp_configuration(path: PathBuf) -> McpConfiguration {
     let content = fs::read_to_string(path);
 
     if let Err(e) = content {
-        warn!(
-            "Could not parse MCP configuration: {}. Returning default configuration.",
-            e
-        );
+        warn!("Could not parse MCP configuration: {e}. Returning default configuration.");
         return McpConfiguration::default();
     }
 
     match serde_json::from_str(&content.unwrap()) {
         Ok(configuration) => configuration,
         Err(e) => {
-            warn!(
-                "Could not parse MCP configuration: {}. Returning default configuration.",
-                e
-            );
+            warn!("Could not parse MCP configuration: {e}. Returning default configuration.");
             McpConfiguration::default()
         }
     }
@@ -72,10 +66,7 @@ pub fn get_or_create_mcp_configuration(
             return McpConfiguration::default();
         }
         Err(e) => {
-            warn!(
-                "Could not get data directory info: {}. Returning default MCP configuration.",
-                e
-            );
+            warn!("Could not get data directory info: {e}. Returning default MCP configuration.");
             return McpConfiguration::default();
         }
     };
@@ -88,10 +79,7 @@ pub fn get_or_create_mcp_configuration(
     if !configuration_path.exists() {
         let new_configuration = McpConfiguration::default();
         if let Err(e) = new_configuration.save(&configuration_path) {
-            warn!(
-                "Could not save MCP configuration: {}. Returning default configuration.",
-                e
-            );
+            warn!("Could not save MCP configuration: {e}. Returning default configuration.");
             return McpConfiguration::default();
         }
 
@@ -107,18 +95,12 @@ pub fn get_or_create_mcp_configuration(
         Ok(content) => match serde_json::from_str(&content) {
             Ok(configuration) => configuration,
             Err(e) => {
-                warn!(
-                    "Could not parse MCP configuration: {}. Returning default configuration.",
-                    e
-                );
+                warn!("Could not parse MCP configuration: {e}. Returning default configuration.");
                 McpConfiguration::default()
             }
         },
         Err(e) => {
-            warn!(
-                "Could not read MCP configuration: {}. Returning default configuration.",
-                e
-            );
+            warn!("Could not read MCP configuration: {e}. Returning default configuration.");
             McpConfiguration::default()
         }
     }

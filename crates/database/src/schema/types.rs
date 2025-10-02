@@ -378,7 +378,7 @@ impl From<KuzuDataType> for DataType {
             KuzuDataType::Double => DataType::Float64,
             KuzuDataType::Boolean => DataType::Boolean,
             KuzuDataType::Date => DataType::Date32,
-            _ => panic!("Unsupported data type: {}", data_type),
+            _ => panic!("Unsupported data type: {data_type}"),
         }
     }
 }

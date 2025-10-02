@@ -179,7 +179,7 @@ impl ImportUsageService {
                         .split_whitespace()
                         .collect::<Vec<_>>()
                         .join(" ");
-                    imports_text.push_str(&format!("import {} L{}-{}\n", one_line, s, e));
+                    imports_text.push_str(&format!("import {one_line} L{s}-{e}\n"));
                 }
             }
 
@@ -188,7 +188,7 @@ impl ImportUsageService {
                 entries_sorted
                     .sort_by_key(|(_, _def_start, ref_start, ref_end, _)| (*ref_start, *ref_end));
                 for (fqn, def_start, ref_start, ref_end, snippet) in entries_sorted.into_iter() {
-                    usages_text.push_str(&format!("usage {} L{}-{}\n", fqn, ref_start, ref_end));
+                    usages_text.push_str(&format!("usage {fqn} L{ref_start}-{ref_end}\n"));
                     if def_start > 0 && ref_start >= def_start {
                         usages_text.push_str("│ ...\n");
                     }

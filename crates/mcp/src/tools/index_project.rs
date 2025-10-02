@@ -273,7 +273,7 @@ impl KnowledgeGraphTool for IndexProjectTool {
         let xml_output = output.to_xml_without_cdata().map_err(|e| {
             rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Failed to convert output to XML: {}", e),
+                format!("Failed to convert output to XML: {e}"),
                 None,
             )
         })?;
@@ -349,7 +349,7 @@ mod tests {
             "Expected project-path element"
         );
         assert!(
-            text.contains(&format!("<project-path>{}</project-path>", project_path)),
+            text.contains(&format!("<project-path>{project_path}</project-path>")),
             "Expected project path in XML"
         );
         assert!(

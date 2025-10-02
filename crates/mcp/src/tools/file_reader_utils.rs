@@ -74,8 +74,7 @@ pub async fn read_file_chunks(
         match task_result {
             Ok(chunk_result) => results.push(chunk_result),
             Err(join_error) => results.push(Err(io::Error::other(format!(
-                "Task join error: {}",
-                join_error
+                "Task join error: {join_error}"
             )))),
         }
     }
@@ -104,7 +103,7 @@ async fn read_file_chunk_async(
         if lines.next_line().await?.is_none() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("Start line {} exceeds file length", start_line),
+                format!("Start line {start_line} exceeds file length"),
             ));
         }
     }

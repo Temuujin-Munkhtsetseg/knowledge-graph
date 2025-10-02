@@ -131,7 +131,7 @@ impl<'a> KuzuConnection<'a> {
 
         // For Parquet files, we don't need HEADER option as schema is embedded
         // Schema information is stored in Parquet metadata
-        let query = format!("COPY {} FROM '{}'", table_name, db_safe_path);
+        let query = format!("COPY {table_name} FROM '{db_safe_path}'");
 
         info!("Importing data into {}: {}", table_name, file_path);
         self.execute_ddl(&query).map_err(|e| {
@@ -167,7 +167,7 @@ impl<'a> KuzuConnection<'a> {
             absolute_path.display().to_string()
         };
 
-        let mut query = format!("COPY {} FROM '{}'", table_name, db_safe_path);
+        let mut query = format!("COPY {table_name} FROM '{db_safe_path}'");
 
         // For Parquet files, only from/to options are needed for relationship tables
         // HEADER is not needed as schema is embedded in Parquet metadata

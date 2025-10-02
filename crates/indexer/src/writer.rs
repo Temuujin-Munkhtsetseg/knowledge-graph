@@ -128,7 +128,7 @@ impl WriterService {
         let relationships = match graph_mapper.consolidate_relationships() {
             Ok(relationships) => relationships,
             Err(e) => {
-                log::error!("Error consolidating relationships: {}", e);
+                log::error!("Error consolidating relationships: {e}");
                 return Err(e);
             }
         };

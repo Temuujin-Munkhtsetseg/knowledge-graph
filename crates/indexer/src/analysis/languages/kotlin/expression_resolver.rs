@@ -847,7 +847,7 @@ impl KotlinExpressionResolver {
         let class = file.classes.get(class_fqn)?;
 
         // First check if the member is child class of the type
-        let potential_init_fqn = format!("{}.{}.<init>", class_fqn, name);
+        let potential_init_fqn = format!("{class_fqn}.{name}.<init>");
         if let Some(init) = file.functions.get(&potential_init_fqn) {
             resolutions
                 .definition_resolutions
@@ -862,7 +862,7 @@ impl KotlinExpressionResolver {
             }));
         }
 
-        let potential_fqn = format!("{}.{}", class_fqn, name);
+        let potential_fqn = format!("{class_fqn}.{name}");
         if let Some(definition) = file.classes.get(&potential_fqn) {
             resolutions
                 .definition_resolutions
@@ -895,7 +895,7 @@ impl KotlinExpressionResolver {
         }
 
         if let Some(companion) = &class.companion {
-            let companion_fqn = format!("{}.{}", class_fqn, companion);
+            let companion_fqn = format!("{class_fqn}.{companion}");
             if let Some(resolved) =
                 self.resolve_function_type_in_class(&companion_fqn, name, resolutions)
             {
@@ -1233,7 +1233,7 @@ impl KotlinExpressionResolver {
         let target_file = self.files.get(&target_file_path)?;
 
         // First check if the member is an enum entry
-        let potential_fqn = format!("{}.{}", type_fqn, name);
+        let potential_fqn = format!("{type_fqn}.{name}");
         if let Some(enum_fqn) = target_file.enum_entries_by_enum.get(potential_fqn.as_str()) {
             let enum_class = target_file.classes.get(enum_fqn)?;
 
@@ -1384,7 +1384,7 @@ impl KotlinExpressionResolver {
 
             // Check wildcard imports
             for wildcard_import in &file.wildcard_imports {
-                let full_import_path = format!("{}.{}", wildcard_import, parent_symbol);
+                let full_import_path = format!("{wildcard_import}.{parent_symbol}");
                 if let Some(definition) = self.definition_nodes.get(&full_import_path) {
                     parent_symbol_file = self.files.get(&definition.file_path());
                 }
@@ -1521,7 +1521,7 @@ impl KotlinExpressionResolver {
 
         // Then look at the wildcard imports
         for wildcard_import in file.wildcard_imports.iter() {
-            let full_import_path = format!("{}.{}", wildcard_import, name);
+            let full_import_path = format!("{wildcard_import}.{name}");
             if let Some(definition) = self.definition_nodes.get(&full_import_path) {
                 // If the definition is a property, resolve the type of the property.
                 let definition_file = self.files.get(&definition.file_path())?;
