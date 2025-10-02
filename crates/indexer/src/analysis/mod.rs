@@ -9,7 +9,7 @@ use crate::analysis::types::{
     ImportedSymbolImportedSymbolRelationship, ImportedSymbolLocation, ImportedSymbolNode,
     OptimizedFileTree,
 };
-use crate::parsing::processor::FileProcessingResult;
+use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
 use parser_core::parser::SupportedLanguage;
 use std::{
@@ -70,8 +70,8 @@ impl AnalysisService {
 
     /// Analyze file processing results and transform them into graph data
     pub fn analyze_results(
-        &mut self,
-        file_results: &Vec<FileProcessingResult>,
+        mut self,
+        file_results: Vec<FileProcessingResult>,
     ) -> Result<GraphData, String> {
         let start_time = Instant::now();
         log::info!(
@@ -115,18 +115,10 @@ impl AnalysisService {
             let mut imported_symbol_to_definitions = HashMap::new();
             let mut imported_symbol_to_files = HashMap::new();
 
-            // Initialize Ruby resolver with capacity estimates for this language
-            if language == SupportedLanguage::Ruby && !results.is_empty() {
-                let estimated_definitions = results.len() * 5; // Estimate 5 definitions per file
-                let estimated_scopes = results.len() * 10; // Estimate 10 scopes per file
-                self.ruby_analyzer
-                    .initialize_resolver(estimated_definitions, estimated_scopes);
-            }
-
-            let mut file_paths = Vec::new();
-            for file_result in &results {
+            let mut file_references = Vec::new();
+            for file_result in results {
                 self.extract_file_system_entities(
-                    file_result,
+                    &file_result,
                     &mut file_nodes,
                     &mut directory_nodes,
                     &mut directory_relationships,
@@ -134,19 +126,19 @@ impl AnalysisService {
                     &mut created_dir_relationships,
                 );
                 self.extract_language_entities(
-                    file_result,
+                    &file_result,
                     &mut definition_map,
                     &mut imported_symbol_map,
                     &mut file_definition_relationships,
                     &mut file_imported_symbol_relationships,
                 );
-                file_paths.push(
+                file_references.push((
                     self.filesystem_analyzer
-                        .get_relative_path(&file_result.file_path),
-                );
+                        .get_relative_path(file_result.file_path.as_str()),
+                    file_result.references,
+                ));
             }
 
-            let file_tree = OptimizedFileTree::new(file_paths);
             self.add_nodes(
                 &definition_map,
                 &imported_symbol_map,
@@ -160,21 +152,26 @@ impl AnalysisService {
                 &mut definition_relationships,
                 &mut definition_imported_symbol_relationships,
             );
-            self.extract_import_relationships(
-                language,
-                file_tree,
-                &mut definition_map,
-                &mut imported_symbol_map,
-                &mut imported_symbol_to_imported_symbols,
-                &mut imported_symbol_to_definitions,
-                &mut imported_symbol_to_files,
-                &mut imported_symbol_imported_symbol_relationships,
-                &mut imported_symbol_definition_relationships,
-                &mut imported_symbol_file_relationships,
-            );
+            if language == SupportedLanguage::Python {
+                let file_tree =
+                    OptimizedFileTree::new(file_references.iter().map(|(path, _)| path));
+
+                self.extract_import_relationships(
+                    language,
+                    file_tree,
+                    &mut definition_map,
+                    &mut imported_symbol_map,
+                    &mut imported_symbol_to_imported_symbols,
+                    &mut imported_symbol_to_definitions,
+                    &mut imported_symbol_to_files,
+                    &mut imported_symbol_imported_symbol_relationships,
+                    &mut imported_symbol_definition_relationships,
+                    &mut imported_symbol_file_relationships,
+                );
+            }
             self.extract_reference_relationships(
                 language,
-                &results,
+                file_references,
                 &definition_map,
                 &imported_symbol_map,
                 &mut definition_relationships,
@@ -223,10 +220,10 @@ impl AnalysisService {
         })
     }
 
-    fn group_results_by_language<'a>(
+    fn group_results_by_language(
         &self,
-        file_results: &'a Vec<FileProcessingResult>,
-    ) -> HashMap<SupportedLanguage, Vec<&'a FileProcessingResult>> {
+        file_results: Vec<FileProcessingResult>,
+    ) -> HashMap<SupportedLanguage, Vec<FileProcessingResult>> {
         let mut results_by_language = HashMap::new();
 
         for file_result in file_results {
@@ -456,7 +453,7 @@ impl AnalysisService {
     fn extract_reference_relationships(
         &mut self,
         language: SupportedLanguage,
-        file_results: &Vec<&FileProcessingResult>,
+        file_references: Vec<(String, Option<References>)>,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
         definition_relationships: &mut Vec<DefinitionRelationship>,
@@ -470,15 +467,11 @@ impl AnalysisService {
         imported_symbol_to_definitions: &HashMap<ImportedSymbolLocation, Vec<DefinitionNode>>,
         imported_symbol_to_files: &HashMap<ImportedSymbolLocation, Vec<String>>,
     ) {
-        for file_result in file_results {
-            let relative_path = self
-                .filesystem_analyzer
-                .get_relative_path(&file_result.file_path);
-
+        for (relative_path, references) in file_references {
             match language {
                 SupportedLanguage::Python => {
                     self.python_analyzer.process_references(
-                        &file_result.references,
+                        &references,
                         &relative_path,
                         definition_map,
                         imported_symbol_map,
@@ -492,23 +485,23 @@ impl AnalysisService {
                     );
                 }
                 SupportedLanguage::Ruby | SupportedLanguage::Java | SupportedLanguage::Kotlin => {
-                    if let Some(references) = &file_result.references {
+                    if let Some(references) = references {
                         if language == SupportedLanguage::Ruby {
                             self.ruby_analyzer.process_references(
-                                references,
+                                &references,
                                 &relative_path,
                                 definition_relationships,
                             );
                         } else if language == SupportedLanguage::Java {
                             self.java_analyzer.process_references(
-                                references,
+                                &references,
                                 &relative_path,
                                 definition_relationships,
                                 definition_imported_symbol_relationships,
                             );
                         } else if language == SupportedLanguage::Kotlin {
                             self.kotlin_analyzer.process_references(
-                                references,
+                                &references,
                                 &relative_path,
                                 definition_relationships,
                                 definition_imported_symbol_relationships,
@@ -518,7 +511,7 @@ impl AnalysisService {
                 }
                 SupportedLanguage::TypeScript => {
                     self.typescript_analyzer.process_references(
-                        file_result,
+                        &references,
                         &relative_path,
                         definition_relationships,
                         file_definition_relationships,

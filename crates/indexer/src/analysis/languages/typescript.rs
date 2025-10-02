@@ -3,7 +3,7 @@ use crate::analysis::types::{
     FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
     ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
 };
-use crate::parsing::processor::FileProcessingResult;
+use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
 use parser_core::typescript::{
     ast::typescript_fqn_to_string,
@@ -127,12 +127,12 @@ impl TypeScriptAnalyzer {
 
     pub fn process_references(
         &self,
-        file_result: &FileProcessingResult,
+        file_references: &Option<References>,
         relative_file_path: &str,
         definition_relationships: &mut Vec<DefinitionRelationship>,
         file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
     ) {
-        if let Some(analyzer_references) = &file_result.references {
+        if let Some(analyzer_references) = file_references {
             let iter_refs = analyzer_references.iter_typescript();
             if let Some(iter_refs) = iter_refs {
                 for reference in iter_refs {

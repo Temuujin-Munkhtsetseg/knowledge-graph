@@ -193,23 +193,19 @@ pub struct TypeMap {
     /// - `"User#save"` -> `"User"`
     /// - `"User"` -> `"TopLevel"`
     scope_hierarchy: FxHashMap<ScopeId, ScopeId>,
+}
 
-    /// Pre-allocated capacity hint to minimize hash map reallocations.
-    estimated_capacity: usize,
+impl Default for TypeMap {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TypeMap {
-    pub fn new(estimated_scopes: usize) -> Self {
-        // Estimate: average 4 variables per scope
-        let estimated_capacity = estimated_scopes * 4;
-
+    pub fn new() -> Self {
         Self {
-            types: FxHashMap::with_capacity_and_hasher(estimated_capacity, Default::default()),
-            scope_hierarchy: FxHashMap::with_capacity_and_hasher(
-                estimated_scopes,
-                Default::default(),
-            ),
-            estimated_capacity,
+            types: FxHashMap::with_hasher(Default::default()),
+            scope_hierarchy: FxHashMap::with_hasher(Default::default()),
         }
     }
 
@@ -251,18 +247,6 @@ impl TypeMap {
         self.scope_hierarchy.insert(child_scope, parent_scope);
     }
 
-    /// Clear all stored data to free memory
-    pub fn clear(&mut self) {
-        self.types.clear();
-        self.scope_hierarchy.clear();
-
-        // Shrink if we over-allocated significantly
-        if self.types.capacity() > self.estimated_capacity * 2 {
-            self.types.shrink_to_fit();
-            self.scope_hierarchy.shrink_to_fit();
-        }
-    }
-
     /// Get all variables in a specific scope (for debugging/analysis)
     pub fn get_scope_variables(&self, scope: &ScopeId) -> Vec<(&VariableId, &InferredType)> {
         self.types
@@ -291,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_type_map_basic_operations() {
-        let mut type_map = TypeMap::new(10);
+        let mut type_map = TypeMap::new();
 
         let scope = ScopeId::new("MyClass#my_method".to_string());
         let variable = VariableId::new("user".to_string());
@@ -306,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_scope_hierarchy_lookup() {
-        let mut type_map = TypeMap::new(10);
+        let mut type_map = TypeMap::new();
 
         let parent_scope = ScopeId::new("MyClass".to_string());
         let child_scope = ScopeId::new("MyClass#my_method".to_string());
