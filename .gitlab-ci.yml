@@ -16,6 +16,7 @@ variables:
   WI_POOL_PROVIDER: //iam.googleapis.com/projects/8522242139/locations/global/workloadIdentityPools/gitlab-pool-oidc-$CI_PROJECT_ID/providers/gitlab-jwt-$CI_PROJECT_ID
 
 include:
+  - component: ${CI_SERVER_FQDN}/gitlab-org/components/danger-review/danger-review@2.1.0
   - project: "gitlab-com/gl-security/security-operations/infrastructure-security-public/oidc-modules"
     ref: 3.3.0
     file: templates/gcp_auth.yaml
@@ -37,6 +38,13 @@ include:
   image: registry.gitlab.com/gitlab-org/rust/build-images/rust-kuzu:1.89.0-${KUZU_VERSION}-linux-x86_64
   before_script:
     - rustup set auto-self-update disable
+
+danger-review:
+  stage: lint
+  needs: []
+  before_script:
+    - bundle init
+    - bundle add gitlab-dangerfiles
 
 mr-title-check:
   image: ${GITLAB_DEPENDENCY_PROXY}node:lts-alpine
