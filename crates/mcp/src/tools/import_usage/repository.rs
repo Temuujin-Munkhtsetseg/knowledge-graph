@@ -39,11 +39,9 @@ impl ImportUsageRepository {
         names: Vec<String>,
         aliases: Vec<String>,
     ) -> Result<(Vec<ImportHit>, Vec<ReferenceHit>), rmcp::ErrorData> {
-        use database::graph::{RelationshipType, RelationshipTypeMapping};
-        let mapping = RelationshipTypeMapping::new();
-        let calls_type_id = mapping.get_type_id(RelationshipType::Calls) as i64;
-        let ambiguous_calls_type_id =
-            mapping.get_type_id(RelationshipType::AmbiguouslyCalls) as i64;
+        use database::graph::RelationshipType;
+        let calls_type_id = RelationshipType::Calls.as_string();
+        let ambiguous_calls_type_id = RelationshipType::AmbiguouslyCalls.as_string();
 
         let mut params = serde_json::Map::new();
         let lowercased: Vec<serde_json::Value> = import_paths
@@ -53,11 +51,11 @@ impl ImportUsageRepository {
         params.insert("paths_lc".to_string(), serde_json::Value::Array(lowercased));
         params.insert(
             "calls_type_id".to_string(),
-            serde_json::Value::Number(calls_type_id.into()),
+            serde_json::Value::String(calls_type_id),
         );
         params.insert(
             "ambiguous_calls_type_id".to_string(),
-            serde_json::Value::Number(ambiguous_calls_type_id.into()),
+            serde_json::Value::String(ambiguous_calls_type_id),
         );
         params.insert("limit".to_string(), serde_json::Value::Number(500.into()));
 

@@ -293,13 +293,13 @@ impl<'a> NodeDatabaseService<'a> {
         &self,
         source_fqn: &str,
         target_fqn: &str,
-    ) -> Result<Vec<(String, String, u8)>, DatabaseError> {
+    ) -> Result<Vec<(String, String, String)>, DatabaseError> {
         let query =
             format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
-             WHERE source.fqn = '{}' AND target.fqn = '{}' AND r.type = {} 
+             WHERE source.fqn = '{}' AND target.fqn = '{}' AND r.type = '{}' 
              RETURN source.fqn, target.fqn, r.type",
-            source_fqn, target_fqn, self.get_calls_relationship_type_id()
+            source_fqn, target_fqn, RelationshipType::Calls.as_str()
         );
 
         let conn = self.get_connection();
@@ -310,10 +310,10 @@ impl<'a> NodeDatabaseService<'a> {
             if let (
                 Some(kuzu::Value::String(source)),
                 Some(kuzu::Value::String(target)),
-                Some(kuzu::Value::UInt8(rel_type)),
+                Some(kuzu::Value::String(rel_type)),
             ) = (row.first(), row.get(1), row.get(2))
             {
-                relationships.push((source.to_string(), target.to_string(), *rel_type));
+                relationships.push((source.to_string(), target.to_string(), rel_type.to_string()));
             }
         }
 
@@ -324,10 +324,10 @@ impl<'a> NodeDatabaseService<'a> {
     pub fn find_calls_from_method(&self, source_fqn: &str) -> Result<Vec<String>, DatabaseError> {
         let query = format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
-             WHERE source.fqn = '{}' AND r.type = {} 
+             WHERE source.fqn = '{}' AND r.type = '{}' 
              RETURN target.fqn",
             source_fqn,
-            self.get_calls_relationship_type_id()
+            RelationshipType::Calls.as_str()
         );
 
         let conn = self.get_connection();
@@ -347,10 +347,10 @@ impl<'a> NodeDatabaseService<'a> {
     pub fn find_calls_to_method(&self, target_fqn: &str) -> Result<Vec<String>, DatabaseError> {
         let query = format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
-             WHERE target.fqn = '{}' AND r.type = {} 
+             WHERE target.fqn = '{}' AND r.type = '{}' 
              RETURN source.fqn",
             target_fqn,
-            self.get_calls_relationship_type_id()
+            RelationshipType::Calls.as_str()
         );
 
         let conn = self.get_connection();
@@ -373,11 +373,11 @@ impl<'a> NodeDatabaseService<'a> {
     ) -> Result<Vec<String>, DatabaseError> {
         let query = format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:ImportedSymbolNode) 
-             WHERE target.import_path = '{}' AND target.name = '{}' AND r.type = {} 
+             WHERE target.import_path = '{}' AND target.name = '{}' AND r.type = '{}' 
              RETURN source.fqn",
             import_path,
             import_name,
-            self.get_calls_relationship_type_id()
+            RelationshipType::Calls.as_str()
         );
 
         let conn = self.get_connection();
@@ -401,11 +401,11 @@ impl<'a> NodeDatabaseService<'a> {
     ) -> Result<Vec<String>, DatabaseError> {
         let query = format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
-             WHERE target.fqn = '{}' AND r.type = {} 
+             WHERE target.fqn = '{}' AND r.type = '{}' 
              RETURN source.fqn
              LIMIT {}",
             target_fqn,
-            self.get_calls_relationship_type_id(),
+            RelationshipType::Calls.as_str(),
             limit
         );
 
@@ -425,8 +425,8 @@ impl<'a> NodeDatabaseService<'a> {
     /// Count total call relationships
     pub fn count_call_relationships(&self) -> i64 {
         let query = format!(
-            "MATCH ()-[r:DEFINITION_RELATIONSHIPS]->() WHERE r.type = {} RETURN count(r)",
-            self.get_calls_relationship_type_id()
+            "MATCH ()-[r:DEFINITION_RELATIONSHIPS]->() WHERE r.type = '{}' RETURN count(r)",
+            RelationshipType::Calls.as_str()
         );
 
         let conn = self.get_connection();
@@ -437,13 +437,15 @@ impl<'a> NodeDatabaseService<'a> {
     }
 
     /// Get all call relationships for debugging
-    pub fn get_all_call_relationships(&self) -> Result<Vec<(String, String, u8)>, DatabaseError> {
+    pub fn get_all_call_relationships(
+        &self,
+    ) -> Result<Vec<(String, String, String)>, DatabaseError> {
         let query = format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) 
-             WHERE r.type = {} 
+             WHERE r.type = '{}' 
              RETURN source.fqn, target.fqn, r.type 
              LIMIT 50",
-            self.get_calls_relationship_type_id()
+            RelationshipType::Calls.as_str()
         );
 
         let conn = self.get_connection();
@@ -454,25 +456,17 @@ impl<'a> NodeDatabaseService<'a> {
             if let (
                 Some(kuzu::Value::String(source_fqn)),
                 Some(kuzu::Value::String(target_fqn)),
-                Some(kuzu::Value::Int64(rel_type)),
+                Some(kuzu::Value::String(rel_type)),
             ) = (row.first(), row.get(1), row.get(2))
             {
                 call_relationships.push((
                     source_fqn.to_string(),
                     target_fqn.to_string(),
-                    *rel_type as u8,
+                    rel_type.to_string(),
                 ));
             }
         }
 
         Ok(call_relationships)
-    }
-
-    /// Helper method to get the relationship type ID for Calls
-    fn get_calls_relationship_type_id(&self) -> u8 {
-        use crate::graph::{RelationshipType, RelationshipTypeMapping};
-
-        let mapping = RelationshipTypeMapping::new();
-        mapping.get_type_id(RelationshipType::Calls)
     }
 }

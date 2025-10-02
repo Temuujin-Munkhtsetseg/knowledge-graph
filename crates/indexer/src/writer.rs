@@ -5,7 +5,6 @@ use crate::mutation::types::ConsolidatedRelationship;
 use crate::mutation::utils::{GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Error, Result};
 use arrow::{datatypes::Schema, record_batch::RecordBatch};
-use database::graph::RelationshipTypeMapping;
 use database::schema::init::RELATIONSHIP_TABLES;
 use database::schema::types::{
     ArrowBatchConverter, RelationshipTable, ToArrowBatch, ToArrowRelationshipBatch,
@@ -116,10 +115,8 @@ impl WriterService {
         );
 
         let mut files_written = Vec::new();
-        let mut relationship_mapping = RelationshipTypeMapping::new();
 
-        let mut graph_mapper =
-            GraphMapper::new(graph_data, node_id_generator, &mut relationship_mapping);
+        let mut graph_mapper = GraphMapper::new(graph_data, node_id_generator);
 
         // Pre-assign IDs to all nodes
         graph_mapper.assign_node_ids();

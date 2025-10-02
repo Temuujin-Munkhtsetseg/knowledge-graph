@@ -77,7 +77,7 @@ pub static NODE_TABLES: &[NodeTable] = &[
 // If we have unused columns, they take up no space by kuzu
 // Source id and target id are implicit columns in Kuzu relationships
 pub static RELATIONSHIP_TABLE_COLUMNS: &[ColumnDefinition] = &[
-    ColumnDefinition::new("type").uint8(),
+    ColumnDefinition::new("type").string(),
     // Optional source location fields for imports and calls
     ColumnDefinition::new("source_start_byte")
         .int64()

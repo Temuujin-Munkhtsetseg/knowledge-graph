@@ -4,7 +4,6 @@ use tracing::{debug, info, warn};
 use crate::analysis::types::{GraphData, ImportedSymbolLocation};
 use crate::mutation::types::{ConsolidatedRelationship, ConsolidatedRelationships};
 use database::graph::RelationshipType;
-use database::graph::RelationshipTypeMapping;
 use parser_core::utils::Range;
 
 /// Node ID generator for assigning integer IDs to nodes
@@ -152,20 +151,14 @@ impl NodeIdGenerator {
 pub struct GraphMapper<'a> {
     pub graph_data: &'a GraphData,
     pub node_id_generator: &'a mut NodeIdGenerator,
-    pub relationship_mapping: &'a mut RelationshipTypeMapping,
 }
 
 impl<'a> GraphMapper<'a> {
     /// Create a new writer service
-    pub fn new(
-        graph_data: &'a GraphData,
-        node_id_generator: &'a mut NodeIdGenerator,
-        relationship_mapping: &'a mut RelationshipTypeMapping,
-    ) -> Self {
+    pub fn new(graph_data: &'a GraphData, node_id_generator: &'a mut NodeIdGenerator) -> Self {
         Self {
             graph_data,
             node_id_generator,
-            relationship_mapping,
         }
     }
 
@@ -221,10 +214,6 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(dir_rel.relationship_type);
-
             if dir_rel.relationship_type == RelationshipType::DirContainsDir {
                 let Some(target_id) = self.node_id_generator.get_directory_id(&dir_rel.to_path)
                 else {
@@ -241,7 +230,7 @@ impl<'a> GraphMapper<'a> {
                     .push(ConsolidatedRelationship {
                         source_id: Some(source_id),
                         target_id: Some(target_id),
-                        relationship_type,
+                        relationship_type: dir_rel.relationship_type.as_string(),
                         start_byte: None,
                         end_byte: None,
                         start_line: None,
@@ -264,7 +253,7 @@ impl<'a> GraphMapper<'a> {
                     .push(ConsolidatedRelationship {
                         source_id: Some(source_id),
                         target_id: Some(target_id),
-                        relationship_type,
+                        relationship_type: dir_rel.relationship_type.as_string(),
                         start_byte: None,
                         end_byte: None,
                         start_line: None,
@@ -303,9 +292,6 @@ impl<'a> GraphMapper<'a> {
                 );
                 continue;
             };
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(file_rel.relationship_type);
 
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = file_rel.source_location.as_ref() {
@@ -326,7 +312,7 @@ impl<'a> GraphMapper<'a> {
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
-                    relationship_type,
+                    relationship_type: file_rel.relationship_type.as_string(),
                     start_byte,
                     end_byte,
                     start_line,
@@ -364,9 +350,6 @@ impl<'a> GraphMapper<'a> {
                 );
                 continue;
             };
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(file_rel.relationship_type);
 
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = file_rel.source_location.as_ref() {
@@ -387,7 +370,7 @@ impl<'a> GraphMapper<'a> {
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
-                    relationship_type,
+                    relationship_type: file_rel.relationship_type.as_string(),
                     start_byte,
                     end_byte,
                     start_line,
@@ -437,10 +420,6 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(def_rel.relationship_type);
-
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = def_rel.source_location.as_ref() {
                     (
@@ -460,7 +439,7 @@ impl<'a> GraphMapper<'a> {
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
-                    relationship_type,
+                    relationship_type: def_rel.relationship_type.as_string(),
                     start_byte,
                     end_byte,
                     start_line,
@@ -504,10 +483,6 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(def_rel.relationship_type);
-
             let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
                 if let Some(loc) = def_rel.source_location.as_ref() {
                     (
@@ -527,7 +502,7 @@ impl<'a> GraphMapper<'a> {
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
-                    relationship_type,
+                    relationship_type: def_rel.relationship_type.as_string(),
                     start_byte,
                     end_byte,
                     start_line,
@@ -561,16 +536,12 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(import_rel.relationship_type);
-
             relationships
                 .imported_symbol_to_definition
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
-                    relationship_type,
+                    relationship_type: import_rel.relationship_type.as_string(),
                     start_byte: None,
                     end_byte: None,
                     start_line: None,
@@ -607,16 +578,12 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(import_rel.relationship_type);
-
             relationships
                 .imported_symbol_to_imported_symbol
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
-                    relationship_type,
+                    relationship_type: import_rel.relationship_type.as_string(),
                     start_byte: None,
                     end_byte: None,
                     start_line: None,
@@ -650,16 +617,12 @@ impl<'a> GraphMapper<'a> {
                 continue;
             };
 
-            let relationship_type = self
-                .relationship_mapping
-                .get_type_id(import_rel.relationship_type);
-
             relationships
                 .imported_symbol_to_file
                 .push(ConsolidatedRelationship {
                     source_id: Some(source_id),
                     target_id: Some(target_id),
-                    relationship_type,
+                    relationship_type: import_rel.relationship_type.as_string(),
                     start_byte: None,
                     end_byte: None,
                     start_line: None,

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
-use database::graph::{RelationshipType, RelationshipTypeMapping};
+use database::graph::RelationshipType;
 use database::kuzu::connection::KuzuConnection;
 use database::kuzu::database::KuzuDatabase;
 use rmcp::model::ErrorCode;
@@ -59,10 +59,9 @@ impl GetDefinitionService {
         };
 
         let (calls_type_id, ambiguous_calls_type_id) = {
-            let mapping = RelationshipTypeMapping::new();
             (
-                mapping.get_type_id(RelationshipType::Calls) as i64,
-                mapping.get_type_id(RelationshipType::AmbiguouslyCalls) as i64,
+                RelationshipType::Calls.as_string(),
+                RelationshipType::AmbiguouslyCalls.as_string(),
             )
         };
 
@@ -103,8 +102,8 @@ impl GetDefinitionService {
                         db_line,
                         start_col,
                         end_col,
-                        calls_type_id,
-                        ambiguous_calls_type_id,
+                        calls_type_id.clone(),
+                        ambiguous_calls_type_id.clone(),
                     )?;
                     for hit in hits {
                         if hit.target_type == "Definition" {

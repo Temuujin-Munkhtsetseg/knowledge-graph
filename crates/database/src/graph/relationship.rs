@@ -1,17 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use strum::{AsRefStr, EnumIter, IntoEnumIterator};
-
-/// Relationship type mappings for efficient storage
-#[derive(Debug, Clone, Default)]
-pub struct RelationshipTypeMapping {
-    /// Map from relationship type enum to integer ID
-    type_to_id: HashMap<RelationshipType, u8>,
-    /// Map from integer ID to relationship type enum
-    id_to_type: HashMap<u8, RelationshipType>,
-    /// Next available ID
-    next_id: u8,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter, AsRefStr)]
 pub enum RelationshipType {
@@ -130,56 +118,12 @@ impl RelationshipType {
         self.as_ref()
     }
 
+    pub fn as_string(&self) -> String {
+        self.as_str().to_string()
+    }
+
     pub fn all_types() -> Vec<RelationshipType> {
         RelationshipType::iter().collect()
-    }
-}
-
-impl RelationshipTypeMapping {
-    pub fn new() -> Self {
-        let mut mapping = Self {
-            type_to_id: HashMap::new(),
-            id_to_type: HashMap::new(),
-            next_id: 1, // Start from 1, reserve 0 for unknown/default
-        };
-
-        // Pre-register known relationship types
-        mapping.register_known_types();
-        mapping
-    }
-
-    fn register_known_types(&mut self) {
-        for rel_type in RelationshipType::all_types() {
-            let id = self.next_id;
-            self.type_to_id.insert(rel_type, id);
-            self.id_to_type.insert(id, rel_type);
-            self.next_id += 1;
-
-            if self.next_id == 0 {
-                panic!("Relationship type ID overflow! Consider using UINT16 instead of UINT8");
-            }
-        }
-    }
-
-    pub fn get_type_id(&self, relationship_type: RelationshipType) -> u8 {
-        *self.type_to_id.get(&relationship_type).unwrap()
-    }
-
-    pub fn get_type_name(&self, type_id: u8) -> &str {
-        // Convert enum back to string only when needed
-        self.id_to_type.get(&type_id).unwrap().as_str()
-    }
-
-    pub fn get_type_enum(&self, type_id: u8) -> RelationshipType {
-        *self.id_to_type.get(&type_id).unwrap()
-    }
-
-    pub fn get_all_types(&self) -> Vec<RelationshipType> {
-        self.id_to_type.values().copied().collect()
-    }
-
-    pub fn get_all_mappings(&self) -> HashMap<RelationshipType, u8> {
-        self.type_to_id.clone()
     }
 }
 
@@ -189,21 +133,10 @@ mod tests {
 
     #[test]
     fn test_relationship_type_mapping_iteration() {
-        let mapping = RelationshipTypeMapping::new();
-        for rel_type in mapping.get_all_types() {
-            println!("{}", rel_type.as_str());
-        }
-    }
-
-    #[test]
-    fn test_relationship_type_mapping() {
-        let mapping = RelationshipTypeMapping::new();
-        let type_id = mapping.get_type_id(RelationshipType::DirContainsDir);
-        assert_eq!(type_id, 1);
-        assert_eq!(mapping.get_type_name(type_id), "DIR_CONTAINS_DIR");
-        assert_eq!(
-            mapping.get_type_enum(type_id),
-            RelationshipType::DirContainsDir
-        );
+        // NOTE: The point of this test to validate the behavior of the strum crate/macros
+        let mapping = RelationshipType::all_types();
+        assert!(!mapping.is_empty());
+        let contains_dir_contains_file = mapping.contains(&RelationshipType::DirContainsFile);
+        assert!(contains_dir_contains_file);
     }
 }

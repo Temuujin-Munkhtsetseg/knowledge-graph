@@ -371,13 +371,12 @@ mod integration_tests {
         let conn = KuzuConnection::new(&database_instance).expect("conn");
 
         // Assert exact expected lines for specific calls in fixtures
-        let mapping = database::graph::RelationshipTypeMapping::new();
-        let calls_id = mapping.get_type_id(database::graph::RelationshipType::Calls);
+        let calls_id = database::graph::RelationshipType::Calls.as_string();
 
         // 1) com.example.app.Main.main -> await(() -> super.run()) on line 22 (0-based 21)
         let query = format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
-         WHERE source.fqn = 'com.example.app.Main.main' AND target.fqn = 'com.example.app.Application.run' AND r.type = {calls_id} \
+         WHERE source.fqn = 'com.example.app.Main.main' AND target.fqn = 'com.example.app.Application.run' AND r.type = '{calls_id}' \
          RETURN r.source_start_line, r.source_end_line"
         );
         let result = conn.query(&query).expect("query ok");
@@ -404,7 +403,7 @@ mod integration_tests {
         // 2) com.example.app.Main.main -> Outer.make() on line 25 (0-based 24)
         let query = format!(
             "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
-         WHERE source.fqn = 'com.example.app.Main.main' AND target.fqn = 'com.example.util.Outer.make' AND r.type = {calls_id} \
+         WHERE source.fqn = 'com.example.app.Main.main' AND target.fqn = 'com.example.util.Outer.make' AND r.type = '{calls_id}' \
          RETURN r.source_start_line, r.source_end_line"
         );
         let result = conn.query(&query).expect("query ok");
@@ -435,7 +434,7 @@ mod integration_tests {
             source.fqn = 'com.example.app.Main.main' 
             AND target.import_path = 'java.util' 
             AND target.name = 'ArrayList' 
-            AND r.type = {calls_id} \
+            AND r.type = '{calls_id}' \
          RETURN r.source_start_line, r.source_end_line"
     );
         let result = conn.query(&query).expect("query ok");

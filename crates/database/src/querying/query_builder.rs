@@ -1,4 +1,4 @@
-use crate::graph::{RelationshipType, RelationshipTypeMapping};
+use crate::graph::RelationshipType;
 use crate::kuzu::types::{
     FromKuzuNode, KuzuNodeType, QueryGeneratorResult, QueryNoop, QuoteEscape,
 };
@@ -233,9 +233,9 @@ impl QueryBuilder {
         (
             QueryNoop::No,
             format!(
-                "MATCH (from)-[r:{}]->(to) WHERE r.type = {} RETURN COUNT(DISTINCT [from, to])",
+                "MATCH (from)-[r:{}]->(to) WHERE r.type = '{}' RETURN COUNT(DISTINCT [from, to])",
                 rel_label,
-                RelationshipTypeMapping::new().get_type_id(relationship_type)
+                relationship_type.as_string()
             ),
         )
     }

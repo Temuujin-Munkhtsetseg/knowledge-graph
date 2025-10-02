@@ -14,7 +14,7 @@ pub struct RawHit {
     pub end_line_db: i64,
     pub rel_start_col: i64,
     pub rel_end_col: i64,
-    pub rel_type_id: i64,
+    pub rel_type_id: String,
 }
 
 pub fn find_definitions(
@@ -23,8 +23,8 @@ pub fn find_definitions(
     db_line: i64,
     start_col: i64,
     end_col: i64,
-    calls_type_id: i64,
-    ambiguous_calls_type_id: i64,
+    calls_type_id: String,
+    ambiguous_calls_type_id: String,
 ) -> Result<Vec<RawHit>, rmcp::ErrorData> {
     let mut base_params = Map::new();
     base_params.insert(
@@ -145,7 +145,7 @@ pub fn find_definitions(
                 end_line_db: row[6].to_string().parse().unwrap_or(0),
                 rel_start_col: row[7].to_string().parse().unwrap_or(0),
                 rel_end_col: row[8].to_string().parse().unwrap_or(0),
-                rel_type_id: row[9].to_string().parse().unwrap_or(0),
+                rel_type_id: row[9].to_string(),
             };
             hits.push(raw);
         }
