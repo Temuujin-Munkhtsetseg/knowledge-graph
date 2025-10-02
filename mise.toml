@@ -125,3 +125,24 @@ run = "./packages/gkg-evals/run.sh"
 
 [tasks.measure-kuzu-db-size]
 run = "./scripts/devtools/measure_kuzu_db_size.sh"
+
+# Observability tasks
+[tasks."observability:up"]
+description = "Start the observability stack (Prometheus, Grafana, Mimir)"
+run = "cd observability && docker-compose up -d"
+
+[tasks."observability:down"]
+description = "Stop the observability stack"
+run = "cd observability && docker-compose down"
+
+[tasks."observability:restart"]
+description = "Restart the observability stack"
+run = "cd observability && docker-compose restart"
+
+[tasks."observability:logs"]
+description = "View logs from the observability stack"
+run = "cd observability && docker-compose logs -f"
+
+[tasks."observability:clean"]
+description = "Stop the observability stack and remove all data volumes"
+run = "cd observability && docker-compose down -v"

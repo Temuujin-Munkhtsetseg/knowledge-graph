@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'gkg-local'
+    environment: 'development'
+
+# Remote write to Mimir for long-term storage
+remote_write:
+  - url: http://mimir:9009/api/v1/push
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
+
+# Scrape configurations
+scrape_configs:
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Scrape GKG HTTP Server (Deployed)
+  - job_name: 'gkg-http-server-deployed'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:8080']  # Default port
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'gkg-http-server-deployed'
+
+  # Scrape Mimir metrics
+  - job_name: 'mimir'
+    static_configs:
+      - targets: ['mimir:9009']
+

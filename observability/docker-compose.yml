@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Grafana Mimir - Long-term storage for Prometheus metrics
+  mimir:
+    image: grafana/mimir:latest
+    container_name: gkg-mimir
+    command:
+      - -config.file=/etc/mimir/mimir.yaml
+    ports:
+      - "9009:9009"  # Mimir API
+    volumes:
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml
+      - mimir-data:/data
+    networks:
+      - gkg-observability
+
+  # Prometheus - Metrics collection and short-term storage
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gkg-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - gkg-observability
+    depends_on:
+      - mimir
+
+  # Grafana - Visualization and dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gkg-grafana
+    ports:
+      - "3001:3000"  # Using 3001 to avoid conflicts
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+    networks:
+      - gkg-observability
+    depends_on:
+      - prometheus
+      - mimir
+
+networks:
+  gkg-observability:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  mimir-data:
+  grafana-data:
+
