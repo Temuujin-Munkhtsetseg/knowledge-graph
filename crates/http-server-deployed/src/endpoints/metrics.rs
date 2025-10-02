@@ -1,22 +1,19 @@
 use axum::{http::header, routing::get, Router};
+use prometheus::{Encoder, TextEncoder};
 
 pub fn get_routes() -> Router {
     Router::new().route("/metrics", get(handle_metrics))
 }
 
 async fn handle_metrics() -> ([(header::HeaderName, &'static str); 1], String) {
-    // Return Prometheus-formatted metrics
-    let metrics = "# HELP gkg_requests_total Total number of HTTP requests\n\
-         # TYPE gkg_requests_total counter\n\
-         gkg_requests_total 0\n\
-         # HELP gkg_up Whether the service is up\n\
-         # TYPE gkg_up gauge\n\
-         gkg_up 1\n"
-        .to_string();
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus::gather();
+    let mut buffer = vec![];
+    encoder.encode(&metric_families, &mut buffer).unwrap();
 
     (
         [(header::CONTENT_TYPE, "text/plain; version=0.0.4")],
-        metrics,
+        String::from_utf8(buffer).unwrap(),
     )
 }
 
@@ -27,6 +24,12 @@ mod tests {
 
     #[tokio::test]
     async fn metrics_route_returns_prometheus_format() {
+        // Increment counter and record histogram observation so they appear in output
+        crate::metrics::HTTP_REQUESTS_TOTAL.inc();
+        crate::metrics::HTTP_REQUEST_DURATION_SECONDS
+            .with_label_values(&["GET", "/test"])
+            .observe(0.1);
+
         let app = get_routes();
         let server = TestServer::new(app).unwrap();
 
@@ -40,8 +43,8 @@ mod tests {
 
         // Check body contains Prometheus metrics
         let body = response.text();
-        assert!(body.contains("gkg_requests_total 0"));
-        assert!(body.contains("gkg_up 1"));
+        assert!(body.contains("gkg_http_requests_total"));
+        assert!(body.contains("gkg_http_request_duration_seconds"));
         assert!(body.contains("# HELP"));
         assert!(body.contains("# TYPE"));
     }

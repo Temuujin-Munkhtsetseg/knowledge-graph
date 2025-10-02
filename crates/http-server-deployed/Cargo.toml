@@ -20,6 +20,8 @@ chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 jsonwebtoken = { workspace = true }
 tower-http = { workspace = true }
+prometheus = { workspace = true }
+lazy_static = { workspace = true }
 
 [[bin]]
 name = "http-server-deployed"

@@ -1,4 +1,4 @@
-use http_server_deployed::{authentication, endpoints};
+use http_server_deployed::{authentication, endpoints, metrics};
 
 use axum::{middleware, Router};
 use clap::Parser;
@@ -10,11 +10,11 @@ use tracing::{error, info};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    // Socket file path to use
-    #[arg(short, long, default_value = "/tmp/gkg-indexer-http.sock")]
-    socket: String,
-    // Bind address to use
-    #[arg(short, long, default_value = "", conflicts_with = "socket")]
+    // Socket file path to use (mutually exclusive with --bind)
+    #[arg(short, long, conflicts_with = "bind")]
+    socket: Option<String>,
+    // Bind address to use (defaults to 127.0.0.1:8080)
+    #[arg(short, long, default_value = "127.0.0.1:8080")]
     bind: String,
     // Server mode - server can run either in indexer or webserver mode
     #[arg(short, long, default_value = "indexer")]
@@ -39,14 +39,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    // Create routes and apply JWT middleware to all endpoints
-    let app = endpoints::get_routes(args.mode.clone()).layer(middleware::from_fn_with_state(
-        auth,
-        authentication::jwt_middleware_for_all,
-    ));
+    // Create routes and apply middleware layers
+    let app = endpoints::get_routes(args.mode.clone())
+        // Apply metrics middleware first (before auth) to track all requests
+        .layer(middleware::from_fn(metrics::request_metrics_middleware))
+        // Then apply JWT authentication
+        .layer(middleware::from_fn_with_state(
+            auth,
+            authentication::jwt_middleware_for_all,
+        ));
 
-    if args.bind.is_empty() {
-        serve_unix_socket(args.socket, app).await;
+    if let Some(socket) = args.socket {
+        serve_unix_socket(socket, app).await;
     } else {
         serve_tcp_socket(args.bind, app).await;
     }
