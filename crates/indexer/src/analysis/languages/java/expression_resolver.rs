@@ -74,7 +74,7 @@ impl ExpressionResolver {
                     reference.range.byte_offset.0 as u64,
                     reference.range.byte_offset.1 as u64,
                 );
-                let expression = reference.metadata.clone();
+                let expression = reference.metadata.as_ref().map(|m| (**m).clone());
 
                 let scope = reference.scope.clone();
                 if scope.is_none() {

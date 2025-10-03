@@ -107,7 +107,7 @@ impl KotlinExpressionResolver {
     ) {
         if let Some(iterator) = references.iter_kotlin() {
             for reference in iterator {
-                let expression = reference.metadata.clone();
+                let expression = reference.metadata.as_ref().map(|m| (**m).clone());
 
                 let scope = reference.scope.clone();
                 if scope.is_none() {
