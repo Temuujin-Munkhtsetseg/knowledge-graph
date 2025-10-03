@@ -1,3 +1,9 @@
+## [0.18.1](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.18.0...v0.18.1) (2025-10-03)
+
+### :fast_forward: Performance
+
+* **indexing:** support memory optimized structs from parser ([1f3ebba](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/1f3ebba3104dc0928d68a1593779b3306bf8d4de)) by Bohdan Parkhomchuk
+
 ## [0.18.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.17.0...v0.18.0) (2025-10-03)
 
 ### :sparkles: Features

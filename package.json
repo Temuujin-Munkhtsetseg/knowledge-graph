@@ -1,6 +1,6 @@
 {
   "name": "@gitlab-org/knowledge-graph",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "A framework to create a structured, queryable graph database from code repositories to power AI features and enhance developer productivity.",
   "workspaces": [
     "packages/*"
