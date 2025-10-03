@@ -299,7 +299,7 @@ impl ExpressionResolver {
         batch_updates: &mut Vec<(ScopeId, VariableId, InferredType)>,
         resolved_relationships: &mut Vec<DefinitionRelationship>,
     ) {
-        if let Some(metadata) = &reference.metadata
+        if let Some(metadata) = reference.metadata.as_deref()
             && let Some(assignment_target) = &metadata.assignment_target
         {
             // Resolve the right-hand side of the assignment
@@ -328,7 +328,7 @@ impl ExpressionResolver {
         file_path: &str,
         resolved_relationships: &mut Vec<DefinitionRelationship>,
     ) {
-        if let Some(metadata) = &reference.metadata {
+        if let Some(metadata) = reference.metadata.as_deref() {
             let mut context = ResolutionContext {
                 current_scope: scope_id.clone(),
                 current_type: None,

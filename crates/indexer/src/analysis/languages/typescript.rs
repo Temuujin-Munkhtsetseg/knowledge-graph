@@ -140,7 +140,7 @@ impl TypeScriptAnalyzer {
                         TypeScriptReferenceTarget::Resolved(target) => target,
                         _ => continue,
                     };
-                    let target_defn = match &target_defn {
+                    let target_defn = match &**target_defn {
                         TypeScriptTargetResolution::Definition(definition) => definition,
                         _ => continue,
                     };
