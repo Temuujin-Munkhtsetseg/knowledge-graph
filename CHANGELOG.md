@@ -1,3 +1,38 @@
+## [0.18.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.17.0...v0.18.0) (2025-10-03)
+
+### :sparkles: Features
+
+* add --data-dir argument to http-server-deployed binary ([cb46489](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/cb46489d11e053bd1ada53b0f14fe4e28bffff06)) by Dmitry Gruzd
+* add JWT authentication middleware to http-server-deployed ([673b6f9](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/673b6f970a92331ecd2407b9ecdf6d1612b445d5)) by Dmitry Gruzd
+* add lefthook git hooks with shared CI/local scripts ([2eb5f44](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/2eb5f44aa61a0022bbbdf55dc769283564d58300)) by Dmitry Gruzd
+* add TCP socket support for server-side ([705865f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/705865f577c4afdd80f1be84f11078ee7b83809d)) by Jan Provaznik
+* **devtools:** script to measure kuzu database size ([40d0867](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/40d08676a59354aeb570a798e2dfff5a4bdb0e02)) by Michael Usachenko
+* **evals:** local evaluation framework for gkg pt7 - more figures ([c909ffc](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/c909ffc06a657214b6b8efadcbddcf5237347e07)) by Michael Usachenko
+* **indexer:** removed RelationshipTypeMapper ([98bf3a8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/98bf3a8d204e6981b627a3b55d248bc0d229c56a)) by Michael Usachenko
+* **kotlin:** index Kotlin cross-file references ([a44bef7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a44bef79a6b2295e47bfc1a18e659ced037f23ad)) by Jean-Gabriel Doyon
+* **observability:** create Prometheus and Grafana local stack ([d19cd0c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/d19cd0ca940ae3115e7b2febef1958546a9e6bdb)) by Jean-Gabriel Doyon
+
+### :memo: Documentation
+
+* add PATH configuration note for gkg installation ([69d445d](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/69d445d227cd357a2d69792df50bca9cbaf63fcc)) by Dmitry Gruzd
+* fix the docs of http-server-deployed ([34622db](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/34622db4900dff5455c1e56ccd855c2ff5f12a26)) by Dmitry Gruzd
+* update public beta project status ([e7fb59f](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e7fb59ff41914c69fc2b88a3b735d6fa32900944)) by Erran Carey
+
+### :fast_forward: Performance
+
+* **indexing:** optimize analysis order for memory ([6155b7c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/6155b7cfb4bdc61fd5b6f0a1b3946335d46d4e43)) by Bohdan Parkhomchuk
+* **indexing:** update parser-core to bring in more memory optimization ([639bfe7](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/639bfe77522ab58d8040875e81f9e9da1b7da084)) by Bohdan Parkhomchuk
+* **indexing:** use code parser memory optimizations ([5111f5c](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/5111f5ce17b54f1dfaff10f823b9d2e3207058e4)) by Bohdan Parkhomchuk
+
+### :repeat: CI
+
+* add danger bot ([e6f62c8](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/e6f62c8b2c480b1c770b90a89606fdc95a3c3736)) by Dmitry Gruzd
+
+### :repeat: Chore
+
+* fix clippy warnings across database, indexer, and mcp crates ([11aaab1](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/11aaab125e922b95dad4ceb3952eea47a26c8469)) by Dmitry Gruzd
+* **indexer:** reduce hardcoding in the parquet writer ([13692bd](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/13692bd01e846a099dfc55a352fc866b7a3a36e7)) by Michael Usachenko
+
 ## [0.17.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.16.0...v0.17.0) (2025-09-23)
 
 ### :sparkles: Features
