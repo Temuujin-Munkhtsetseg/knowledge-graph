@@ -75,7 +75,7 @@ pub async fn run(
     event_bus: Arc<EventBus>,
     mcp_configuration: Arc<McpConfiguration>,
 ) -> Result<()> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
         |origin: &HeaderValue, _| {
             if let Ok(origin_str) = origin.to_str()
