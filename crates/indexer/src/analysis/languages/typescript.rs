@@ -1,20 +1,16 @@
 use crate::analysis::types::{
-    DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DefinitionType,
-    FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-    ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
+    ConsolidatedRelationship, DefinitionNode, DefinitionType, FqnType, ImportIdentifier,
+    ImportType, ImportedSymbolLocation, ImportedSymbolNode, RelationshipKind,
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
+use internment::ArcIntern;
 use parser_core::typescript::{
     ast::typescript_fqn_to_string,
-    references::types::{
-        TypeScriptReferenceInfo, TypeScriptReferenceTarget, TypeScriptTargetResolution,
-    },
-    types::{
-        TypeScriptDefinitionInfo, TypeScriptDefinitionType, TypeScriptFqn,
-        TypeScriptImportedSymbolInfo,
-    },
+    references::types::{TypeScriptReferenceTarget, TypeScriptTargetResolution},
+    types::{TypeScriptDefinitionType, TypeScriptImportedSymbolInfo},
 };
+use parser_core::utils::Range;
 use std::collections::HashMap;
 
 // Handles Python-specific analysis operations
@@ -38,7 +34,7 @@ impl TypeScriptAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(defs) = file_result.definitions.iter_typescript() {
             for definition in defs {
@@ -46,33 +42,36 @@ impl TypeScriptAnalyzer {
                     continue;
                 }
 
-                if let Ok(Some((location, fqn))) =
-                    self.create_definition_location(definition, relative_file_path)
-                {
-                    let fqn_string = typescript_fqn_to_string(&definition.fqn);
-                    let definition_node = DefinitionNode::new(
-                        fqn_string.clone(),
-                        definition.name.clone(),
-                        DefinitionType::TypeScript(definition.definition_type),
-                        location.clone(),
-                    );
+                let fqn_string = typescript_fqn_to_string(&definition.fqn);
+                let definition_node = DefinitionNode::new(
+                    fqn_string.clone(),
+                    definition.name.clone(),
+                    DefinitionType::TypeScript(definition.definition_type),
+                    definition.range,
+                    relative_file_path.to_string(),
+                );
 
-                    // If top-level definition, add file-to-definition relationship
-                    if definition.fqn.len() == 1 {
-                        file_definition_relationships.push(FileDefinitionRelationship {
-                            file_path: relative_file_path.to_string(),
-                            definition_fqn: fqn_string.clone(),
-                            relationship_type: RelationshipType::FileDefines,
-                            definition_location: location.clone(),
-                            source_location: None,
-                        });
-                    }
-
-                    definition_map.insert(
-                        (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node.clone(), FqnType::TypeScript(fqn.clone())),
-                    );
+                // If top-level definition, add file-to-definition relationship
+                if definition.fqn.len() == 1 {
+                    let relationship = ConsolidatedRelationship {
+                        source_path: Some(ArcIntern::new(relative_file_path.to_string())),
+                        target_path: Some(ArcIntern::new(relative_file_path.to_string())),
+                        kind: RelationshipKind::FileToDefinition,
+                        relationship_type: RelationshipType::FileDefines,
+                        source_range: ArcIntern::new(Range::empty()),
+                        target_range: ArcIntern::new(definition.range),
+                        ..Default::default()
+                    };
+                    relationships.push(relationship);
                 }
+
+                definition_map.insert(
+                    (fqn_string.clone(), relative_file_path.to_string()),
+                    (
+                        definition_node.clone(),
+                        FqnType::TypeScript(definition.fqn.clone()),
+                    ),
+                );
             }
         }
     }
@@ -83,7 +82,7 @@ impl TypeScriptAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(imported_symbols) = &file_result.imported_symbols
             && let Some(imports) = imported_symbols.iter_typescript()
@@ -115,12 +114,14 @@ impl TypeScriptAnalyzer {
                     );
                 }
 
-                file_import_relationships.push(FileImportedSymbolRelationship {
-                    file_path: relative_file_path.to_string(),
-                    import_location: location.clone(),
-                    relationship_type: RelationshipType::FileImports,
-                    source_location: None,
-                });
+                let mut relationship = ConsolidatedRelationship::file_to_imported_symbol(
+                    relative_file_path.to_string(),
+                    location.file_path.clone(),
+                );
+                relationship.relationship_type = RelationshipType::FileImports;
+                relationship.source_range = ArcIntern::new(Range::empty());
+                relationship.target_range = ArcIntern::new(location.range());
+                relationships.push(relationship);
             }
         }
     }
@@ -129,8 +130,7 @@ impl TypeScriptAnalyzer {
         &self,
         file_references: &Option<References>,
         relative_file_path: &str,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(analyzer_references) = file_references {
             let iter_refs = analyzer_references.iter_typescript();
@@ -145,57 +145,35 @@ impl TypeScriptAnalyzer {
                         _ => continue,
                     };
 
-                    let from_definition_fqn = reference
-                        .scope
-                        .as_ref()
-                        .map(typescript_fqn_to_string)
-                        .unwrap_or_default();
-
-                    let from_location = SourceLocation {
-                        file_path: relative_file_path.to_string(),
-                        start_byte: target_defn.range.byte_offset.0 as i64,
-                        end_byte: target_defn.range.byte_offset.1 as i64,
-                        start_line: target_defn.range.start.line as i32,
-                        end_line: target_defn.range.end.line as i32,
-                        start_col: target_defn.range.start.column as i32,
-                        end_col: target_defn.range.end.column as i32,
-                    };
-
-                    // Call-site location
-                    let call_location = SourceLocation {
-                        file_path: relative_file_path.to_string(),
-                        start_byte: reference.range.byte_offset.0 as i64,
-                        end_byte: reference.range.byte_offset.1 as i64,
-                        start_line: reference.range.start.line as i32,
-                        end_line: reference.range.end.line as i32,
-                        start_col: reference.range.start.column as i32,
-                        end_col: reference.range.end.column as i32,
-                    };
-
-                    let Some(to_location) = self
-                        .create_definition_location_from_reference(reference, relative_file_path)
-                    else {
-                        file_definition_relationships.push(FileDefinitionRelationship {
-                            file_path: relative_file_path.to_string(),
-                            definition_fqn: from_definition_fqn.clone(),
-                            relationship_type: RelationshipType::Calls,
-                            definition_location: from_location.clone(),
-                            source_location: None,
-                        });
+                    let Some(scope) = &reference.scope else {
+                        let mut relationship = ConsolidatedRelationship::file_to_definition(
+                            relative_file_path.to_string(),
+                            relative_file_path.to_string(),
+                        );
+                        relationship.relationship_type = RelationshipType::Calls;
+                        relationship.source_range = ArcIntern::new(Range::empty());
+                        relationship.target_range = ArcIntern::new(target_defn.range);
+                        relationships.push(relationship);
                         continue;
                     };
 
-                    let rel = DefinitionRelationship {
-                        from_file_path: relative_file_path.to_string(),
-                        to_file_path: relative_file_path.to_string(),
-                        from_definition_fqn,
-                        to_definition_fqn: typescript_fqn_to_string(&target_defn.fqn),
-                        from_location: from_location.clone(),
-                        to_location: to_location.clone(),
-                        relationship_type: RelationshipType::Calls,
-                        source_location: Some(call_location),
+                    let Some(scope_range) = scope.last().map(|part| part.range) else {
+                        continue;
                     };
-                    definition_relationships.push(rel);
+
+                    let relationship = ConsolidatedRelationship {
+                        source_path: Some(ArcIntern::new(relative_file_path.to_string())),
+                        target_path: Some(ArcIntern::new(relative_file_path.to_string())),
+                        kind: RelationshipKind::DefinitionToDefinition,
+                        relationship_type: RelationshipType::Calls,
+                        source_range: ArcIntern::new(reference.range), // Call site location for source_start_line etc
+                        target_range: ArcIntern::new(target_defn.range),
+                        source_definition_range: Some(ArcIntern::new(scope_range)), // Source definition range for ID lookup
+                        target_definition_range: Some(ArcIntern::new(target_defn.range)),
+                        ..Default::default()
+                    };
+
+                    relationships.push(relationship);
                 }
             }
         }
@@ -206,8 +184,7 @@ impl TypeScriptAnalyzer {
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             // Handle definition-to-imported-symbol relationships
@@ -215,17 +192,18 @@ impl TypeScriptAnalyzer {
                 imported_symbol_map.get(&(child_fqn_string.clone(), child_file_path.to_string()))
             {
                 for imported_symbol in imported_symbol_nodes {
-                    definition_imported_symbol_relationships.push(
-                        DefinitionImportedSymbolRelationship {
-                            file_path: child_file_path.clone(),
-                            definition_fqn: child_fqn_string.clone(),
-                            imported_symbol_location: imported_symbol.location.clone(),
-                            relationship_type: RelationshipType::DefinesImportedSymbol,
-                            definition_location: child_def.location.clone(),
-                            // FIXME: add source location for Typescript
-                            source_location: None,
-                        },
-                    );
+                    let relationship = ConsolidatedRelationship {
+                        source_path: Some(ArcIntern::new(child_file_path.to_string())),
+                        target_path: Some(ArcIntern::new(
+                            imported_symbol.location.file_path.clone(),
+                        )),
+                        kind: RelationshipKind::DefinitionToImportedSymbol,
+                        relationship_type: RelationshipType::DefinesImportedSymbol,
+                        source_range: ArcIntern::new(child_def.range),
+                        target_range: ArcIntern::new(imported_symbol.location.range()),
+                        ..Default::default()
+                    };
+                    relationships.push(relationship);
                 }
             }
 
@@ -238,37 +216,18 @@ impl TypeScriptAnalyzer {
                     &child_def.definition_type,
                 )
             {
-                definition_relationships.push(DefinitionRelationship {
-                    from_file_path: parent_def.location.file_path.clone(),
-                    to_file_path: child_def.location.file_path.clone(),
-                    from_definition_fqn: parent_fqn_string,
-                    to_definition_fqn: child_fqn_string.clone(),
-                    from_location: parent_def.location.clone(),
-                    to_location: child_def.location.clone(),
+                let relationship = ConsolidatedRelationship {
+                    source_path: Some(ArcIntern::new(parent_def.file_path.clone())),
+                    target_path: Some(ArcIntern::new(child_def.file_path.clone())),
+                    kind: RelationshipKind::DefinitionToDefinition,
                     relationship_type,
-                    source_location: None,
-                });
+                    source_range: ArcIntern::new(parent_def.range),
+                    target_range: ArcIntern::new(child_def.range),
+                    ..Default::default()
+                };
+                relationships.push(relationship);
             }
         }
-    }
-
-    /// Create a definition location from a definition info
-    fn create_definition_location(
-        &self,
-        definition: &TypeScriptDefinitionInfo,
-        file_path: &str,
-    ) -> Result<Option<(SourceLocation, TypeScriptFqn)>, String> {
-        let location = SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: definition.range.byte_offset.0 as i64,
-            end_byte: definition.range.byte_offset.1 as i64,
-            start_line: definition.range.start.line as i32,
-            end_line: definition.range.end.line as i32,
-            start_col: definition.range.start.column as i32,
-            end_col: definition.range.end.column as i32,
-        };
-
-        Ok(Some((location, definition.fqn.clone())))
     }
 
     /// Create an imported symbol location from an imported symbol info
@@ -286,27 +245,6 @@ impl TypeScriptAnalyzer {
             start_col: imported_symbol.range.start.column as i32,
             end_col: imported_symbol.range.end.column as i32,
         }
-    }
-
-    fn create_definition_location_from_reference(
-        &self,
-        reference: &TypeScriptReferenceInfo,
-        file_path: &str,
-    ) -> Option<SourceLocation> {
-        let Some(scope) = &reference.scope else {
-            return None;
-        };
-        let scope_range = scope.last().map(|part| part.range)?;
-
-        Some(SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: scope_range.byte_offset.0 as i64,
-            end_byte: scope_range.byte_offset.1 as i64,
-            start_line: scope_range.start.line as i32,
-            end_line: scope_range.end.line as i32,
-            start_col: scope_range.start.column as i32,
-            end_col: scope_range.end.column as i32,
-        })
     }
 
     fn create_imported_symbol_identifier(

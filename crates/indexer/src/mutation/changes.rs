@@ -79,7 +79,7 @@ impl<'a> KuzuChanges<'a> {
         }
 
         let result = writer_service
-            .write_graph_data(&self.graph_data, &mut node_id_generator)
+            .write_graph_data(&mut self.graph_data, &mut node_id_generator)
             .map_err(|e| format!("Writing failed: {e}"))
             .expect("Failed to write graph data");
 
@@ -230,7 +230,7 @@ impl<'a> KuzuChanges<'a> {
             .iter()
             .filter(|kuzu_def| {
                 !self.graph_data.definition_nodes.iter().any(|def| {
-                    def.fqn == kuzu_def.fqn && def.location.file_path == kuzu_def.primary_file_path
+                    def.fqn == kuzu_def.fqn && def.file_path == kuzu_def.primary_file_path
                 })
             })
             .cloned()

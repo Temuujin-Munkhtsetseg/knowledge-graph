@@ -3,23 +3,21 @@ use std::collections::HashMap;
 use database::graph::RelationshipType;
 use parser_core::java::{
     ast::java_fqn_to_string,
-    types::{
-        JavaDefinitionInfo, JavaDefinitionType, JavaFqn, JavaFqnPartType, JavaImportedSymbolInfo,
-    },
+    types::{JavaDefinitionType, JavaFqn, JavaFqnPartType, JavaImportedSymbolInfo},
 };
 
 use crate::{
     analysis::{
         languages::java::{expression_resolver::ExpressionResolver, utils::full_import_path},
         types::{
-            DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship,
-            DefinitionType, FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType,
-            ImportIdentifier, ImportType, ImportedSymbolLocation, ImportedSymbolNode,
-            SourceLocation,
+            ConsolidatedRelationship, DefinitionNode, DefinitionType, FqnType, ImportIdentifier,
+            ImportType, ImportedSymbolLocation, ImportedSymbolNode,
         },
     },
     parsing::processor::{FileProcessingResult, References},
 };
+use internment::ArcIntern;
+use parser_core::utils::Range;
 
 #[derive(Default)]
 pub struct JavaAnalyzer {
@@ -38,7 +36,7 @@ impl JavaAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(defs) = file_result.definitions.iter_java() {
             for definition in defs {
@@ -48,47 +46,45 @@ impl JavaAnalyzer {
                     continue;
                 }
 
-                if let Ok(Some((location, fqn))) =
-                    self.create_definition_location(definition, relative_file_path)
+                let fqn_string = java_fqn_to_string(&definition.fqn);
+                let definition_node = DefinitionNode::new(
+                    fqn_string.clone(),
+                    definition.name.clone(),
+                    DefinitionType::Java(definition.definition_type),
+                    definition.range,
+                    relative_file_path.to_string(),
+                );
+
+                self.expression_resolver.add_definition(
+                    relative_file_path.to_string(),
+                    definition.clone(),
+                    definition_node.clone(),
+                );
+
+                // We don't want to index local variables, parameters, or fields
+                if definition.definition_type == JavaDefinitionType::LocalVariable
+                    || definition.definition_type == JavaDefinitionType::Parameter
+                    || definition.definition_type == JavaDefinitionType::Field
                 {
-                    let fqn_string = java_fqn_to_string(&fqn);
-                    let definition_node = DefinitionNode::new(
-                        fqn_string.clone(),
-                        definition.name.clone(),
-                        DefinitionType::Java(definition.definition_type),
-                        location.clone(),
-                    );
-
-                    self.expression_resolver.add_definition(
-                        relative_file_path.to_string(),
-                        definition.clone(),
-                        definition_node.clone(),
-                    );
-
-                    // We don't want to index local variables, parameters, or fields
-                    if definition.definition_type == JavaDefinitionType::LocalVariable
-                        || definition.definition_type == JavaDefinitionType::Parameter
-                        || definition.definition_type == JavaDefinitionType::Field
-                    {
-                        continue;
-                    }
-
-                    // Only add file definition relationship for top-level definitions
-                    if self.is_top_level_definition(&fqn) {
-                        file_definition_relationships.push(FileDefinitionRelationship {
-                            file_path: relative_file_path.to_string(),
-                            definition_fqn: fqn_string.clone(),
-                            relationship_type: RelationshipType::FileDefines,
-                            definition_location: location.clone(),
-                            source_location: None,
-                        });
-                    }
-
-                    definition_map.insert(
-                        (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node, FqnType::Java(fqn)),
-                    );
+                    continue;
                 }
+
+                // Only add file definition relationship for top-level definitions
+                if self.is_top_level_definition(&definition.fqn) {
+                    let mut relationship = ConsolidatedRelationship::file_to_definition(
+                        relative_file_path.to_string(),
+                        relative_file_path.to_string(),
+                    );
+                    relationship.relationship_type = RelationshipType::FileDefines;
+                    relationship.source_range = ArcIntern::new(Range::empty());
+                    relationship.target_range = ArcIntern::new(definition.range);
+                    relationships.push(relationship);
+                }
+
+                definition_map.insert(
+                    (fqn_string.clone(), relative_file_path.to_string()),
+                    (definition_node, FqnType::Java(definition.fqn.clone())),
+                );
             }
         }
     }
@@ -99,7 +95,7 @@ impl JavaAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(imported_symbols) = &file_result.imported_symbols
             && let Some(imports) = imported_symbols.iter_java()
@@ -122,12 +118,14 @@ impl JavaAnalyzer {
                     vec![imported_symbol_node.clone()],
                 );
 
-                file_import_relationships.push(FileImportedSymbolRelationship {
-                    file_path: relative_file_path.to_string(),
-                    import_location: location.clone(),
-                    relationship_type: RelationshipType::FileImports,
-                    source_location: None,
-                });
+                let mut relationship = ConsolidatedRelationship::file_to_imported_symbol(
+                    relative_file_path.to_string(),
+                    location.file_path.clone(),
+                );
+                relationship.relationship_type = RelationshipType::FileImports;
+                relationship.source_range = ArcIntern::new(Range::empty());
+                relationship.target_range = ArcIntern::new(location.range());
+                relationships.push(relationship);
 
                 self.expression_resolver
                     .add_import(relative_file_path.to_string(), &imported_symbol_node);
@@ -140,24 +138,19 @@ impl JavaAnalyzer {
         &mut self,
         references: &References,
         file_path: &str,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
-        self.expression_resolver.resolve_references(
-            file_path,
-            references,
-            definition_relationships,
-            definition_imported_symbol_relationships,
-        );
+        self.expression_resolver
+            .resolve_references(file_path, references, relationships);
     }
 
     /// Create definition-to-definition relationships using definitions map
     pub fn add_definition_relationships(
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
-        for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
+        for ((_child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             if let Some(parent_fqn_string) = self.get_parent_fqn_string(child_fqn)
                 && let Some((parent_def, _)) =
                     definition_map.get(&(parent_fqn_string.clone(), child_file_path.to_string()))
@@ -166,18 +159,16 @@ impl JavaAnalyzer {
                     &child_def.definition_type,
                 )
             {
-                definition_relationships.push(DefinitionRelationship {
-                    from_file_path: parent_def.location.file_path.clone(),
-                    to_file_path: child_def.location.file_path.clone(),
-                    from_definition_fqn: parent_fqn_string,
-                    to_definition_fqn: child_fqn_string.clone(),
-                    from_location: parent_def.location.clone(),
-                    to_location: child_def.location.clone(),
-                    relationship_type,
-                    // FIXME: https://gitlab.com/gitlab-org/rust/knowledge-graph/-/issues/177
-                    // Definition Heirarchy relationships should have their own struct
-                    source_location: None,
-                });
+                // FIXME: https://gitlab.com/gitlab-org/rust/knowledge-graph/-/issues/177
+                // Definition Heirarchy relationships should have their own struct
+                let mut relationship = ConsolidatedRelationship::definition_to_definition(
+                    parent_def.file_path.clone(),
+                    child_def.file_path.clone(),
+                );
+                relationship.relationship_type = relationship_type;
+                relationship.source_range = ArcIntern::new(parent_def.range);
+                relationship.target_range = ArcIntern::new(child_def.range);
+                relationships.push(relationship);
             }
         }
     }
@@ -289,25 +280,6 @@ impl JavaAnalyzer {
             DefinitionType::Java(Lambda) => Some(DefinitionType::Java(Lambda)),
             _ => None,
         }
-    }
-
-    fn create_definition_location(
-        &self,
-        definition: &JavaDefinitionInfo,
-        file_path: &str,
-    ) -> Result<Option<(SourceLocation, JavaFqn)>, String> {
-        // All definitions now have mandatory FQNs
-        let location = SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: definition.range.byte_offset.0 as i64,
-            end_byte: definition.range.byte_offset.1 as i64,
-            start_line: definition.range.start.line as i32,
-            end_line: definition.range.end.line as i32,
-            start_col: definition.range.start.column as i32,
-            end_col: definition.range.end.column as i32,
-        };
-
-        Ok(Some((location, definition.fqn.clone())))
     }
 
     fn is_top_level_definition(&self, fqn: &JavaFqn) -> bool {

@@ -1,7 +1,8 @@
 use crate::analysis::types::{
-    DefinitionNode, DirectoryNode, FileNode, GraphData, ImportedSymbolNode,
+    ConsolidatedRelationship, DefinitionNode, DirectoryNode, FileNode, GraphData,
+    ImportedSymbolNode, RelationshipKind,
 };
-use crate::mutation::types::ConsolidatedRelationship;
+use crate::analysis::types::{get_relationships_for_pair, rels_by_kind};
 use crate::mutation::utils::{GraphMapper, NodeIdGenerator};
 use anyhow::{Context, Error, Result};
 use arrow::{datatypes::Schema, record_batch::RecordBatch};
@@ -105,7 +106,7 @@ impl WriterService {
     /// Write graph data to Parquet files with consolidated relationship schema
     pub fn write_graph_data(
         &self,
-        graph_data: &GraphData,
+        graph_data: &mut GraphData,
         node_id_generator: &mut NodeIdGenerator,
     ) -> Result<WriterResult> {
         let start_time = Instant::now();
@@ -121,14 +122,8 @@ impl WriterService {
         // Pre-assign IDs to all nodes
         graph_mapper.assign_node_ids();
 
-        // Consolidate relationships into a single struct
-        let relationships = match graph_mapper.consolidate_relationships() {
-            Ok(relationships) => relationships,
-            Err(e) => {
-                log::error!("Error consolidating relationships: {e}");
-                return Err(e);
-            }
-        };
+        // Consolidate relationships with assigned IDs
+        graph_mapper.assign_relationship_ids()?;
 
         // WRITE ALL NODES to PARQUET
         let batches = [
@@ -154,9 +149,12 @@ impl WriterService {
                     &graph_data.definition_nodes,
                     &database::schema::init::DEFINITION_TABLE,
                     |n: &DefinitionNode| {
-                        let range = n.location.to_range();
                         node_id_generator
-                            .get_definition_id(&n.location.file_path, &range)
+                            .get_definition_id(
+                                &n.file_path,
+                                n.range.byte_offset.0,
+                                n.range.byte_offset.1,
+                            )
                             .unwrap_or(0)
                     },
                 ),
@@ -168,7 +166,11 @@ impl WriterService {
                     &database::schema::init::IMPORTED_SYMBOL_TABLE,
                     |n: &ImportedSymbolNode| {
                         node_id_generator
-                            .get_imported_symbol_id(&n.location)
+                            .get_imported_symbol_id(
+                                &n.location.file_path,
+                                n.location.start_byte as usize,
+                                n.location.end_byte as usize,
+                            )
                             .unwrap_or(0)
                     },
                 ),
@@ -218,13 +220,14 @@ impl WriterService {
 
         for table in RELATIONSHIP_TABLES.iter() {
             for (from, to) in table.from_to_pairs {
-                let (filename, relationships) = relationships.get_relationships_for_pair(from, to);
+                let (filename, relationships) =
+                    get_relationships_for_pair(&graph_data.relationships, from, to);
                 if let Some(filename) = &filename {
                     let file_path = self.output_directory.join(filename);
                     if relationships.is_empty() {
                         continue;
                     }
-                    self.write_consolidated_relationships(&file_path, relationships, table)?;
+                    self.write_consolidated_relationships(&file_path, &relationships, table)?;
                     files_written.push(WrittenFile {
                         file_path: file_path.clone(),
                         file_type: filename.clone(),
@@ -249,17 +252,47 @@ impl WriterService {
             total_files: graph_data.file_nodes.len(),
             total_definitions: graph_data.definition_nodes.len(),
             total_imported_symbols: graph_data.imported_symbol_nodes.len(),
-            total_directory_relationships: relationships.directory_to_directory.len()
-                + relationships.directory_to_file.len(),
-            total_file_definition_relationships: relationships.file_to_definition.len(),
-            total_file_imported_symbol_relationships: relationships.file_to_imported_symbol.len(),
-            total_definition_relationships: relationships.definition_to_definition.len(),
-            total_definition_imported_symbol_relationships: relationships
-                .definition_to_imported_symbol
+            total_directory_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::DirectoryToDirectory,
+            )
+            .len()
+                + rels_by_kind(&graph_data.relationships, RelationshipKind::DirectoryToFile).len(),
+            total_file_definition_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::FileToDefinition,
+            )
+            .len(),
+            total_file_imported_symbol_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::FileToImportedSymbol,
+            )
+            .len(),
+            total_definition_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::DefinitionToDefinition,
+            )
+            .len(),
+            total_definition_imported_symbol_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::DefinitionToImportedSymbol,
+            )
+            .len(),
+            total_imported_symbol_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::ImportedSymbolToDefinition,
+            )
+            .len()
+                + rels_by_kind(
+                    &graph_data.relationships,
+                    RelationshipKind::ImportedSymbolToImportedSymbol,
+                )
+                .len()
+                + rels_by_kind(
+                    &graph_data.relationships,
+                    RelationshipKind::ImportedSymbolToFile,
+                )
                 .len(),
-            total_imported_symbol_relationships: relationships.imported_symbol_to_definition.len()
-                + relationships.imported_symbol_to_imported_symbol.len()
-                + relationships.imported_symbol_to_file.len(),
             writing_duration,
         })
     }

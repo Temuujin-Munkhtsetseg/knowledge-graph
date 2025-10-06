@@ -3,8 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use internment::ArcIntern;
+
 use database::graph::RelationshipType;
-use database::schema::types::NodeFieldAccess;
+use database::schema::types::{NodeFieldAccess, NodeTable};
 use parser_core::{
     csharp::types::{CSharpDefinitionType, CSharpFqn, CSharpImportType},
     definitions::DefinitionTypeInfo,
@@ -19,8 +21,257 @@ use parser_core::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Structured graph data ready for writing to Parquet files
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RelationshipKind {
+    DirectoryToDirectory,
+    DirectoryToFile,
+    FileToDefinition,
+    FileToImportedSymbol,
+    DefinitionToDefinition,
+    DefinitionToImportedSymbol,
+    ImportedSymbolToImportedSymbol,
+    ImportedSymbolToDefinition,
+    ImportedSymbolToFile,
+    #[default]
+    Empty,
+}
+
+impl RelationshipKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            RelationshipKind::DirectoryToDirectory => "DIR_CONTAINS_DIR",
+            RelationshipKind::DirectoryToFile => "DIR_CONTAINS_FILE",
+            RelationshipKind::FileToDefinition => "FILE_DEFINES",
+            RelationshipKind::FileToImportedSymbol => "FILE_IMPORTS",
+            RelationshipKind::DefinitionToDefinition => "DEFINES_DEFINITION",
+            RelationshipKind::DefinitionToImportedSymbol => "DEFINES_IMPORTED_SYMBOL",
+            RelationshipKind::ImportedSymbolToImportedSymbol => {
+                "IMPORTED_SYMBOL_TO_IMPORTED_SYMBOL"
+            }
+            RelationshipKind::ImportedSymbolToDefinition => "IMPORTED_SYMBOL_TO_DEFINITION",
+            RelationshipKind::ImportedSymbolToFile => "IMPORTED_SYMBOL_TO_FILE",
+            RelationshipKind::Empty => "EMPTY",
+        }
+    }
+}
+
+/// Consolidated relationship data for efficient storage
 #[derive(Debug, Clone)]
+pub struct ConsolidatedRelationship {
+    pub kind: RelationshipKind,
+    pub source_id: Option<u32>,
+    pub target_id: Option<u32>,
+    pub relationship_type: RelationshipType,
+    pub source_path: Option<ArcIntern<String>>,
+    pub target_path: Option<ArcIntern<String>>,
+    pub source_range: ArcIntern<Range>,
+    pub target_range: ArcIntern<Range>,
+    /// Definition location for source node (used for ID lookup)
+    pub source_definition_range: Option<ArcIntern<Range>>,
+    /// Definition location for target node (used for ID lookup)  
+    pub target_definition_range: Option<ArcIntern<Range>>,
+}
+
+impl Default for ConsolidatedRelationship {
+    fn default() -> Self {
+        Self {
+            kind: RelationshipKind::Empty,
+            source_id: None,
+            target_id: None,
+            relationship_type: RelationshipType::Empty,
+            source_path: None,
+            target_path: None,
+            source_range: ArcIntern::new(Range::empty()),
+            target_range: ArcIntern::new(Range::empty()),
+            source_definition_range: None,
+            target_definition_range: None,
+        }
+    }
+}
+
+impl ConsolidatedRelationship {
+    pub fn dir_to_dir(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::DirectoryToDirectory,
+            ..Default::default()
+        }
+    }
+
+    pub fn dir_to_file(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::DirectoryToFile,
+            ..Default::default()
+        }
+    }
+
+    pub fn import_to_import(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::ImportedSymbolToImportedSymbol,
+            ..Default::default()
+        }
+    }
+
+    pub fn import_to_definition(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::ImportedSymbolToDefinition,
+            ..Default::default()
+        }
+    }
+
+    pub fn import_to_file(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::ImportedSymbolToFile,
+            ..Default::default()
+        }
+    }
+
+    pub fn definition_to_definition(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::DefinitionToDefinition,
+            ..Default::default()
+        }
+    }
+
+    pub fn file_to_definition(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::FileToDefinition,
+            ..Default::default()
+        }
+    }
+
+    pub fn file_to_imported_symbol(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::FileToImportedSymbol,
+            ..Default::default()
+        }
+    }
+
+    pub fn definition_to_imported_symbol(from_path: String, to_path: String) -> Self {
+        Self {
+            source_path: Some(ArcIntern::new(from_path)),
+            target_path: Some(ArcIntern::new(to_path)),
+            kind: RelationshipKind::DefinitionToImportedSymbol,
+            ..Default::default()
+        }
+    }
+}
+
+pub fn rels_by_kind(
+    relationships: &[ConsolidatedRelationship],
+    kind: RelationshipKind,
+) -> Vec<ConsolidatedRelationship> {
+    relationships
+        .iter()
+        .filter(|rel| rel.kind == kind)
+        .cloned()
+        .collect()
+}
+
+pub fn get_relationships_for_pair(
+    relationships: &[ConsolidatedRelationship],
+    from_table: &NodeTable,
+    to_table: &NodeTable,
+) -> (Option<String>, Vec<ConsolidatedRelationship>) {
+    let filename = from_table.relationship_filename(to_table);
+    match (from_table.name, to_table.name) {
+        ("DirectoryNode", "DirectoryNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::DirectoryToDirectory),
+        ),
+        ("DirectoryNode", "FileNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::DirectoryToFile),
+        ),
+        ("FileNode", "DefinitionNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::FileToDefinition),
+        ),
+        ("FileNode", "ImportedSymbolNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::FileToImportedSymbol),
+        ),
+        ("DefinitionNode", "DefinitionNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::DefinitionToDefinition),
+        ),
+        ("DefinitionNode", "ImportedSymbolNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::DefinitionToImportedSymbol),
+        ),
+        ("ImportedSymbolNode", "ImportedSymbolNode") => (
+            Some(filename),
+            rels_by_kind(
+                relationships,
+                RelationshipKind::ImportedSymbolToImportedSymbol,
+            ),
+        ),
+        ("ImportedSymbolNode", "DefinitionNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::ImportedSymbolToDefinition),
+        ),
+        ("ImportedSymbolNode", "FileNode") => (
+            Some(filename),
+            rels_by_kind(relationships, RelationshipKind::ImportedSymbolToFile),
+        ),
+        _ => (None, vec![]),
+    }
+}
+
+impl NodeFieldAccess for ConsolidatedRelationship {
+    fn get_u32_field(&self, field_name: &str) -> Option<u32> {
+        match field_name {
+            "source_id" => self.source_id,
+            "target_id" => self.target_id,
+            _ => None,
+        }
+    }
+
+    fn get_string_field(&self, field_name: &str) -> Option<String> {
+        match field_name {
+            "type" => Some(self.relationship_type.as_string()),
+            "source_path" => self.source_path.as_ref().map(|p| p.as_ref().clone()),
+            "target_path" => self.target_path.as_ref().map(|p| p.as_ref().clone()),
+            _ => None,
+        }
+    }
+
+    fn get_i64_field(&self, field_name: &str) -> Option<i64> {
+        match field_name {
+            "source_start_byte" => Some(self.source_range.byte_offset.0 as i64),
+            "source_end_byte" => Some(self.source_range.byte_offset.1 as i64),
+            _ => None,
+        }
+    }
+
+    fn get_i32_field(&self, field_name: &str) -> Option<i32> {
+        match field_name {
+            "source_start_line" => Some(self.source_range.start.line as i32),
+            "source_end_line" => Some(self.source_range.end.line as i32),
+            "source_start_col" => Some(self.source_range.start.column as i32),
+            "source_end_col" => Some(self.source_range.end.column as i32),
+            _ => None,
+        }
+    }
+}
+
+/// Structured graph data ready for writing to Parquet files
+#[derive(Debug)]
 pub struct GraphData {
     /// Directory nodes to be written to directories.parquet
     pub directory_nodes: Vec<DirectoryNode>,
@@ -30,23 +281,8 @@ pub struct GraphData {
     pub definition_nodes: Vec<DefinitionNode>,
     /// Imported symbol nodes to be written to imported_symbols.parquet
     pub imported_symbol_nodes: Vec<ImportedSymbolNode>,
-    /// Directory relationships to be written to directory_relationships.parquet
-    pub directory_relationships: Vec<DirectoryRelationship>,
-    /// File-to-imported-symbol relationships to be written to file_imported_symbol_relationships.parquet
-    pub file_imported_symbol_relationships: Vec<FileImportedSymbolRelationship>,
-    /// File-to-definition relationships to be written to file_definition_relationships.parquet
-    pub file_definition_relationships: Vec<FileDefinitionRelationship>,
-    /// Definition-to-definition relationships to be written to definition_relationships.parquet
-    pub definition_relationships: Vec<DefinitionRelationship>,
-    /// Definition-to-imported-symbol relationships to be written to definition_imported_symbol_relationships.parquet
-    pub definition_imported_symbol_relationships: Vec<DefinitionImportedSymbolRelationship>,
-    /// Imported symbol-to-imported symbol relationships to be written to imported_symbol_imported_symbol_relationships.parquet
-    pub imported_symbol_imported_symbol_relationships:
-        Vec<ImportedSymbolImportedSymbolRelationship>,
-    /// Imported symbol-to-definition relationships to be written to imported_symbol_definition_relationships.parquet
-    pub imported_symbol_definition_relationships: Vec<ImportedSymbolDefinitionRelationship>,
-    /// Imported symbol-to-file relationships to be written to imported_symbol_file_relationships.parquet
-    pub imported_symbol_file_relationships: Vec<ImportedSymbolFileRelationship>,
+    /// Relationships to be written to parquet files based on their kind
+    pub relationships: Vec<ConsolidatedRelationship>,
 }
 
 /// Represents a directory node in the graph
@@ -131,35 +367,6 @@ impl NodeFieldAccess for FileNode {
     }
 }
 
-/// Represents a single location where a definition or reference call is found
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SourceLocation {
-    /// File path where this definition or reference call location is found
-    pub file_path: String,
-    /// Start byte position in the file
-    pub start_byte: i64,
-    /// End byte position in the file  
-    pub end_byte: i64,
-    /// Start line number
-    pub start_line: i32,
-    /// End line number
-    pub end_line: i32,
-    /// Start column number
-    pub start_col: i32,
-    /// End column number
-    pub end_col: i32,
-}
-
-impl SourceLocation {
-    pub fn to_range(&self) -> Range {
-        Range::new(
-            Position::new(self.start_line as usize, self.start_col as usize),
-            Position::new(self.end_line as usize, self.end_col as usize),
-            (self.start_byte as usize, self.end_byte as usize),
-        )
-    }
-}
-
 /// Represents a language-specific definition type (e.g. class, module, method, etc.)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DefinitionType {
@@ -209,8 +416,9 @@ pub struct DefinitionNode {
     pub name: String,
     /// Type of definition
     pub definition_type: DefinitionType,
-    /// File location of the definition
-    pub location: SourceLocation,
+    pub range: Range,
+    // File location of the definition
+    pub file_path: String,
 }
 
 impl DefinitionNode {
@@ -219,18 +427,16 @@ impl DefinitionNode {
         fqn: String,
         name: String,
         definition_type: DefinitionType,
-        location: SourceLocation,
+        range: Range,
+        file_path: String,
     ) -> Self {
         Self {
             fqn,
             name,
             definition_type,
-            location,
+            range,
+            file_path,
         }
-    }
-
-    pub fn file_path(&self) -> String {
-        self.location.file_path.clone()
     }
 }
 
@@ -241,17 +447,17 @@ impl NodeFieldAccess for DefinitionNode {
             "fqn" => Some(self.fqn.clone()),
             "name" => Some(self.name.clone()),
             "definition_type" => Some(self.definition_type.as_str().to_string()),
-            "primary_file_path" => Some(self.location.file_path.clone()),
+            "primary_file_path" => Some(self.file_path.clone()),
             _ => None,
         }
     }
 
     fn get_i32_field(&self, field_name: &str) -> Option<i32> {
         match field_name {
-            "start_line" => Some(self.location.start_line),
-            "end_line" => Some(self.location.end_line),
-            "start_col" => Some(self.location.start_col),
-            "end_col" => Some(self.location.end_col),
+            "start_line" => Some(self.range.start.line as i32),
+            "end_line" => Some(self.range.end.line as i32),
+            "start_col" => Some(self.range.start.column as i32),
+            "end_col" => Some(self.range.end.column as i32),
             "total_locations" => Some(1), // Default to 1 for single location
             _ => None,
         }
@@ -259,8 +465,8 @@ impl NodeFieldAccess for DefinitionNode {
 
     fn get_i64_field(&self, field_name: &str) -> Option<i64> {
         match field_name {
-            "primary_start_byte" => Some(self.location.start_byte),
-            "primary_end_byte" => Some(self.location.end_byte),
+            "primary_start_byte" => Some(self.range.byte_offset.0 as i64),
+            "primary_end_byte" => Some(self.range.byte_offset.1 as i64),
             _ => None,
         }
     }
@@ -293,6 +499,18 @@ pub struct ImportedSymbolLocation {
     pub start_col: i32,
     /// End column
     pub end_col: i32,
+}
+
+impl ImportedSymbolLocation {
+    pub fn range(&self) -> Range {
+        let start_pos = Position::new(self.start_line as usize, self.start_col as usize);
+        let end_pos = Position::new(self.end_line as usize, self.end_col as usize);
+        Range::new(
+            start_pos,
+            end_pos,
+            (self.start_byte as usize, self.end_byte as usize),
+        )
+    }
 }
 
 /// Represents a language-specific import type
@@ -400,113 +618,6 @@ impl NodeFieldAccess for ImportedSymbolNode {
             _ => None,
         }
     }
-}
-
-/// Represents a relationship between directories and files
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DirectoryRelationship {
-    /// Source path (directory path)
-    pub from_path: String,
-    /// Target path (directory or file path)
-    pub to_path: String,
-    /// Type of relationship ("DIR_CONTAINS_DIR" or "DIR_CONTAINS_FILE")
-    pub relationship_type: RelationshipType,
-}
-
-/// Represents a relationship between a file and a definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileDefinitionRelationship {
-    /// File path (foreign key to FileNode.path)
-    pub file_path: String,
-    /// Definition FQN (foreign key to DefinitionNode.fqn)
-    pub definition_fqn: String,
-    /// Type of relationship (always "DEFINES" for now)
-    pub relationship_type: RelationshipType,
-    /// Definition location (foreign key to DefinitionNode.location)
-    pub definition_location: SourceLocation,
-    /// Optional location where definition is used (e.g., Call edges)
-    pub source_location: Option<SourceLocation>,
-}
-
-/// Represents a relationship between a file and an imported symbol
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileImportedSymbolRelationship {
-    /// File path (foreign key to FileNode.path)
-    pub file_path: String,
-    /// Imported symbol location (foreign key to ImportedSymbolNode.location)
-    pub import_location: ImportedSymbolLocation,
-    /// Type of relationship (import, or a reference)
-    pub relationship_type: RelationshipType,
-    /// Optional location where imported symbol is used (e.g., Call edges)
-    pub source_location: Option<SourceLocation>,
-}
-
-/// Represents a hierarchical relationship between definitions
-#[derive(Debug, Clone)]
-pub struct DefinitionRelationship {
-    /// Parent definition file path (foreign key to FileNode.path)
-    pub from_file_path: String, // TODO: Drop (we have from_location already)
-    /// Child definition file path (foreign key to FileNode.path)
-    pub to_file_path: String, // TODO: Drop (we have to_location already)
-    /// Parent definition FQN (foreign key to DefinitionNode.fqn)
-    pub from_definition_fqn: String,
-    /// Child definition FQN (foreign key to DefinitionNode.fqn)
-    pub to_definition_fqn: String,
-    /// Parent definition location (foreign key to DefinitionNode.location)
-    pub from_location: SourceLocation,
-    /// Child definition location (foreign key to DefinitionNode.location)
-    pub to_location: SourceLocation,
-    /// Type of relationship (e.g., "MODULE_TO_CLASS", "CLASS_TO_METHOD", etc.)
-    pub relationship_type: RelationshipType,
-    /// Optional location where definition is used (e.g., Call edges)
-    pub source_location: Option<SourceLocation>,
-}
-
-/// Represents a relationship between a definition and an imported symbol
-/// (i.e. when an import is contained in the body of a definition)
-#[derive(Debug, Clone)]
-pub struct DefinitionImportedSymbolRelationship {
-    /// File path that the definition and import that's contained (or referenced) in it
-    /// (foreign key to FileNode.path)
-    pub file_path: String,
-    /// Definition FQN (foreign key to DefinitionNode.fqn)
-    pub definition_fqn: String,
-    /// Imported symbol location (foreign key to ImportedSymbolNode.location)
-    pub imported_symbol_location: ImportedSymbolLocation,
-    /// Type of relationship (either "DEFINES_IMPORTED_SYMBOL" or "CALLS_IMPORTED_SYMBOL" for now)
-    pub relationship_type: RelationshipType,
-    /// Definition location (foreign key to DefinitionNode.location)
-    pub definition_location: SourceLocation,
-    /// Optional location where imported symbol is used (e.g., Call edges)
-    pub source_location: Option<SourceLocation>,
-}
-
-/// Represents a relationship between an imported symbol and another imported symbol
-/// (i.e. when an imported symbol is imported by another imported symbol,
-/// `from module import foo` -> `from other_module import stuff as foo`)
-#[derive(Debug, Clone)]
-pub struct ImportedSymbolImportedSymbolRelationship {
-    pub source_location: ImportedSymbolLocation,
-    pub target_location: ImportedSymbolLocation,
-    pub relationship_type: RelationshipType,
-}
-
-/// Represents a relationship between an imported symbol and a definition
-/// (i.e. when a definition is imported, `from module import foo` -> `def foo(): ...`)
-#[derive(Debug, Clone)]
-pub struct ImportedSymbolDefinitionRelationship {
-    pub source_location: ImportedSymbolLocation,
-    pub target_location: SourceLocation,
-    pub relationship_type: RelationshipType,
-}
-
-/// Represents a relationship between an imported symbol and a file
-/// (i.e. when a module is imported, `import my.module` -> `File("my/module.py")`)
-#[derive(Debug, Clone)]
-pub struct ImportedSymbolFileRelationship {
-    pub source_location: ImportedSymbolLocation,
-    pub target_location: String,
-    pub relationship_type: RelationshipType,
 }
 
 /// Optimized file tree structure for fast lookups

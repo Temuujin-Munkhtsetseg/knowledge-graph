@@ -110,6 +110,8 @@ pub enum RelationshipType {
     ImportedSymbolToDefinition,
     #[strum(serialize = "IMPORTED_SYMBOL_TO_FILE")]
     ImportedSymbolToFile,
+    #[strum(serialize = "EMPTY")]
+    Empty,
 }
 
 impl RelationshipType {

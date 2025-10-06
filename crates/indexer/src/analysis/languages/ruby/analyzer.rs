@@ -4,22 +4,19 @@
 //! Ruby code analysis process, transforming parsed structural data into a semantic
 //! Knowledge Graph with accurate cross-references.
 
-use crate::analysis::types::{
-    DefinitionNode, DefinitionRelationship, DefinitionType, FileDefinitionRelationship, FqnType,
-    SourceLocation,
-};
+use crate::analysis::types::{ConsolidatedRelationship, DefinitionNode, DefinitionType, FqnType};
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
+use internment::ArcIntern;
+use parser_core::utils::Range;
 use parser_core::{
     references::ReferenceInfo,
     ruby::{
-        definitions::RubyDefinitionInfo,
         fqn::ruby_fqn_to_string,
         references::types::{RubyExpressionMetadata, RubyReferenceType, RubyTargetResolution},
         types::{RubyDefinitionType, RubyFqn},
     },
 };
-
 use std::collections::HashMap;
 
 // Import the new Ruby-specific analyzers
@@ -63,80 +60,71 @@ impl RubyAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) -> Result<(), String> {
         if let Some(defs) = file_result.definitions.iter_ruby() {
             for definition in defs {
                 // Process all definition types including modules for better scope resolution
                 // Modules provide namespace context that's important for method resolution
+                let fqn_string = ruby_fqn_to_string(&definition.fqn);
+                let definition_node = DefinitionNode::new(
+                    fqn_string.clone(),
+                    definition.name.clone(),
+                    DefinitionType::Ruby(definition.definition_type),
+                    definition.range,
+                    relative_file_path.to_string(),
+                );
 
-                if let Some((location, ruby_fqn)) =
-                    self.create_definition_location(definition, relative_file_path)?
-                {
-                    let fqn_string = ruby_fqn_to_string(&ruby_fqn);
+                let key = (fqn_string.clone(), relative_file_path.to_string());
 
-                    // Create new definition
-                    let definition_node = DefinitionNode::new(
-                        fqn_string.clone(),
-                        definition.name.to_string(),
-                        DefinitionType::Ruby(definition.definition_type),
-                        location.clone(),
+                if definition_map.contains_key(&key) {
+                    log::warn!(
+                        "Duplicate definition found for Ruby: {} in file {}",
+                        definition.name,
+                        relative_file_path
                     );
-
-                    let fqn_type = FqnType::Ruby(ruby_fqn.clone());
-                    definition_map.insert(
-                        (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node.clone(), fqn_type.clone()),
-                    );
-
-                    // Always create file-definition relationship for this specific location
-                    file_definition_relationships.push(FileDefinitionRelationship {
-                        file_path: relative_file_path.to_string(),
-                        definition_fqn: fqn_string.clone(),
-                        relationship_type: RelationshipType::FileDefines,
-                        definition_location: location.clone(),
-                        source_location: None,
-                    });
-
-                    // Add definition to expression resolver if available
-                    if let Some(ref mut resolver) = self.expression_resolver {
-                        resolver.add_definition(fqn_string.clone(), definition_node, &fqn_type);
-                    }
-
-                    self.stats.definitions_processed += 1;
+                    continue;
                 }
+
+                definition_map.insert(
+                    key,
+                    (
+                        definition_node.clone(),
+                        FqnType::Ruby(definition.fqn.clone()),
+                    ),
+                );
+                let mut relationship = ConsolidatedRelationship::file_to_definition(
+                    relative_file_path.to_string(),
+                    relative_file_path.to_string(),
+                );
+                relationship.relationship_type = RelationshipType::FileDefines;
+                relationship.source_range = ArcIntern::new(Range::empty());
+                relationship.target_range = ArcIntern::new(definition.range);
+                relationships.push(relationship);
+
+                // Add definition to expression resolver if available
+                if let Some(ref mut resolver) = self.expression_resolver {
+                    resolver.add_definition(
+                        fqn_string.clone(),
+                        definition_node,
+                        &FqnType::Ruby(definition.fqn.clone()),
+                    );
+                }
+
+                self.stats.definitions_processed += 1;
             }
         }
 
         Ok(())
     }
 
-    /// Create a definition location from a definition info
-    fn create_definition_location(
-        &self,
-        definition: &RubyDefinitionInfo,
-        file_path: &str,
-    ) -> Result<Option<(SourceLocation, RubyFqn)>, String> {
-        let location = SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: definition.range.byte_offset.0 as i64,
-            end_byte: definition.range.byte_offset.1 as i64,
-            start_line: definition.range.start.line as i32,
-            end_line: definition.range.end.line as i32,
-            start_col: definition.range.start.column as i32,
-            end_col: definition.range.end.column as i32,
-        };
-
-        Ok(Some((location, definition.fqn.clone())))
-    }
-
     /// Create definition-to-definition relationships using definitions map
     pub fn add_definition_relationships(
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
-        for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
+        for ((_child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             // Find parent definition by using FQN parts directly
             if let Some(parent_fqn_string) = self.get_parent_fqn_from_parts(child_fqn)
                 && let Some((parent_def, _)) =
@@ -147,16 +135,14 @@ impl RubyAnalyzer {
                     &parent_def.definition_type,
                     &child_def.definition_type,
                 ) {
-                    definition_relationships.push(DefinitionRelationship {
-                        from_file_path: parent_def.location.file_path.clone(),
-                        to_file_path: child_def.location.file_path.clone(),
-                        from_definition_fqn: parent_fqn_string,
-                        to_definition_fqn: child_fqn_string.clone(),
-                        from_location: parent_def.location.clone(),
-                        to_location: child_def.location.clone(),
-                        relationship_type,
-                        source_location: None,
-                    });
+                    let mut relationship = ConsolidatedRelationship::definition_to_definition(
+                        parent_def.file_path.clone(),
+                        child_def.file_path.clone(),
+                    );
+                    relationship.relationship_type = relationship_type;
+                    relationship.source_range = ArcIntern::new(parent_def.range);
+                    relationship.target_range = ArcIntern::new(child_def.range);
+                    relationships.push(relationship);
                 }
             }
         }
@@ -167,14 +153,14 @@ impl RubyAnalyzer {
         &mut self,
         references: &References,
         file_path: &str,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(ref mut resolver) = self.expression_resolver {
-            let initial_count = definition_relationships.len();
+            let initial_count = relationships.len();
 
-            resolver.process_references(references, file_path, definition_relationships);
+            resolver.process_references(references, file_path, relationships);
 
-            let new_relationships = definition_relationships.len() - initial_count;
+            let new_relationships = relationships.len() - initial_count;
 
             self.stats.references_processed += new_relationships;
             self.stats.relationships_created += new_relationships;

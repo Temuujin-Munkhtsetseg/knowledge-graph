@@ -1,4 +1,6 @@
-use super::{DirectoryNode, DirectoryRelationship, FileNode};
+use super::{DirectoryNode, FileNode};
+use crate::analysis::types::ConsolidatedRelationship;
+
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
 use std::{collections::HashSet, path::Path};
@@ -23,7 +25,7 @@ impl FileSystemAnalyzer {
         &self,
         file_path: &str,
         directory_nodes: &mut Vec<DirectoryNode>,
-        directory_relationships: &mut Vec<DirectoryRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         created_directories: &mut HashSet<String>,
         created_relationships: &mut HashSet<(String, String)>,
     ) {
@@ -75,11 +77,12 @@ impl FileSystemAnalyzer {
                 if let Some(ref parent) = parent_path {
                     let rel_tuple = (parent.clone(), current_path.clone());
                     if !created_relationships.contains(&rel_tuple) {
-                        directory_relationships.push(DirectoryRelationship {
-                            from_path: parent.clone(),
-                            to_path: current_path.clone(),
-                            relationship_type: RelationshipType::DirContainsDir,
-                        });
+                        let mut rel = ConsolidatedRelationship::dir_to_dir(
+                            parent.clone(),
+                            current_path.clone(),
+                        );
+                        rel.relationship_type = RelationshipType::DirContainsDir;
+                        relationships.push(rel);
                         created_relationships.insert(rel_tuple);
                     }
                 }
