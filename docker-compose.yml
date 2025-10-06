@@ -1,25 +1,34 @@
 services:
-  gkg-deployed:
+  gkg:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/gkg/Dockerfile
+    container_name: gkg
+    # This service provides the gkg CLI tool. It is intended to be used for
+    # one-off commands. For example, to run the indexer on a mounted volume:
+    #   docker compose run --rm -v ./my-workspace:/workspace gkg index /workspace
+    # The default command shows the help message.
+    command: ["--help"]
+
+  http-server-deployed:
+    build:
+      context: .
+      dockerfile: docker/http-server-deployed/Dockerfile
     container_name: gkg-server-deployed
-    # Running as root, data dir can be anywhere.
     command: ["http-server-deployed", "-m", "webserver", "--bind", "0.0.0.0:3334", "--secret-path", "/secrets/jwt.secret", "--data-dir", "/data/gkg-deployed"]
     ports:
       - "3334:3334"
     volumes:
       - gkg-data-deployed:/data/gkg-deployed
       - ./jwt.secret:/secrets/jwt.secret:ro
-      - ./:/workspace:ro
     environment:
       - RUST_LOG=info
     restart: unless-stopped
 
-  gkg-desktop:
+  http-server-desktop:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/http-server-desktop/Dockerfile
     container_name: gkg-server-desktop
     command: ["dev-server", "--enable-reindexing"]
     ports:
@@ -27,7 +36,6 @@ services:
     volumes:
       # The dev-server will use /root/.gkg as its data path when run as root
       - gkg-data-desktop:/root/.gkg
-      - ./:/workspace:ro
     environment:
       - RUST_LOG=info
       - DEV_PORT=27495

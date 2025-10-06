@@ -15,8 +15,8 @@ struct Args {
     // Socket file path to use (mutually exclusive with --bind)
     #[arg(short, long, conflicts_with = "bind")]
     socket: Option<String>,
-    // Bind address to use (defaults to 127.0.0.1:8080)
-    #[arg(short, long, default_value = "127.0.0.1:8080")]
+    // Bind address to use (defaults to 0.0.0.0:8080)
+    #[arg(short, long, default_value = "0.0.0.0:8080")]
     bind: String,
     // Server mode - server can run either in indexer or webserver mode
     #[arg(short, long, default_value = "indexer")]

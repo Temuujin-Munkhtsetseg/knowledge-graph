@@ -1,0 +1,29 @@
+# Ignore version control directories
+.git/
+.github/
+
+# Ignore build artifacts
+target/
+build/
+dist/
+
+# Ignore Node.js dependencies
+node_modules/
+
+# Ignore local environment files and secrets
+.env
+*.secret
+jwt.secret
+
+# Ignore editor and OS-specific files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Ignore logs
+*.log
+
+# Ignore the old Dockerfile
+Dockerfile
