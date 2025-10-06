@@ -1,10 +1,22 @@
-use std::collections::{HashMap, HashSet};
-use tracing::{debug, info, warn};
+use std::collections::HashMap;
+use tracing::warn;
 
-use crate::analysis::types::{GraphData, ImportedSymbolLocation};
-use crate::mutation::types::{ConsolidatedRelationship, ConsolidatedRelationships};
-use database::graph::RelationshipType;
+use crate::analysis::types::{GraphData, ImportedSymbolLocation, RelationshipKind};
 use parser_core::utils::Range;
+
+pub enum RelationshipIdType {
+    Source,
+    Target,
+}
+
+impl RelationshipIdType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            RelationshipIdType::Source => "SOURCE",
+            RelationshipIdType::Target => "TARGET",
+        }
+    }
+}
 
 /// Node ID generator for assigning integer IDs to nodes
 #[derive(Debug, Clone)]
@@ -127,35 +139,37 @@ impl NodeIdGenerator {
         self.file_ids.get(path).copied()
     }
 
-    pub fn get_definition_id(&self, file_path: &str, range: &Range) -> Option<u32> {
+    pub fn get_definition_id(
+        &self,
+        file_path: &str,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> Option<u32> {
         self.definition_ids
-            .get(&(
-                file_path.to_string(),
-                range.byte_offset.0,
-                range.byte_offset.1,
-            ))
+            .get(&(file_path.to_string(), start_byte, end_byte))
             .copied()
     }
 
-    pub fn get_imported_symbol_id(&self, location: &ImportedSymbolLocation) -> Option<u32> {
+    pub fn get_imported_symbol_id(
+        &self,
+        file_path: &str,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> Option<u32> {
         self.imported_symbol_ids
-            .get(&(
-                location.file_path.clone(),
-                location.start_byte as usize,
-                location.end_byte as usize,
-            ))
+            .get(&(file_path.to_string(), start_byte, end_byte))
             .copied()
     }
 }
 
 pub struct GraphMapper<'a> {
-    pub graph_data: &'a GraphData,
+    pub graph_data: &'a mut GraphData,
     pub node_id_generator: &'a mut NodeIdGenerator,
 }
 
 impl<'a> GraphMapper<'a> {
     /// Create a new writer service
-    pub fn new(graph_data: &'a GraphData, node_id_generator: &'a mut NodeIdGenerator) -> Self {
+    pub fn new(graph_data: &'a mut GraphData, node_id_generator: &'a mut NodeIdGenerator) -> Self {
         Self {
             graph_data,
             node_id_generator,
@@ -178,10 +192,8 @@ impl<'a> GraphMapper<'a> {
 
         // Assign definition IDs
         for def_node in &self.graph_data.definition_nodes {
-            self.node_id_generator.get_or_assign_definition_id(
-                &def_node.location.file_path,
-                &def_node.location.to_range(),
-            );
+            self.node_id_generator
+                .get_or_assign_definition_id(&def_node.file_path, &def_node.range);
         }
 
         // Assign imported symbol IDs
@@ -192,506 +204,402 @@ impl<'a> GraphMapper<'a> {
     }
 
     /// Consolidate all relationships into four categories with integer IDs and types
-    pub fn consolidate_relationships(&self) -> Result<ConsolidatedRelationships, anyhow::Error> {
-        let mut relationships = ConsolidatedRelationships::default();
+    pub fn assign_relationship_ids(&mut self) -> Result<(), anyhow::Error> {
         let mut dir_not_found = 0;
         let mut file_not_found = 0;
         let mut def_not_found = 0;
         let mut import_not_found = 0;
-        let mut calls_count = 0;
-        let mut missing_source_fqns = HashSet::new();
-        let mut missing_target_fqns = HashSet::new();
+        // let calls_count = 0;
+        // let mut missing_source_fqns = HashSet::new();
+        // let mut missing_target_fqns = HashSet::new();
 
-        // Process directory-to-directory and directory-to-file relationships
-        for dir_rel in &self.graph_data.directory_relationships {
-            let Some(source_id) = self.node_id_generator.get_directory_id(&dir_rel.from_path)
-            else {
-                dir_not_found += 1;
-                warn!(
-                    "(DIR_CONTAINS_DIR) Source directory ID not found: Directory({})",
-                    dir_rel.from_path
-                );
+        // Process all relationships in a single iteration
+        for rel in &mut self.graph_data.relationships {
+            let Some(from_path) = rel.source_path.as_ref().map(|p| p.as_ref()) else {
                 continue;
             };
+            let Some(to_path) = rel.target_path.as_ref().map(|p| p.as_ref()) else {
+                continue;
+            };
+            let kind_str = rel.kind.as_str();
 
-            if dir_rel.relationship_type == RelationshipType::DirContainsDir {
-                let Some(target_id) = self.node_id_generator.get_directory_id(&dir_rel.to_path)
-                else {
-                    dir_not_found += 1;
-                    warn!(
-                        "(DIR_CONTAINS_DIR) Target directory ID not found: Directory({})",
-                        dir_rel.to_path
+            match rel.kind {
+                RelationshipKind::DirectoryToDirectory => {
+                    let source_id = self.node_id_generator.get_directory_id(from_path);
+                    let target_id = self.node_id_generator.get_directory_id(to_path);
+                    if source_id.is_none() {
+                        dir_not_found += 1;
+                        warn!(
+                            "({}) Source directory ID not found: Directory({})",
+                            kind_str, from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        dir_not_found += 1;
+                        warn!(
+                            "({}) Target directory ID not found: Directory({})",
+                            kind_str, to_path
+                        );
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::DirectoryToFile => {
+                    let source_id = self.node_id_generator.get_directory_id(from_path);
+                    let target_id = self.node_id_generator.get_file_id(to_path);
+                    if source_id.is_none() {
+                        dir_not_found += 1;
+                        warn!(
+                            "({}) Source directory ID not found: Directory({})",
+                            kind_str, from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        file_not_found += 1;
+                        warn!("({}) Target file ID not found: File({})", kind_str, to_path);
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::FileToDefinition => {
+                    let source_id = self.node_id_generator.get_file_id(from_path);
+                    let target_id = self.node_id_generator.get_definition_id(
+                        to_path,
+                        rel.target_range.byte_offset.0,
+                        rel.target_range.byte_offset.1,
                     );
-                    continue;
-                };
-
-                relationships
-                    .directory_to_directory
-                    .push(ConsolidatedRelationship {
-                        source_id: Some(source_id),
-                        target_id: Some(target_id),
-                        relationship_type: dir_rel.relationship_type.as_string(),
-                        start_byte: None,
-                        end_byte: None,
-                        start_line: None,
-                        end_line: None,
-                        start_column: None,
-                        end_column: None,
-                    });
-            } else if dir_rel.relationship_type == RelationshipType::DirContainsFile {
-                let Some(target_id) = self.node_id_generator.get_file_id(&dir_rel.to_path) else {
-                    file_not_found += 1;
-                    warn!(
-                        "(DIR_CONTAINS_FILE) Target file ID not found: File({})",
-                        dir_rel.to_path
+                    if source_id.is_none() {
+                        file_not_found += 1;
+                        warn!(
+                            "({}) Source file ID not found: File({})",
+                            kind_str, from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        def_not_found += 1;
+                        warn!(
+                            "({}) Target definition ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.target_range.byte_offset.0 },
+                            { rel.target_range.byte_offset.1 },
+                            to_path
+                        );
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::FileToImportedSymbol => {
+                    let source_id = self.node_id_generator.get_file_id(from_path);
+                    let target_id = self.node_id_generator.get_imported_symbol_id(
+                        to_path,
+                        rel.target_range.byte_offset.0,
+                        rel.target_range.byte_offset.1,
                     );
+                    if source_id.is_none() {
+                        file_not_found += 1;
+                        warn!(
+                            "({}) Source file ID not found: File({})",
+                            kind_str, from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        import_not_found += 1;
+                        warn!(
+                            "({}) Target imported symbol ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.target_range.byte_offset.0 },
+                            { rel.target_range.byte_offset.1 },
+                            to_path
+                        );
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::DefinitionToDefinition => {
+                    let (source_start, source_end) =
+                        if let Some(def_range) = &rel.source_definition_range {
+                            (def_range.byte_offset.0, def_range.byte_offset.1)
+                        } else {
+                            (
+                                rel.source_range.byte_offset.0,
+                                rel.source_range.byte_offset.1,
+                            )
+                        };
+                    let (target_start, target_end) =
+                        if let Some(def_range) = &rel.target_definition_range {
+                            (def_range.byte_offset.0, def_range.byte_offset.1)
+                        } else {
+                            (
+                                rel.target_range.byte_offset.0,
+                                rel.target_range.byte_offset.1,
+                            )
+                        };
+                    let source_id = self.node_id_generator.get_definition_id(
+                        from_path,
+                        source_start,
+                        source_end,
+                    );
+                    let target_id =
+                        self.node_id_generator
+                            .get_definition_id(to_path, target_start, target_end);
+                    if source_id.is_none() {
+                        def_not_found += 1;
+                        warn!(
+                            "({}) Source definition ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.source_range.byte_offset.0 },
+                            { rel.source_range.byte_offset.1 },
+                            from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        def_not_found += 1;
+                        warn!(
+                            "({}) Target definition ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.target_range.byte_offset.0 },
+                            { rel.target_range.byte_offset.1 },
+                            to_path
+                        );
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::DefinitionToImportedSymbol => {
+                    let (source_start, source_end) =
+                        if let Some(def_range) = &rel.source_definition_range {
+                            (def_range.byte_offset.0, def_range.byte_offset.1)
+                        } else {
+                            (
+                                rel.source_range.byte_offset.0,
+                                rel.source_range.byte_offset.1,
+                            )
+                        };
+                    let (target_start, target_end) =
+                        if let Some(def_range) = &rel.target_definition_range {
+                            (def_range.byte_offset.0, def_range.byte_offset.1)
+                        } else {
+                            (
+                                rel.target_range.byte_offset.0,
+                                rel.target_range.byte_offset.1,
+                            )
+                        };
+                    let source_id = self.node_id_generator.get_definition_id(
+                        from_path,
+                        source_start,
+                        source_end,
+                    );
+                    let target_id = self.node_id_generator.get_imported_symbol_id(
+                        to_path,
+                        target_start,
+                        target_end,
+                    );
+                    if source_id.is_none() {
+                        def_not_found += 1;
+                        warn!(
+                            "({}) Source definition ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.source_range.byte_offset.0 },
+                            { rel.source_range.byte_offset.1 },
+                            from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        import_not_found += 1;
+                        warn!(
+                            "({}) Target imported symbol ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.target_range.byte_offset.0 },
+                            { rel.target_range.byte_offset.1 },
+                            to_path
+                        );
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::ImportedSymbolToDefinition => {
+                    let source_id = self.node_id_generator.get_imported_symbol_id(
+                        from_path,
+                        rel.source_range.byte_offset.0,
+                        rel.source_range.byte_offset.1,
+                    );
+                    let target_id = self.node_id_generator.get_definition_id(
+                        to_path,
+                        rel.target_range.byte_offset.0,
+                        rel.target_range.byte_offset.1,
+                    );
+                    if source_id.is_none() {
+                        import_not_found += 1;
+                        warn!(
+                            "({}) Source imported symbol ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.source_range.byte_offset.0 },
+                            { rel.source_range.byte_offset.1 },
+                            from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        def_not_found += 1;
+                        warn!(
+                            "({}) Target definition ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.target_range.byte_offset.0 },
+                            { rel.target_range.byte_offset.1 },
+                            to_path
+                        );
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::ImportedSymbolToImportedSymbol => {
+                    let source_id = self.node_id_generator.get_imported_symbol_id(
+                        from_path,
+                        rel.source_range.byte_offset.0,
+                        rel.source_range.byte_offset.1,
+                    );
+                    let target_id = self.node_id_generator.get_imported_symbol_id(
+                        to_path,
+                        rel.target_range.byte_offset.0,
+                        rel.target_range.byte_offset.1,
+                    );
+                    if source_id.is_none() {
+                        import_not_found += 1;
+                        warn!(
+                            "({}) Source imported symbol ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.source_range.byte_offset.0 },
+                            { rel.source_range.byte_offset.1 },
+                            from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        import_not_found += 1;
+                        warn!(
+                            "({}) Target imported symbol ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.target_range.byte_offset.0 },
+                            { rel.target_range.byte_offset.1 },
+                            to_path
+                        );
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                RelationshipKind::ImportedSymbolToFile => {
+                    let source_id = self.node_id_generator.get_imported_symbol_id(
+                        from_path,
+                        rel.source_range.byte_offset.0,
+                        rel.source_range.byte_offset.1,
+                    );
+                    let target_id = self.node_id_generator.get_file_id(to_path);
+                    if source_id.is_none() {
+                        import_not_found += 1;
+                        warn!(
+                            "({}) Source imported symbol ID not found: byte_offset({},{}) File({})",
+                            kind_str,
+                            { rel.source_range.byte_offset.0 },
+                            { rel.source_range.byte_offset.1 },
+                            from_path
+                        );
+                        continue;
+                    }
+                    if target_id.is_none() {
+                        file_not_found += 1;
+                        warn!("({}) Target file ID not found: File({})", kind_str, to_path);
+                        continue;
+                    }
+                    rel.source_id = source_id;
+                    rel.target_id = target_id;
+                }
+                _ => {
                     continue;
-                };
-
-                relationships
-                    .directory_to_file
-                    .push(ConsolidatedRelationship {
-                        source_id: Some(source_id),
-                        target_id: Some(target_id),
-                        relationship_type: dir_rel.relationship_type.as_string(),
-                        start_byte: None,
-                        end_byte: None,
-                        start_line: None,
-                        end_line: None,
-                        start_column: None,
-                        end_column: None,
-                    });
+                }
             }
         }
 
-        // Process file-to-definition relationships
-        for file_rel in &self.graph_data.file_definition_relationships {
-            if file_rel.relationship_type == RelationshipType::Calls
-                || file_rel.relationship_type == RelationshipType::AmbiguouslyCalls
-            {
-                calls_count += 1;
-            }
+        // Delete all relationships with no source or target id
+        self.graph_data
+            .relationships
+            .retain(|rel| rel.source_id.is_some() && rel.target_id.is_some());
 
-            let Some(source_id) = self.node_id_generator.get_file_id(&file_rel.file_path) else {
-                file_not_found += 1;
-                warn!(
-                    "(FILE_DEFINITION_RELATIONSHIPS) Source file ID not found: File({})",
-                    file_rel.file_path
-                );
-                continue;
-            };
-
-            let Some(target_id) = self.node_id_generator.get_definition_id(
-                &file_rel.definition_location.file_path,
-                &file_rel.definition_location.to_range(),
-            ) else {
-                def_not_found += 1;
-                warn!(
-                    "(FILE_DEFINITION_RELATIONSHIPS) Target definition ID not found: FQN({}) File({})",
-                    file_rel.definition_fqn, file_rel.definition_location.file_path,
-                );
-                continue;
-            };
-
-            let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
-                if let Some(loc) = file_rel.source_location.as_ref() {
-                    (
-                        Some(loc.start_byte as usize),
-                        Some(loc.end_byte as usize),
-                        Some(loc.start_line as usize),
-                        Some(loc.end_line as usize),
-                        Some(loc.start_col as usize),
-                        Some(loc.end_col as usize),
-                    )
-                } else {
-                    (None, None, None, None, None, None)
-                };
-
-            relationships
-                .file_to_definition
-                .push(ConsolidatedRelationship {
-                    source_id: Some(source_id),
-                    target_id: Some(target_id),
-                    relationship_type: file_rel.relationship_type.as_string(),
-                    start_byte,
-                    end_byte,
-                    start_line,
-                    end_line,
-                    start_column: start_col,
-                    end_column: end_col,
-                });
-        }
-
-        // Process file-to-imported-symbol relationships
-        for file_rel in &self.graph_data.file_imported_symbol_relationships {
-            if file_rel.relationship_type == RelationshipType::Calls
-                || file_rel.relationship_type == RelationshipType::AmbiguouslyCalls
-            {
-                calls_count += 1;
-            }
-
-            let Some(source_id) = self.node_id_generator.get_file_id(&file_rel.file_path) else {
-                file_not_found += 1;
-                warn!(
-                    "(FILE_IMPORT_RELATIONSHIPS) Source file ID not found: File({})",
-                    file_rel.file_path
-                );
-                continue;
-            };
-
-            let Some(target_id) = self
-                .node_id_generator
-                .get_imported_symbol_id(&file_rel.import_location)
-            else {
-                import_not_found += 1;
-                warn!(
-                    "(FILE_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: Location({:?}) File({})",
-                    file_rel.import_location, file_rel.file_path,
-                );
-                continue;
-            };
-
-            let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
-                if let Some(loc) = file_rel.source_location.as_ref() {
-                    (
-                        Some(loc.start_byte as usize),
-                        Some(loc.end_byte as usize),
-                        Some(loc.start_line as usize),
-                        Some(loc.end_line as usize),
-                        Some(loc.start_col as usize),
-                        Some(loc.end_col as usize),
-                    )
-                } else {
-                    (None, None, None, None, None, None)
-                };
-
-            relationships
-                .file_to_imported_symbol
-                .push(ConsolidatedRelationship {
-                    source_id: Some(source_id),
-                    target_id: Some(target_id),
-                    relationship_type: file_rel.relationship_type.as_string(),
-                    start_byte,
-                    end_byte,
-                    start_line,
-                    end_line,
-                    start_column: start_col,
-                    end_column: end_col,
-                });
-        }
-
-        // Process definition-to-definition relationships
-        for def_rel in &self.graph_data.definition_relationships {
-            if def_rel.relationship_type == RelationshipType::Calls
-                || def_rel.relationship_type == RelationshipType::AmbiguouslyCalls
-            {
-                calls_count += 1;
-            }
-
-            let Some(source_id) = self
-                .node_id_generator
-                .get_definition_id(&def_rel.from_file_path, &def_rel.from_location.to_range())
-            else {
-                def_not_found += 1;
-                missing_source_fqns.insert((
-                    def_rel.from_definition_fqn.clone(),
-                    def_rel.from_file_path.clone(),
-                ));
-                debug!(
-                    "(DEFINITION_RELATIONSHIPS) Source definition ID not found: {} {}",
-                    def_rel.from_definition_fqn, def_rel.from_file_path,
-                );
-                continue;
-            };
-
-            let Some(target_id) = self
-                .node_id_generator
-                .get_definition_id(&def_rel.to_file_path, &def_rel.to_location.to_range())
-            else {
-                def_not_found += 1;
-                missing_target_fqns.insert((
-                    def_rel.to_definition_fqn.clone(),
-                    def_rel.to_file_path.clone(),
-                ));
-                debug!(
-                    "(DEFINITION_RELATIONSHIPS) Target definition ID not found: {} {}",
-                    def_rel.to_definition_fqn, def_rel.to_file_path,
-                );
-                continue;
-            };
-
-            let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
-                if let Some(loc) = def_rel.source_location.as_ref() {
-                    (
-                        Some(loc.start_byte as usize),
-                        Some(loc.end_byte as usize),
-                        Some(loc.start_line as usize),
-                        Some(loc.end_line as usize),
-                        Some(loc.start_col as usize),
-                        Some(loc.end_col as usize),
-                    )
-                } else {
-                    (None, None, None, None, None, None)
-                };
-
-            relationships
-                .definition_to_definition
-                .push(ConsolidatedRelationship {
-                    source_id: Some(source_id),
-                    target_id: Some(target_id),
-                    relationship_type: def_rel.relationship_type.as_string(),
-                    start_byte,
-                    end_byte,
-                    start_line,
-                    end_line,
-                    start_column: start_col,
-                    end_column: end_col,
-                });
-        }
-
-        // Process definition-to-imported-symbol relationships
-        for def_rel in &self.graph_data.definition_imported_symbol_relationships {
-            if def_rel.relationship_type == RelationshipType::Calls
-                || def_rel.relationship_type == RelationshipType::AmbiguouslyCalls
-            {
-                calls_count += 1;
-            }
-
-            let Some(source_id) = self
-                .node_id_generator
-                .get_definition_id(&def_rel.file_path, &def_rel.definition_location.to_range())
-            else {
-                def_not_found += 1;
-                missing_source_fqns
-                    .insert((def_rel.definition_fqn.clone(), def_rel.file_path.clone()));
-                debug!(
-                    "(DEFINITION_IMPORT_RELATIONSHIPS) Source definition ID not found: {} {}",
-                    def_rel.definition_fqn, def_rel.file_path,
-                );
-                continue;
-            };
-
-            let Some(target_id) = self
-                .node_id_generator
-                .get_imported_symbol_id(&def_rel.imported_symbol_location)
-            else {
-                import_not_found += 1;
-                warn!(
-                    "(DEFINITION_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
-                    def_rel.imported_symbol_location,
-                );
-                continue;
-            };
-
-            let (start_byte, end_byte, start_line, end_line, start_col, end_col) =
-                if let Some(loc) = def_rel.source_location.as_ref() {
-                    (
-                        Some(loc.start_byte as usize),
-                        Some(loc.end_byte as usize),
-                        Some(loc.start_line as usize),
-                        Some(loc.end_line as usize),
-                        Some(loc.start_col as usize),
-                        Some(loc.end_col as usize),
-                    )
-                } else {
-                    (None, None, None, None, None, None)
-                };
-
-            relationships
-                .definition_to_imported_symbol
-                .push(ConsolidatedRelationship {
-                    source_id: Some(source_id),
-                    target_id: Some(target_id),
-                    relationship_type: def_rel.relationship_type.as_string(),
-                    start_byte,
-                    end_byte,
-                    start_line,
-                    end_line,
-                    start_column: start_col,
-                    end_column: end_col,
-                });
-        }
-
-        // Process definition-to-imported-symbol relationships
-        for import_rel in &self.graph_data.imported_symbol_definition_relationships {
-            let Some(source_id) = self
-                .node_id_generator
-                .get_imported_symbol_id(&import_rel.source_location)
-            else {
-                debug!(
-                    "(IMPORT_DEFINITION_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
-                    import_rel.source_location
-                );
-                continue;
-            };
-
-            let Some(target_id) = self.node_id_generator.get_definition_id(
-                &import_rel.target_location.file_path,
-                &import_rel.target_location.to_range(),
-            ) else {
-                warn!(
-                    "(IMPORT_DEFINITION_RELATIONSHIPS) Target definition ID not found: {:?}",
-                    import_rel.target_location
-                );
-                continue;
-            };
-
-            relationships
-                .imported_symbol_to_definition
-                .push(ConsolidatedRelationship {
-                    source_id: Some(source_id),
-                    target_id: Some(target_id),
-                    relationship_type: import_rel.relationship_type.as_string(),
-                    start_byte: None,
-                    end_byte: None,
-                    start_line: None,
-                    end_line: None,
-                    start_column: None,
-                    end_column: None,
-                });
-        }
-
-        // Process imported-symbol-to-imported-symbol relationships
-        for import_rel in &self
-            .graph_data
-            .imported_symbol_imported_symbol_relationships
-        {
-            let Some(source_id) = self
-                .node_id_generator
-                .get_imported_symbol_id(&import_rel.source_location)
-            else {
-                debug!(
-                    "(IMPORT_IMPORT_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
-                    import_rel.source_location
-                );
-                continue;
-            };
-
-            let Some(target_id) = self
-                .node_id_generator
-                .get_imported_symbol_id(&import_rel.target_location)
-            else {
-                warn!(
-                    "(IMPORT_IMPORT_RELATIONSHIPS) Target imported symbol ID not found: {:?}",
-                    import_rel.target_location
-                );
-                continue;
-            };
-
-            relationships
-                .imported_symbol_to_imported_symbol
-                .push(ConsolidatedRelationship {
-                    source_id: Some(source_id),
-                    target_id: Some(target_id),
-                    relationship_type: import_rel.relationship_type.as_string(),
-                    start_byte: None,
-                    end_byte: None,
-                    start_line: None,
-                    end_line: None,
-                    start_column: None,
-                    end_column: None,
-                });
-        }
-
-        // Process imported-symbol-to-file relationships
-        for import_rel in &self.graph_data.imported_symbol_file_relationships {
-            let Some(source_id) = self
-                .node_id_generator
-                .get_imported_symbol_id(&import_rel.source_location)
-            else {
-                debug!(
-                    "(IMPORT_FILE_RELATIONSHIPS) Source imported symbol ID not found: {:?}",
-                    import_rel.source_location
-                );
-                continue;
-            };
-
-            let Some(target_id) = self
-                .node_id_generator
-                .get_file_id(&import_rel.target_location)
-            else {
-                warn!(
-                    "(IMPORT_FILE_RELATIONSHIPS) Target file ID not found: {:?}",
-                    import_rel.target_location
-                );
-                continue;
-            };
-
-            relationships
-                .imported_symbol_to_file
-                .push(ConsolidatedRelationship {
-                    source_id: Some(source_id),
-                    target_id: Some(target_id),
-                    relationship_type: import_rel.relationship_type.as_string(),
-                    start_byte: None,
-                    end_byte: None,
-                    start_line: None,
-                    end_line: None,
-                    start_column: None,
-                    end_column: None,
-                });
-        }
-
-        info!(
+        warn!(
             "Consolidated relationships: dir_not_found: {}, file_not_found: {}, def_not_found: {}, import_not_found: {}",
             dir_not_found, file_not_found, def_not_found, import_not_found
         );
-        info!("Consolidated calls count: {}", calls_count);
 
-        // Show summary of missing definitions instead of individual warnings
-        if !missing_source_fqns.is_empty() {
-            warn!(
-                "Missing source definitions: {} unique FQNs",
-                missing_source_fqns.len()
-            );
-            for (fqn, _file) in missing_source_fqns.iter().take(5) {
-                debug!("  Missing source: {}", fqn);
-            }
-            if missing_source_fqns.len() > 5 {
-                debug!("  ... and {} more", missing_source_fqns.len() - 5);
-            }
-        }
+        // NOTE: these are temporarily deprecated
+        // info!("Consolidated calls count: {}", calls_count);
 
-        if !missing_target_fqns.is_empty() {
-            warn!(
-                "Missing target definitions: {} unique FQNs",
-                missing_target_fqns.len()
-            );
-            for (fqn, _file) in missing_target_fqns.iter().take(5) {
-                debug!("  Missing target: {}", fqn);
-            }
-            if missing_target_fqns.len() > 5 {
-                debug!("  ... and {} more", missing_target_fqns.len() - 5);
-            }
-        }
+        // // Show summary of missing definitions instead of individual warnings
+        // if !missing_source_fqns.is_empty() {
+        //     warn!(
+        //         "Missing source definitions: {} unique FQNs",
+        //         missing_source_fqns.len()
+        //     );
+        //     for (fqn, _file) in missing_source_fqns.iter().take(5) {
+        //         debug!("  Missing source: {}", fqn);
+        //     }
+        //     if missing_source_fqns.len() > 5 {
+        //         debug!("  ... and {} more", missing_source_fqns.len() - 5);
+        //     }
+        // }
 
-        // Show summary of missing definitions instead of individual warnings
-        if !missing_source_fqns.is_empty() {
-            warn!(
-                "Missing source definitions: {} unique FQNs",
-                missing_source_fqns.len()
-            );
-            for (fqn, _file) in missing_source_fqns.iter().take(5) {
-                debug!("  Missing source: {}", fqn);
-            }
-            if missing_source_fqns.len() > 5 {
-                debug!("  ... and {} more", missing_source_fqns.len() - 5);
-            }
-        }
+        // if !missing_target_fqns.is_empty() {
+        //     warn!(
+        //         "Missing target definitions: {} unique FQNs",
+        //         missing_target_fqns.len()
+        //     );
+        //     for (fqn, _file) in missing_target_fqns.iter().take(5) {
+        //         debug!("  Missing target: {}", fqn);
+        //     }
+        //     if missing_target_fqns.len() > 5 {
+        //         debug!("  ... and {} more", missing_target_fqns.len() - 5);
+        //     }
+        // }
 
-        if !missing_target_fqns.is_empty() {
-            warn!(
-                "Missing target definitions: {} unique FQNs",
-                missing_target_fqns.len()
-            );
-            for (fqn, _file) in missing_target_fqns.iter().take(5) {
-                debug!("  Missing target: {}", fqn);
-            }
-            if missing_target_fqns.len() > 5 {
-                debug!("  ... and {} more", missing_target_fqns.len() - 5);
-            }
-        }
+        // // Show summary of missing definitions instead of individual warnings
+        // if !missing_source_fqns.is_empty() {
+        //     warn!(
+        //         "Missing source definitions: {} unique FQNs",
+        //         missing_source_fqns.len()
+        //     );
+        //     for (fqn, _file) in missing_source_fqns.iter().take(5) {
+        //         debug!("  Missing source: {}", fqn);
+        //     }
+        //     if missing_source_fqns.len() > 5 {
+        //         debug!("  ... and {} more", missing_source_fqns.len() - 5);
+        //     }
+        // }
 
-        Ok(relationships)
+        // if !missing_target_fqns.is_empty() {
+        //     warn!(
+        //         "Missing target definitions: {} unique FQNs",
+        //         missing_target_fqns.len()
+        //     );
+        //     for (fqn, _file) in missing_target_fqns.iter().take(5) {
+        //         debug!("  Missing target: {}", fqn);
+        //     }
+        //     if missing_target_fqns.len() > 5 {
+        //         debug!("  ... and {} more", missing_target_fqns.len() - 5);
+        //     }
+        // }
+
+        Ok(())
     }
 }

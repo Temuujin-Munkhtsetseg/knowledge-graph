@@ -48,7 +48,7 @@ pub fn finalize_project_statistics(
     }
 
     for def_node in &graph_data.definition_nodes {
-        if let Some(&language) = file_path_to_language.get(def_node.location.file_path.as_str()) {
+        if let Some(&language) = file_path_to_language.get(def_node.file_path.as_str()) {
             let entry = language_map
                 .entry(language.to_string())
                 .or_insert((0, 0, HashMap::new()));

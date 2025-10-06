@@ -1,5 +1,6 @@
 use crate::project::file_info::FileInfo;
 use log::debug;
+use parser_core::definitions::DefinitionInfo;
 use parser_core::{
     csharp::{
         analyzer::CSharpAnalyzer,
@@ -411,7 +412,7 @@ impl<'a> FileProcessor<'a> {
                         e
                     )),
                 }
-            }
+            } // Note: Use _ => { Ok(Definitions::Unknown(vec![])) } if you want to comment out certain match arms
         };
         debug!("Finished analyzing file {}.", self.path);
         result
@@ -428,6 +429,7 @@ pub enum Definitions {
     CSharp(Vec<CSharpDefinitionInfo>),
     TypeScript(Vec<TypeScriptDefinitionInfo>),
     Rust(Vec<RustDefinitionInfo>),
+    Unknown(Vec<DefinitionInfo<(), ()>>),
 }
 
 impl Definitions {
@@ -441,6 +443,7 @@ impl Definitions {
             Definitions::CSharp(defs) => defs.len(),
             Definitions::TypeScript(defs) => defs.len(),
             Definitions::Rust(defs) => defs.len(),
+            Definitions::Unknown(defs) => defs.len(),
         }
     }
 
@@ -480,6 +483,7 @@ impl Definitions {
                 defs.iter()
                     .map(|def| def.definition_type.as_str().to_string()),
             ),
+            Definitions::Unknown(_) => Box::new(std::iter::empty()),
         }
     }
 
@@ -528,6 +532,13 @@ impl Definitions {
     pub fn iter_rust(&self) -> Option<impl Iterator<Item = &RustDefinitionInfo>> {
         match self {
             Definitions::Rust(defs) => Some(defs.iter()),
+            _ => None,
+        }
+    }
+
+    pub fn iter_unknown(&self) -> Option<impl Iterator<Item = &DefinitionInfo<(), ()>>> {
+        match self {
+            Definitions::Unknown(defs) => Some(defs.iter()),
             _ => None,
         }
     }

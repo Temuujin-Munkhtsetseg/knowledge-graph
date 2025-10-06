@@ -105,19 +105,19 @@ async fn setup_ruby_reference_pipeline(database: &Arc<KuzuDatabase>) -> RubyRefe
 
     if let Some(ref graph_data) = indexing_result.graph_data {
         let call_relationships: Vec<_> = graph_data
-            .definition_relationships
+            .relationships
             .iter()
             .filter(|rel| rel.relationship_type == RelationshipType::Calls)
             .collect();
         if !call_relationships.is_empty() {
-            for (i, call_rel) in call_relationships.iter().take(5).enumerate() {
-                println!(
-                    "  {}: {} -> {}",
-                    i + 1,
-                    call_rel.from_definition_fqn,
-                    call_rel.to_definition_fqn
-                );
-            }
+            // for (i, call_rel) in call_relationships.iter().take(5).enumerate() {
+            //     println!(
+            //         "  {}: {} -> {}",
+            //         i + 1,
+            //         call_rel.from_definition_fqn,
+            //         call_rel.to_definition_fqn
+            //     );
+            // }
         } else {
             println!("No call relationships found in graph data");
         }

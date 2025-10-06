@@ -1,15 +1,16 @@
 use crate::analysis::types::{
-    DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DefinitionType,
-    FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-    ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
+    ConsolidatedRelationship, DefinitionNode, DefinitionType, FqnType, ImportIdentifier,
+    ImportType, ImportedSymbolLocation, ImportedSymbolNode,
 };
 use crate::parsing::processor::FileProcessingResult;
 use database::graph::RelationshipType;
+use internment::ArcIntern;
 use parser_core::rust::{
     fqn::rust_fqn_to_string,
     imports::RustImportedSymbolInfo,
-    types::{RustDefinitionInfo, RustDefinitionType, RustFqn},
+    types::{RustDefinitionType, RustFqn},
 };
+use parser_core::utils::Range;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
@@ -34,42 +35,45 @@ impl RustAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(defs) = file_result.definitions.iter_rust() {
             for definition in defs {
-                if let Ok(Some((location, fqn))) =
-                    self.create_definition_location(definition, relative_file_path)
-                {
-                    let fqn_string = rust_fqn_to_string(&fqn);
-                    let definition_node = DefinitionNode::new(
-                        fqn_string.clone(),
-                        definition.name.clone(),
-                        DefinitionType::Rust(definition.definition_type),
-                        location.clone(),
+                let fqn_string = rust_fqn_to_string(&definition.fqn);
+                let definition_node = DefinitionNode::new(
+                    fqn_string.clone(),
+                    definition.name.clone(),
+                    DefinitionType::Rust(definition.definition_type),
+                    definition.range,
+                    relative_file_path.to_string(),
+                );
+
+                let key = (fqn_string, relative_file_path.to_string());
+
+                if definition_map.contains_key(&key) {
+                    log::warn!(
+                        "Duplicate definition found for Rust: {} in file {}",
+                        definition.name,
+                        relative_file_path
                     );
-
-                    let key = (fqn_string, relative_file_path.to_string());
-
-                    if definition_map.contains_key(&key) {
-                        log::warn!(
-                            "Duplicate definition found for Rust: {} in file {}",
-                            definition.name,
-                            relative_file_path
-                        );
-                        continue;
-                    }
-
-                    definition_map.insert(key, (definition_node.clone(), FqnType::Rust(fqn)));
-
-                    file_definition_relationships.push(FileDefinitionRelationship {
-                        file_path: relative_file_path.to_string(),
-                        definition_fqn: definition_node.fqn.clone(),
-                        relationship_type: RelationshipType::FileDefines,
-                        definition_location: location.clone(),
-                        source_location: None,
-                    });
+                    continue;
                 }
+
+                definition_map.insert(
+                    key,
+                    (
+                        definition_node.clone(),
+                        FqnType::Rust(definition.fqn.clone()),
+                    ),
+                );
+                let mut relationship = ConsolidatedRelationship::file_to_definition(
+                    relative_file_path.to_string(),
+                    relative_file_path.to_string(),
+                );
+                relationship.relationship_type = RelationshipType::FileDefines;
+                relationship.source_range = ArcIntern::new(Range::empty());
+                relationship.target_range = ArcIntern::new(definition.range);
+                relationships.push(relationship);
             }
         }
     }
@@ -80,7 +84,7 @@ impl RustAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(imports) = file_result.imported_symbols.as_ref()
             && let Some(rust_imports) = imports.iter_rust()
@@ -103,12 +107,14 @@ impl RustAnalyzer {
                         .or_default()
                         .push(imported_symbol_node.clone());
 
-                    file_imported_symbol_relationships.push(FileImportedSymbolRelationship {
-                        file_path: relative_file_path.to_string(),
-                        import_location: location.clone(),
-                        relationship_type: RelationshipType::FileImports,
-                        source_location: None,
-                    });
+                    let mut relationship = ConsolidatedRelationship::file_to_imported_symbol(
+                        relative_file_path.to_string(),
+                        location.file_path.clone(),
+                    );
+                    relationship.relationship_type = RelationshipType::FileImports;
+                    relationship.source_range = ArcIntern::new(Range::empty());
+                    relationship.target_range = ArcIntern::new(location.range());
+                    relationships.push(relationship);
                 }
             }
         }
@@ -119,37 +125,17 @@ impl RustAnalyzer {
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         // Handle definition-to-definition relationships
-        self.add_rust_definition_relationships(definition_map, definition_relationships);
+        self.add_rust_definition_relationships(definition_map, relationships);
 
         // Handle definition-to-imported-symbol relationships (scoped imports)
         self.add_rust_definition_import_relationships(
             definition_map,
             imported_symbol_map,
-            definition_imported_symbol_relationships,
+            relationships,
         );
-    }
-
-    /// Create definition location from Rust definition info
-    fn create_definition_location(
-        &self,
-        definition: &RustDefinitionInfo,
-        file_path: &str,
-    ) -> Result<Option<(SourceLocation, RustFqn)>, String> {
-        let location = SourceLocation {
-            file_path: file_path.to_string(),
-            start_line: definition.range.start.line as i32,
-            start_col: definition.range.start.column as i32,
-            end_line: definition.range.end.line as i32,
-            end_col: definition.range.end.column as i32,
-            start_byte: definition.range.byte_offset.0 as i64,
-            end_byte: definition.range.byte_offset.1 as i64,
-        };
-
-        Ok(Some((location, definition.fqn.clone())))
     }
 
     /// Create import location from Rust import info
@@ -199,7 +185,7 @@ impl RustAnalyzer {
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         // Iterate through all definitions to find imports scoped within them
         for ((definition_fqn_string, file_path), (definition_node, _)) in definition_map {
@@ -208,17 +194,15 @@ impl RustAnalyzer {
                 imported_symbol_map.get(&(definition_fqn_string.clone(), file_path.clone()))
             {
                 for imported_symbol in imported_symbol_nodes {
-                    definition_imported_symbol_relationships.push(
-                        DefinitionImportedSymbolRelationship {
-                            file_path: file_path.clone(),
-                            definition_fqn: definition_fqn_string.clone(),
-                            imported_symbol_location: imported_symbol.location.clone(),
-                            relationship_type: RelationshipType::DefinesImportedSymbol,
-                            definition_location: definition_node.location.clone(),
-                            // FIXME: add source location for Rust
-                            source_location: None,
-                        },
+                    // FIXME: add source location for Rust
+                    let mut relationship = ConsolidatedRelationship::definition_to_imported_symbol(
+                        file_path.clone(),
+                        definition_node.file_path.clone(),
                     );
+                    relationship.relationship_type = RelationshipType::DefinesImportedSymbol;
+                    relationship.source_range = ArcIntern::new(Range::empty());
+                    relationship.target_range = ArcIntern::new(imported_symbol.location.range());
+                    relationships.push(relationship);
                 }
             }
         }
@@ -228,7 +212,7 @@ impl RustAnalyzer {
     fn add_rust_definition_relationships(
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         let rust_definitions: Vec<_> = definition_map
             .values()
@@ -242,12 +226,7 @@ impl RustAnalyzer {
             .collect();
 
         for (node, fqn) in &rust_definitions {
-            self.create_rust_nested_relationships(
-                node,
-                fqn,
-                &rust_definitions,
-                definition_relationships,
-            );
+            self.create_rust_nested_relationships(node, fqn, &rust_definitions, relationships);
         }
     }
 
@@ -257,7 +236,7 @@ impl RustAnalyzer {
         node: &DefinitionNode,
         fqn: &RustFqn,
         all_definitions: &[(&DefinitionNode, &RustFqn)],
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if fqn.len() <= 1 {
             return; // No parent for top-level definitions
@@ -280,17 +259,14 @@ impl RustAnalyzer {
                 );
 
                 if let Some(rel_type) = relationship_type {
-                    // For now, simplify by using a generic definition relationship
-                    definition_relationships.push(DefinitionRelationship {
-                        from_definition_fqn: parent_node.fqn.clone(),
-                        to_definition_fqn: node.fqn.clone(),
-                        from_file_path: parent_node.location.file_path.clone(),
-                        from_location: parent_node.location.clone(),
-                        to_file_path: node.location.file_path.clone(),
-                        to_location: node.location.clone(),
-                        relationship_type: rel_type,
-                        source_location: None,
-                    });
+                    let mut relationship = ConsolidatedRelationship::definition_to_definition(
+                        parent_node.file_path.clone(),
+                        node.file_path.clone(),
+                    );
+                    relationship.relationship_type = rel_type;
+                    relationship.source_range = ArcIntern::new(parent_node.range);
+                    relationship.target_range = ArcIntern::new(node.range);
+                    relationships.push(relationship);
                     break; // Only create relationship with immediate parent
                 }
             }

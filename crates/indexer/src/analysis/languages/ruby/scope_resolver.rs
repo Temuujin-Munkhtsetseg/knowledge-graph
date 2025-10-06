@@ -585,7 +585,8 @@ impl ScopeResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::types::{DefinitionType, SourceLocation};
+    use crate::analysis::types::DefinitionType;
+    use parser_core::utils::{Position, Range};
 
     #[test]
     fn test_definition_map_method_lookup() {
@@ -596,15 +597,8 @@ mod tests {
             "User#save".to_string(),
             "save".to_string(),
             DefinitionType::Ruby(RubyDefinitionType::Method),
-            SourceLocation {
-                file_path: "user.rb".to_string(),
-                start_byte: 0,
-                end_byte: 10,
-                start_line: 1,
-                end_line: 1,
-                start_col: 0,
-                end_col: 10,
-            },
+            Range::new(Position::new(1, 0), Position::new(1, 10), (0, 10)),
+            "user.rb".to_string(),
         );
 
         // Create a mock RubyFqn

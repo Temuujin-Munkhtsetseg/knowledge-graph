@@ -1,18 +1,16 @@
-use std::collections::HashMap;
-
 use database::graph::RelationshipType;
+use internment::ArcIntern;
+use parser_core::utils::Range;
 use parser_core::{
-    csharp::types::{
-        CSharpDefinitionInfo, CSharpDefinitionType, CSharpFqn, CSharpFqnPartType, CSharpImportType,
-    },
+    csharp::types::{CSharpDefinitionType, CSharpFqn, CSharpFqnPartType, CSharpImportType},
     imports::ImportedSymbolInfo,
 };
+use std::collections::HashMap;
 
 use crate::{
     analysis::types::{
-        DefinitionNode, DefinitionRelationship, DefinitionType, FileDefinitionRelationship,
-        FileImportedSymbolRelationship, FqnType, ImportIdentifier, ImportType,
-        ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
+        ConsolidatedRelationship, DefinitionNode, DefinitionType, FqnType, ImportIdentifier,
+        ImportType, ImportedSymbolLocation, ImportedSymbolNode,
     },
     parsing::processor::FileProcessingResult,
 };
@@ -30,36 +28,48 @@ impl CSharpAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(defs) = file_result.definitions.iter_csharp() {
             for definition in defs {
-                if let Ok(Some((location, fqn))) =
-                    self.create_definition_location(definition, relative_file_path)
-                {
-                    let fqn_string = self.csharp_fqn_to_string(&fqn);
-                    let definition_node = DefinitionNode::new(
-                        fqn_string.clone(),
-                        definition.name.clone(),
-                        DefinitionType::CSharp(definition.definition_type),
-                        location.clone(),
-                    );
+                let fqn_string = self.csharp_fqn_to_string(&definition.fqn);
+                let definition_node = DefinitionNode::new(
+                    fqn_string.clone(),
+                    definition.name.clone(),
+                    DefinitionType::CSharp(definition.definition_type),
+                    definition.range,
+                    relative_file_path.to_string(),
+                );
 
-                    if self.is_top_level_definition(&fqn) {
-                        file_definition_relationships.push(FileDefinitionRelationship {
-                            file_path: relative_file_path.to_string(),
-                            definition_fqn: fqn_string.clone(),
-                            relationship_type: RelationshipType::FileDefines,
-                            definition_location: location.clone(),
-                            source_location: None,
-                        });
-                    }
+                let key = (fqn_string, relative_file_path.to_string());
 
-                    definition_map.insert(
-                        (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node, FqnType::CSharp(fqn)),
+                if definition_map.contains_key(&key) {
+                    log::warn!(
+                        "Duplicate definition found for CSharp: {} in file {}",
+                        definition.name,
+                        relative_file_path
                     );
+                    continue;
                 }
+
+                if self.is_top_level_definition(&definition.fqn) {
+                    let mut relationship = ConsolidatedRelationship::file_to_definition(
+                        relative_file_path.to_string(),
+                        relative_file_path.to_string(),
+                    );
+                    relationship.relationship_type = RelationshipType::FileDefines;
+                    relationship.source_range = ArcIntern::new(Range::empty());
+                    relationship.target_range = ArcIntern::new(definition.range);
+                    relationships.push(relationship);
+                }
+
+                definition_map.insert(
+                    key,
+                    (
+                        definition_node.clone(),
+                        FqnType::CSharp(definition.fqn.clone()),
+                    ),
+                );
             }
         }
     }
@@ -69,7 +79,7 @@ impl CSharpAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(imported_symbols) = &file_result.imported_symbols
             && let Some(imports) = imported_symbols.iter_csharp()
@@ -94,12 +104,14 @@ impl CSharpAnalyzer {
                     vec![imported_symbol_node],
                 );
 
-                file_import_relationships.push(FileImportedSymbolRelationship {
-                    file_path: relative_file_path.to_string(),
-                    import_location: location.clone(),
-                    relationship_type: RelationshipType::FileImports,
-                    source_location: None,
-                });
+                let mut relationship = ConsolidatedRelationship::file_to_imported_symbol(
+                    relative_file_path.to_string(),
+                    location.file_path.clone(),
+                );
+                relationship.relationship_type = RelationshipType::FileImports;
+                relationship.source_range = ArcIntern::new(Range::empty());
+                relationship.target_range = ArcIntern::new(location.range());
+                relationships.push(relationship);
             }
         }
     }
@@ -107,9 +119,9 @@ impl CSharpAnalyzer {
     pub fn add_definition_relationships(
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
-        for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
+        for ((_child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             if let Some(parent_fqn_string) = self.get_parent_fqn_string(child_fqn)
                 && let Some((parent_def, _)) =
                     definition_map.get(&(parent_fqn_string.clone(), child_file_path.to_string()))
@@ -118,16 +130,14 @@ impl CSharpAnalyzer {
                     &child_def.definition_type,
                 )
             {
-                definition_relationships.push(DefinitionRelationship {
-                    from_file_path: parent_def.location.file_path.clone(),
-                    to_file_path: child_def.location.file_path.clone(),
-                    from_definition_fqn: parent_fqn_string,
-                    to_definition_fqn: child_fqn_string.clone(),
-                    from_location: parent_def.location.clone(),
-                    to_location: child_def.location.clone(),
-                    relationship_type,
-                    source_location: None,
-                });
+                let mut relationship = ConsolidatedRelationship::definition_to_definition(
+                    parent_def.file_path.clone(),
+                    child_def.file_path.clone(),
+                );
+                relationship.relationship_type = relationship_type;
+                relationship.source_range = ArcIntern::new(parent_def.range);
+                relationship.target_range = ArcIntern::new(child_def.range);
+                relationships.push(relationship);
             }
         }
     }
@@ -285,24 +295,6 @@ impl CSharpAnalyzer {
             }
             _ => None,
         }
-    }
-
-    fn create_definition_location(
-        &self,
-        definition: &CSharpDefinitionInfo,
-        file_path: &str,
-    ) -> Result<Option<(SourceLocation, CSharpFqn)>, String> {
-        let location = SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: definition.range.byte_offset.0 as i64,
-            end_byte: definition.range.byte_offset.1 as i64,
-            start_line: definition.range.start.line as i32,
-            end_line: definition.range.end.line as i32,
-            start_col: definition.range.start.column as i32,
-            end_col: definition.range.end.column as i32,
-        };
-
-        Ok(Some((location, definition.fqn.clone())))
     }
 
     fn is_top_level_definition(&self, fqn: &CSharpFqn) -> bool {

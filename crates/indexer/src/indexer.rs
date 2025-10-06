@@ -397,7 +397,7 @@ impl RepositoryIndexer {
 
         let analysis_service = AnalysisService::new(self.name.clone(), self.path.clone());
 
-        let graph_data = analysis_service
+        let mut graph_data = analysis_service
             .analyze_results(file_results)
             .map_err(|e| {
                 FatalIndexingError::FailedToAnalyze(AnalyzeAndWriteErrors::FailedToAnalyze(
@@ -410,16 +410,7 @@ impl RepositoryIndexer {
             graph_data.file_nodes.len(),
             graph_data.definition_nodes.len(),
             graph_data.imported_symbol_nodes.len(),
-            graph_data.directory_relationships.len()
-                + graph_data.file_definition_relationships.len()
-                + graph_data.file_imported_symbol_relationships.len()
-                + graph_data.definition_relationships.len()
-                + graph_data.definition_imported_symbol_relationships.len()
-                + graph_data
-                    .imported_symbol_imported_symbol_relationships
-                    .len()
-                + graph_data.imported_symbol_definition_relationships.len()
-                + graph_data.imported_symbol_file_relationships.len()
+            graph_data.relationships.len()
         );
 
         let writer_service = WriterService::new(output_directory).map_err(|e| {
@@ -429,7 +420,7 @@ impl RepositoryIndexer {
         let mut node_id_generator = NodeIdGenerator::new();
 
         let writer_result = writer_service
-            .write_graph_data(&graph_data, &mut node_id_generator)
+            .write_graph_data(&mut graph_data, &mut node_id_generator)
             .map_err(|e| {
                 FatalIndexingError::FailedToWrite(AnalyzeAndWriteErrors::FailedToWrite(
                     e.to_string(),
@@ -533,7 +524,7 @@ impl RepositoryIndexer {
         let mut kuzu_syncer = KuzuChanges::new(
             &database_instance,
             file_changes,
-            graph_data.clone(),
+            graph_data,
             &self.path,
             output_path,
         );

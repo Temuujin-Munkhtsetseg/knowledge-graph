@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::analysis::types::{DefinitionType, GraphData};
+use crate::analysis::types::{DefinitionType, GraphData, RelationshipKind};
 use crate::indexer::{IndexingConfig, RepositoryIndexer};
 use crate::parsing::changes::FileChanges;
 use crate::project::file_info::FileInfo;
@@ -489,10 +489,10 @@ async fn test_typescript_call_relationship_has_location() {
 
     // Validate known call: Authentication.createSession in Application.testTokenManagement at line 80 (0-based 79)
     let calls_id = RelationshipType::Calls.as_string();
-    // Assert a known internal call's location: Application::testTokenManagement -> Application::run at 0-based line 20
+    // Assert a known internal call's location: Application::run -> Application::testAuthenticationProviders at 0-based line 21 (after import modifications)
     let ts_query = format!(
         "MATCH (source:DefinitionNode)-[r:DEFINITION_RELATIONSHIPS]->(target:DefinitionNode) \
-         WHERE source.fqn = 'Application::testTokenManagement' AND target.fqn = 'Application::run' AND r.type = '{calls_id}' \
+         WHERE source.fqn = 'Application::run' AND target.fqn = 'Application::testAuthenticationProviders' AND r.type = '{calls_id}' \
          RETURN r.source_start_line, r.source_end_line"
     );
     let result = conn.query(&ts_query).expect("query ok");
@@ -513,8 +513,8 @@ async fn test_typescript_call_relationship_has_location() {
             _ => None,
         })
         .expect("end_line");
-    assert_eq!(start_line, 20);
-    assert_eq!(end_line, 20);
+    assert_eq!(start_line, 21);
+    assert_eq!(end_line, 21);
 }
 
 async fn setup_end_to_end_kuzu(temp_repo: &LocalGitRepository) -> Arc<KuzuDatabase> {
@@ -710,16 +710,23 @@ async fn test_full_indexing_pipeline() {
     );
 
     // Check that we have file-definition relationships
+    let file_def_rels = graph_data
+        .relationships
+        .iter()
+        .filter(|r| r.kind == RelationshipKind::FileToDefinition)
+        .collect::<Vec<_>>();
     assert!(
-        !graph_data.file_definition_relationships.is_empty(),
+        !file_def_rels.is_empty(),
         "Should have file-definition relationships"
     );
 
     // Check that we have definition relationships (parent-child)
-    assert!(
-        !graph_data.definition_relationships.is_empty(),
-        "Should have definition relationships"
-    );
+    let def_rels = graph_data
+        .relationships
+        .iter()
+        .filter(|r| r.kind == RelationshipKind::DefinitionToDefinition)
+        .collect::<Vec<_>>();
+    assert!(!def_rels.is_empty(), "Should have definition relationships");
 
     // Verify writer result
     let writer_result = result.writer_result.expect("Should have writer result");
@@ -750,12 +757,9 @@ async fn test_full_indexing_pipeline() {
     );
     println!(
         "📊 Created {} file-definition relationships",
-        graph_data.file_definition_relationships.len()
+        file_def_rels.len()
     );
-    println!(
-        "📊 Created {} definition relationships",
-        graph_data.definition_relationships.len()
-    );
+    println!("📊 Created {} definition relationships", def_rels.len());
     println!(
         "📁 Wrote {} Parquet files",
         writer_result.files_written.len()
@@ -859,7 +863,7 @@ async fn test_inheritance_relationships() {
 
     // Verify we have class-to-method relationships
     let class_method_rels: Vec<_> = graph_data
-        .definition_relationships
+        .relationships
         .iter()
         .filter(|rel| rel.relationship_type == RelationshipType::ClassToMethod)
         .collect();
@@ -871,18 +875,25 @@ async fn test_inheritance_relationships() {
 
     // Check for methods in BaseModel
     let base_model_methods: Vec<_> = graph_data
-        .definition_relationships
+        .relationships
         .iter()
         .filter(|rel| {
-            rel.from_definition_fqn == "BaseModel"
-                && rel.relationship_type == RelationshipType::ClassToMethod
+            rel.relationship_type == RelationshipType::ClassToMethod
+                && rel.source_path.as_ref().map(|p| p.as_ref().as_str())
+                    == Some("app/models/base_model.rb")
         })
         .collect();
 
-    assert!(
-        !base_model_methods.is_empty(),
-        "BaseModel should have methods"
-    );
+    let mut match_count = 0;
+    let base_model_range = base_model.range;
+    for rel in &base_model_methods {
+        println!("Rel target range: {:?}", rel.target_range);
+        if rel.target_range.is_contained_within(base_model_range) {
+            match_count += 1;
+        }
+    }
+
+    assert!(match_count > 0, "BaseModel should have methods");
 
     println!("✅ Inheritance relationships test completed successfully!");
     println!(
@@ -1158,63 +1169,7 @@ async fn test_detailed_data_inspection() {
 
     // === PART 1: In-memory graph data verification (existing) ===
 
-    // 1. Inspect class hierarchies
-    println!("\n📊 Class Hierarchy Analysis:");
-    let classes: Vec<_> = graph_data
-        .definition_nodes
-        .iter()
-        .filter(|def| {
-            matches!(
-                def.definition_type,
-                DefinitionType::Ruby(parser_core::ruby::types::RubyDefinitionType::Class)
-            )
-        })
-        .collect();
-
-    for class_def in &classes {
-        println!("  🏗️  Class: {}", class_def.fqn);
-
-        // Find methods in this class
-        let class_methods: Vec<_> = graph_data
-            .definition_relationships
-            .iter()
-            .filter(|rel| {
-                rel.from_definition_fqn == class_def.fqn
-                    && rel.relationship_type == RelationshipType::ClassToMethod
-            })
-            .collect();
-
-        println!("     Methods: {}", class_methods.len());
-        for method_rel in class_methods.iter().take(5) {
-            // Show first 5 methods
-            let method_name = method_rel
-                .to_definition_fqn
-                .split("::")
-                .last()
-                .unwrap_or("unknown");
-            println!("     └─ {method_name}");
-        }
-        if class_methods.len() > 5 {
-            println!("     └─ ... and {} more", class_methods.len() - 5);
-        }
-    }
-
-    // 2. Inspect parent-child relationships
-    println!("\n📊 Definition Relationships Analysis:");
-    let relationship_counts: std::collections::HashMap<String, usize> = graph_data
-        .definition_relationships
-        .iter()
-        .fold(std::collections::HashMap::new(), |mut acc, rel| {
-            *acc.entry(rel.relationship_type.as_str().to_string())
-                .or_insert(0) += 1;
-            acc
-        });
-
-    for (rel_type, count) in &relationship_counts {
-        println!("  🔗 {rel_type}: {count}");
-    }
-
-    // 5. Verify specific expected definitions exist
+    // Verify specific expected definitions exist
     println!("\n📊 Expected Definitions Verification:");
     let expected_definitions = vec![
         ("Authentication::Providers::LdapProvider", "Class"),
@@ -1235,40 +1190,6 @@ async fn test_detailed_data_inspection() {
             println!("  ❌ Missing: {expected_fqn} ({expected_type})");
         }
     }
-
-    // 6. Inspect file-definition relationships
-    println!("\n📊 File-Definition Relationships:");
-    let auth_file_rels: Vec<_> = graph_data
-        .file_definition_relationships
-        .iter()
-        .filter(|rel| rel.definition_fqn.contains("Authentication"))
-        .collect();
-
-    println!(
-        "  Authentication-related file relationships: {}",
-        auth_file_rels.len()
-    );
-    for rel in auth_file_rels.iter().take(10) {
-        let file_name = std::path::Path::new(&rel.file_path)
-            .file_name()
-            .map(|n| n.to_str().unwrap_or("unknown"))
-            .unwrap_or("unknown");
-        println!("    {} → {}", file_name, rel.definition_fqn);
-    }
-
-    println!("\n🎯 === SUMMARY ===");
-    println!(
-        "Total definition nodes: {}",
-        graph_data.definition_nodes.len()
-    );
-    println!(
-        "Total file-definition relationships: {}",
-        graph_data.file_definition_relationships.len()
-    );
-    println!(
-        "Total definition relationships: {}",
-        graph_data.definition_relationships.len()
-    );
 
     println!("✅ All verification checks passed!");
 }

@@ -33,11 +33,10 @@ use super::{
     scope_resolver::ScopeResolver,
     type_map::{InferredType, ScopeId, VariableId},
 };
-use crate::analysis::types::{
-    DefinitionNode, DefinitionRelationship, DefinitionType, SourceLocation,
-};
+use crate::analysis::types::{ConsolidatedRelationship, DefinitionNode, DefinitionType};
 use crate::parsing::processor::{References, RubyReference};
 use database::graph::RelationshipType;
+use internment::ArcIntern;
 use parser_core::ruby::types::RubyDefinitionType;
 use parser_core::ruby::{
     fqn::ruby_fqn_to_string,
@@ -170,7 +169,7 @@ impl ExpressionResolver {
         &mut self,
         references: &References,
         file_path: &str,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(ruby_refs) = references.iter_ruby() {
             let references_vec: Vec<_> = ruby_refs.collect();
@@ -188,12 +187,7 @@ impl ExpressionResolver {
             // Process each scope's references sequentially to maintain type map consistency
             for (scope_str, scope_refs) in refs_by_scope {
                 let scope_id = ScopeId::new(scope_str);
-                self.process_scope_references(
-                    scope_refs,
-                    &scope_id,
-                    file_path,
-                    definition_relationships,
-                );
+                self.process_scope_references(scope_refs, &scope_id, file_path, relationships);
             }
 
             self.stats.total_references_processed += references_vec.len();
@@ -206,7 +200,7 @@ impl ExpressionResolver {
         references: Vec<&RubyReference>,
         scope_id: &ScopeId,
         file_path: &str,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         // Pre-allocate collections for this scope
         let mut batch_updates = Vec::with_capacity(references.len());
@@ -260,7 +254,7 @@ impl ExpressionResolver {
         }
 
         // Add all resolved relationships
-        definition_relationships.extend(resolved_relationships);
+        relationships.extend(resolved_relationships);
     }
 
     /// Set up scope hierarchy for proper variable resolution
@@ -297,7 +291,7 @@ impl ExpressionResolver {
         scope_id: &ScopeId,
         file_path: &str,
         batch_updates: &mut Vec<(ScopeId, VariableId, InferredType)>,
-        resolved_relationships: &mut Vec<DefinitionRelationship>,
+        resolved_relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(metadata) = reference.metadata.as_deref()
             && let Some(assignment_target) = &metadata.assignment_target
@@ -326,7 +320,7 @@ impl ExpressionResolver {
         reference: &RubyReference,
         scope_id: &ScopeId,
         file_path: &str,
-        resolved_relationships: &mut Vec<DefinitionRelationship>,
+        resolved_relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(metadata) = reference.metadata.as_deref() {
             let mut context = ResolutionContext {
@@ -345,7 +339,7 @@ impl ExpressionResolver {
         &mut self,
         symbols: &[RubyExpressionSymbol],
         context: &mut ResolutionContext,
-        resolved_relationships: &mut Vec<DefinitionRelationship>,
+        resolved_relationships: &mut Vec<ConsolidatedRelationship>,
     ) -> InferredType {
         let mut current_type = None;
         let mut created_relationships: std::collections::HashSet<String> =
@@ -379,24 +373,18 @@ impl ExpressionResolver {
 
                             // Only create relationship if we haven't already created it
                             if !created_relationships.contains(&relationship_key) {
-                                let call_relationship = DefinitionRelationship {
-                                    from_file_path: context.file_path.clone(),
-                                    to_file_path: definition.location.file_path.clone(),
-                                    from_definition_fqn: context.current_scope.as_str().to_string(),
-                                    to_definition_fqn: definition.fqn.clone(),
-                                    from_location: calling_definition.location.clone(),
-                                    to_location: definition.location.clone(),
-                                    relationship_type: RelationshipType::Calls,
-                                    source_location: Some(SourceLocation {
-                                        file_path: context.file_path.clone(),
-                                        start_byte: symbol.range.byte_offset.0 as i64,
-                                        end_byte: symbol.range.byte_offset.1 as i64,
-                                        start_line: symbol.range.start.line as i32,
-                                        end_line: symbol.range.end.line as i32,
-                                        start_col: symbol.range.start.column as i32,
-                                        end_col: symbol.range.end.column as i32,
-                                    }),
-                                };
+                                let mut call_relationship =
+                                    ConsolidatedRelationship::definition_to_definition(
+                                        calling_definition.file_path.clone(),
+                                        definition.file_path.clone(),
+                                    );
+                                call_relationship.relationship_type = RelationshipType::Calls;
+                                call_relationship.source_range = ArcIntern::new(symbol.range);
+                                call_relationship.target_range = ArcIntern::new(definition.range);
+                                call_relationship.source_definition_range =
+                                    Some(ArcIntern::new(calling_definition.range));
+                                call_relationship.target_definition_range =
+                                    Some(ArcIntern::new(definition.range));
                                 resolved_relationships.push(call_relationship);
                                 created_relationships.insert(relationship_key);
                             }
@@ -656,9 +644,9 @@ impl ResolutionStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::types::{DefinitionType, SourceLocation};
+    use crate::analysis::types::DefinitionType;
     use parser_core::ruby::types::{RubyDefinitionType, RubyFqn};
-    use parser_core::utils::Range;
+    use parser_core::utils::{Position, Range};
 
     #[test]
     fn test_expression_resolver_basic() {
@@ -669,15 +657,8 @@ mod tests {
             "User#save".to_string(),
             "save".to_string(),
             DefinitionType::Ruby(RubyDefinitionType::Method),
-            SourceLocation {
-                file_path: "user.rb".to_string(),
-                start_byte: 0,
-                end_byte: 10,
-                start_line: 1,
-                end_line: 1,
-                start_col: 0,
-                end_col: 10,
-            },
+            Range::new(Position::new(1, 0), Position::new(1, 10), (0, 10)),
+            "user.rb".to_string(),
         );
 
         let ruby_fqn = RubyFqn {

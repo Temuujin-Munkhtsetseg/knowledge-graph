@@ -21,12 +21,14 @@ use crate::{
             utils::{full_import_path, get_binary_operator_function, get_unary_operator_function},
         },
         types::{
-            DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship,
-            DefinitionType, ImportType, ImportedSymbolLocation, ImportedSymbolNode, SourceLocation,
+            ConsolidatedRelationship, DefinitionNode, DefinitionType, ImportType,
+            ImportedSymbolLocation, ImportedSymbolNode,
         },
     },
     parsing::processor::References,
 };
+
+use internment::ArcIntern;
 
 // Standard member functions which should not be added to the function registry because they are already in every
 const STD_MEMBER_FUNCTIONS: [&str; 14] = [
@@ -102,8 +104,7 @@ impl KotlinExpressionResolver {
         &self,
         file_path: &str,
         references: &References,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(iterator) = references.iter_kotlin() {
             for reference in iterator {
@@ -130,46 +131,29 @@ impl KotlinExpressionResolver {
                         let to_definition = self.definition_nodes.get(&resolved_definition.fqn);
 
                         if let Some(to_definition) = to_definition {
-                            definition_relationships.push(DefinitionRelationship {
-                                from_file_path: file_path.to_string(),
-                                to_file_path: to_definition.location.file_path.clone(),
-                                from_definition_fqn: from_definition.fqn.clone(),
-                                to_definition_fqn: to_definition.fqn.clone(),
-                                from_location: from_definition.location.clone(),
-                                to_location: to_definition.location.clone(),
-                                relationship_type: RelationshipType::Calls,
-                                source_location: Some(SourceLocation {
-                                    file_path: file_path.to_string(),
-                                    start_byte: reference.range.byte_offset.0 as i64,
-                                    end_byte: reference.range.byte_offset.1 as i64,
-                                    start_line: reference.range.start.line as i32,
-                                    end_line: reference.range.end.line as i32,
-                                    start_col: reference.range.start.column as i32,
-                                    end_col: reference.range.end.column as i32,
-                                }),
-                            });
+                            let mut relationship =
+                                ConsolidatedRelationship::definition_to_definition(
+                                    from_definition.file_path.clone(),
+                                    to_definition.file_path.clone(),
+                                );
+                            relationship.relationship_type = RelationshipType::Calls;
+                            relationship.source_range = ArcIntern::new(from_definition.range);
+                            relationship.target_range = ArcIntern::new(to_definition.range);
+                            relationships.push(relationship);
                         }
                     }
 
                     for resolved_import in resolutions.import_resolutions {
-                        definition_imported_symbol_relationships.push(
-                            DefinitionImportedSymbolRelationship {
-                                file_path: file_path.to_string(),
-                                definition_fqn: from_definition.fqn.clone(),
-                                imported_symbol_location: resolved_import.location.clone(),
-                                relationship_type: RelationshipType::Calls,
-                                definition_location: from_definition.location.clone(),
-                                source_location: Some(SourceLocation {
-                                    file_path: file_path.to_string(),
-                                    start_byte: reference.range.byte_offset.0 as i64,
-                                    end_byte: reference.range.byte_offset.1 as i64,
-                                    start_line: reference.range.start.line as i32,
-                                    end_line: reference.range.end.line as i32,
-                                    start_col: reference.range.start.column as i32,
-                                    end_col: reference.range.end.column as i32,
-                                }),
-                            },
-                        );
+                        let mut relationship =
+                            ConsolidatedRelationship::definition_to_imported_symbol(
+                                from_definition.file_path.clone(),
+                                resolved_import.location.file_path.clone(),
+                            );
+                        relationship.relationship_type = RelationshipType::Calls;
+                        relationship.source_range = ArcIntern::new(from_definition.range);
+                        relationship.target_range =
+                            ArcIntern::new(resolved_import.location.range());
+                        relationships.push(relationship);
                     }
                 }
             }
@@ -842,7 +826,7 @@ impl KotlinExpressionResolver {
         name: &str,
         resolutions: &mut Resolutions,
     ) -> Option<ResolvedType> {
-        let file_path = self.definition_nodes.get(class_fqn)?.file_path().clone();
+        let file_path = self.definition_nodes.get(class_fqn)?.file_path.clone();
         let file = self.files.get(&file_path)?;
         let class = file.classes.get(class_fqn)?;
 
@@ -940,7 +924,7 @@ impl KotlinExpressionResolver {
         // Look if the field is a constant in the package
         let potential_fqn = format!("{}.{}", file.package_name, field_name);
         if let Some(definition) = self.definition_nodes.get(&potential_fqn) {
-            let definition_file = self.files.get(&definition.file_path())?;
+            let definition_file = self.files.get(&definition.file_path)?;
             let field_declaration = definition_file.constants.get(&definition.fqn)?;
 
             if field_declaration.is_extension_field(class_name) {
@@ -1036,7 +1020,7 @@ impl KotlinExpressionResolver {
         // Look for the function in the current package
         let potential_package_fqn = format!("{}.{}", file.package_name, function_name);
         if let Some(definition) = self.definition_nodes.get(&potential_package_fqn) {
-            let definition_file = self.files.get(&definition.file_path())?;
+            let definition_file = self.files.get(&definition.file_path)?;
             let function = definition_file.functions.get(&definition.fqn)?;
 
             if function.is_extension_function(class_name) {
@@ -1229,7 +1213,7 @@ impl KotlinExpressionResolver {
 
     fn resolve_member_type_in_class(&self, type_fqn: &str, name: &str) -> Option<ResolvedType> {
         // Find the file containing this type
-        let target_file_path = self.definition_nodes.get(type_fqn)?.file_path().clone();
+        let target_file_path = self.definition_nodes.get(type_fqn)?.file_path.clone();
         let target_file = self.files.get(&target_file_path)?;
 
         // First check if the member is an enum entry
@@ -1358,13 +1342,13 @@ impl KotlinExpressionResolver {
             // Check the current package first
             let potential_fqn = format!("{}.{}", file.package_name, parent_symbol);
             if let Some(definition) = self.definition_nodes.get(&potential_fqn) {
-                parent_symbol_file = self.files.get(&definition.file_path());
+                parent_symbol_file = self.files.get(&definition.file_path);
             }
 
             // Check imported symbols
             if let Some(import_path) = file.imported_symbols.get(*parent_symbol) {
                 if let Some(imported_definition) = self.definition_nodes.get(import_path)
-                    && let Some(file) = self.files.get(&imported_definition.file_path())
+                    && let Some(file) = self.files.get(&imported_definition.file_path)
                 {
                     parent_symbol_file = Some(file);
                 } else {
@@ -1386,7 +1370,7 @@ impl KotlinExpressionResolver {
             for wildcard_import in &file.wildcard_imports {
                 let full_import_path = format!("{wildcard_import}.{parent_symbol}");
                 if let Some(definition) = self.definition_nodes.get(&full_import_path) {
-                    parent_symbol_file = self.files.get(&definition.file_path());
+                    parent_symbol_file = self.files.get(&definition.file_path.clone());
                 }
             }
         }
@@ -1435,7 +1419,7 @@ impl KotlinExpressionResolver {
             if let Some(definition) = self.definition_nodes.get(import_path) {
                 // If the definition is a property, resolve the type of the property.
 
-                let definition_file = self.files.get(&definition.file_path())?;
+                let definition_file = self.files.get(&definition.file_path)?;
                 if matches!(
                     definition.definition_type,
                     DefinitionType::Kotlin(KotlinDefinitionType::Property)
@@ -1524,7 +1508,7 @@ impl KotlinExpressionResolver {
             let full_import_path = format!("{wildcard_import}.{name}");
             if let Some(definition) = self.definition_nodes.get(&full_import_path) {
                 // If the definition is a property, resolve the type of the property.
-                let definition_file = self.files.get(&definition.file_path())?;
+                let definition_file = self.files.get(&definition.file_path)?;
                 if matches!(
                     definition.definition_type,
                     DefinitionType::Kotlin(KotlinDefinitionType::Property)
@@ -1632,7 +1616,7 @@ impl KotlinExpressionResolver {
                 None => continue,
             };
 
-            let file_path = def_node.file_path();
+            let file_path = def_node.file_path.clone();
             let file = match self.files.get(&file_path) {
                 Some(f) => f,
                 None => continue,

@@ -1,21 +1,22 @@
 use crate::analysis::languages::python::interfile::get_possible_symbol_locations;
 use crate::analysis::types::{
-    DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DefinitionType,
-    FileDefinitionRelationship, FileImportedSymbolRelationship, FqnType, ImportIdentifier,
-    ImportType, ImportedSymbolLocation, ImportedSymbolNode, OptimizedFileTree, SourceLocation,
+    ConsolidatedRelationship, DefinitionNode, DefinitionType, FqnType, ImportIdentifier,
+    ImportType, ImportedSymbolLocation, ImportedSymbolNode, OptimizedFileTree, RelationshipKind,
 };
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
+use internment::ArcIntern;
 use parser_core::python::types::PythonReferenceInfo;
 use parser_core::python::types::{Connector, PythonImportType, Symbol};
 use parser_core::python::{
     fqn::python_fqn_to_string,
     types::{
-        PartialResolution, PythonDefinitionInfo, PythonDefinitionType, PythonFqn,
-        PythonImportedSymbolInfo, PythonTargetResolution,
+        PartialResolution, PythonDefinitionType, PythonFqn, PythonImportedSymbolInfo,
+        PythonTargetResolution,
     },
 };
 use parser_core::references::ReferenceTarget;
+use parser_core::utils::Range;
 use std::collections::{HashMap, HashSet};
 
 /// Represents the result of resolving an imported symbol
@@ -47,36 +48,47 @@ impl PythonAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(defs) = file_result.definitions.iter_python() {
             for definition in defs {
-                if let Ok(Some((location, fqn))) =
-                    self.create_definition_location(definition, relative_file_path)
-                {
-                    let fqn_string = python_fqn_to_string(&fqn);
-                    let definition_node = DefinitionNode::new(
-                        fqn_string.clone(),
-                        definition.name.clone(),
-                        DefinitionType::Python(definition.definition_type),
-                        location.clone(),
-                    );
+                let fqn_string = python_fqn_to_string(&definition.fqn);
+                let definition_node = DefinitionNode::new(
+                    fqn_string.clone(),
+                    definition.name.clone(),
+                    DefinitionType::Python(definition.definition_type),
+                    definition.range,
+                    relative_file_path.to_string(),
+                );
 
-                    if self.is_top_level_definition(&fqn) {
-                        file_definition_relationships.push(FileDefinitionRelationship {
-                            file_path: relative_file_path.to_string(),
-                            definition_fqn: fqn_string.clone(),
-                            relationship_type: RelationshipType::FileDefines,
-                            definition_location: location.clone(),
-                            source_location: None,
-                        });
-                    }
-
-                    definition_map.insert(
-                        (fqn_string.clone(), relative_file_path.to_string()),
-                        (definition_node, FqnType::Python(fqn)),
+                if self.is_top_level_definition(&definition.fqn) {
+                    let mut relationship = ConsolidatedRelationship::file_to_definition(
+                        relative_file_path.to_string(),
+                        relative_file_path.to_string(),
                     );
+                    relationship.source_range = ArcIntern::new(Range::empty()); // File source has no specific range
+                    relationship.target_range = ArcIntern::new(definition.range);
+                    relationship.relationship_type = RelationshipType::FileDefines;
+                    relationships.push(relationship);
                 }
+                let key = (fqn_string.clone(), relative_file_path.to_string());
+
+                if definition_map.contains_key(&key) {
+                    log::warn!(
+                        "Duplicate definition found for Python: {} in file {}",
+                        definition.name,
+                        relative_file_path
+                    );
+                    continue;
+                }
+
+                definition_map.insert(
+                    key,
+                    (
+                        definition_node.clone(),
+                        FqnType::Python(definition.fqn.clone()),
+                    ),
+                );
             }
         }
     }
@@ -87,7 +99,7 @@ impl PythonAnalyzer {
         file_result: &FileProcessingResult,
         relative_file_path: &str,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if let Some(imported_symbols) = &file_result.imported_symbols
             && let Some(imports) = imported_symbols.iter_python()
@@ -119,12 +131,15 @@ impl PythonAnalyzer {
                     );
                 }
 
-                file_import_relationships.push(FileImportedSymbolRelationship {
-                    file_path: relative_file_path.to_string(),
-                    import_location: location.clone(),
-                    relationship_type: RelationshipType::FileImports,
-                    source_location: None,
-                });
+                let mut relationship: ConsolidatedRelationship =
+                    ConsolidatedRelationship::file_to_imported_symbol(
+                        relative_file_path.to_string(),
+                        location.file_path.clone(),
+                    );
+                relationship.source_range = ArcIntern::new(Range::empty());
+                relationship.target_range = ArcIntern::new(location.range());
+                relationship.relationship_type = RelationshipType::FileImports;
+                relationships.push(relationship);
             }
         }
     }
@@ -136,10 +151,7 @@ impl PythonAnalyzer {
         relative_file_path: &str,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         imported_symbol_to_imported_symbols: &HashMap<
             ImportedSymbolLocation,
             Vec<ImportedSymbolNode>,
@@ -170,10 +182,7 @@ impl PythonAnalyzer {
                             &source_definition,
                             definition_map,
                             imported_symbol_map,
-                            definition_relationships,
-                            definition_imported_symbol_relationships,
-                            file_definition_relationships,
-                            file_import_relationships,
+                            relationships,
                             imported_symbol_to_imported_symbols,
                             imported_symbol_to_definitions,
                             imported_symbol_to_files,
@@ -189,10 +198,7 @@ impl PythonAnalyzer {
                                 &source_definition,
                                 definition_map,
                                 imported_symbol_map,
-                                definition_relationships,
-                                definition_imported_symbol_relationships,
-                                file_definition_relationships,
-                                file_import_relationships,
+                                relationships,
                                 imported_symbol_to_imported_symbols,
                                 imported_symbol_to_definitions,
                                 imported_symbol_to_files,
@@ -217,10 +223,7 @@ impl PythonAnalyzer {
         source_definition: &Option<DefinitionNode>,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         imported_symbol_to_imported_symbols: &HashMap<
             ImportedSymbolLocation,
             Vec<ImportedSymbolNode>,
@@ -243,8 +246,7 @@ impl PythonAnalyzer {
                         reference,
                         source_definition,
                         &target_def_node,
-                        definition_relationships,
-                        file_definition_relationships,
+                        relationships,
                         is_ambiguous,
                     );
                 }
@@ -274,8 +276,7 @@ impl PythonAnalyzer {
                                 reference,
                                 source_definition,
                                 &target_imported_symbol_node,
-                                definition_imported_symbol_relationships,
-                                file_import_relationships,
+                                relationships,
                                 is_ambiguous,
                             );
                         }
@@ -285,8 +286,7 @@ impl PythonAnalyzer {
                                 reference,
                                 source_definition,
                                 &target_definition_node,
-                                definition_relationships,
-                                file_definition_relationships,
+                                relationships,
                                 is_ambiguous,
                             ),
                         _ => {}
@@ -348,8 +348,7 @@ impl PythonAnalyzer {
                                             reference,
                                             source_definition,
                                             imported_symbol_node,
-                                            definition_imported_symbol_relationships,
-                                            file_import_relationships,
+                                            relationships,
                                             is_ambiguous,
                                         );
                                     }
@@ -373,10 +372,7 @@ impl PythonAnalyzer {
                             source_definition,
                             definition_map,
                             imported_symbol_map,
-                            definition_relationships,
-                            definition_imported_symbol_relationships,
-                            file_definition_relationships,
-                            file_import_relationships,
+                            relationships,
                             imported_symbol_to_imported_symbols,
                             imported_symbol_to_definitions,
                             imported_symbol_to_files,
@@ -398,10 +394,7 @@ impl PythonAnalyzer {
         source_definition: &Option<DefinitionNode>,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         imported_symbol_to_imported_symbols: &HashMap<
             ImportedSymbolLocation,
             Vec<ImportedSymbolNode>,
@@ -465,10 +458,7 @@ impl PythonAnalyzer {
                                                     source_definition,
                                                     definition_map,
                                                     imported_symbol_map,
-                                                    definition_relationships,
-                                                    definition_imported_symbol_relationships,
-                                                    file_definition_relationships,
-                                                    file_import_relationships,
+                                                    relationships,
                                                     imported_symbol_to_imported_symbols,
                                                     imported_symbol_to_definitions,
                                                     imported_symbol_to_files,
@@ -496,7 +486,7 @@ impl PythonAnalyzer {
                                     definition_map,
                                     imported_symbol_map,
                                     &fqn,
-                                    &definition_node.location.file_path,
+                                    &definition_node.file_path,
                                 )
                             {
                                 match matched_target {
@@ -523,10 +513,7 @@ impl PythonAnalyzer {
                                                 source_definition,
                                                 definition_map,
                                                 imported_symbol_map,
-                                                definition_relationships,
-                                                definition_imported_symbol_relationships,
-                                                file_definition_relationships,
-                                                file_import_relationships,
+                                                relationships,
                                                 imported_symbol_to_imported_symbols,
                                                 imported_symbol_to_definitions,
                                                 imported_symbol_to_files,
@@ -635,8 +622,7 @@ impl PythonAnalyzer {
                     reference,
                     source_definition,
                     definition_node,
-                    definition_relationships,
-                    file_definition_relationships,
+                    relationships,
                     is_ambiguous,
                 );
             }
@@ -646,8 +632,7 @@ impl PythonAnalyzer {
                     reference,
                     source_definition,
                     imported_symbol_node,
-                    definition_imported_symbol_relationships,
-                    file_import_relationships,
+                    relationships,
                     is_ambiguous,
                 );
             }
@@ -753,8 +738,7 @@ impl PythonAnalyzer {
         &self,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         for ((child_fqn_string, child_file_path), (child_def, child_fqn)) in definition_map {
             // Handle definition-to-imported-symbol relationships
@@ -762,17 +746,18 @@ impl PythonAnalyzer {
                 imported_symbol_map.get(&(child_fqn_string.clone(), child_file_path.to_string()))
             {
                 for imported_symbol in imported_symbol_nodes {
-                    definition_imported_symbol_relationships.push(
-                        DefinitionImportedSymbolRelationship {
-                            file_path: child_file_path.clone(),
-                            definition_fqn: child_fqn_string.clone(),
-                            imported_symbol_location: imported_symbol.location.clone(),
-                            relationship_type: RelationshipType::DefinesImportedSymbol,
-                            definition_location: child_def.location.clone(),
-                            // FIXME: add source location for Python imports
-                            source_location: None,
-                        },
-                    );
+                    let relationship = ConsolidatedRelationship {
+                        source_path: Some(ArcIntern::new(child_file_path.to_string())),
+                        target_path: Some(ArcIntern::new(
+                            imported_symbol.location.file_path.clone(),
+                        )),
+                        kind: RelationshipKind::DefinitionToImportedSymbol,
+                        relationship_type: RelationshipType::DefinesImportedSymbol,
+                        source_range: ArcIntern::new(child_def.range),
+                        target_range: ArcIntern::new(imported_symbol.location.range()),
+                        ..Default::default()
+                    };
+                    relationships.push(relationship);
                 }
             }
 
@@ -785,16 +770,16 @@ impl PythonAnalyzer {
                     &child_def.definition_type,
                 )
             {
-                definition_relationships.push(DefinitionRelationship {
-                    from_file_path: parent_def.location.file_path.clone(),
-                    to_file_path: child_def.location.file_path.clone(),
-                    from_definition_fqn: parent_fqn_string,
-                    to_definition_fqn: child_fqn_string.clone(),
-                    from_location: parent_def.location.clone(),
-                    to_location: child_def.location.clone(),
+                let relationship = ConsolidatedRelationship {
+                    source_path: Some(ArcIntern::new(parent_def.file_path.clone())),
+                    target_path: Some(ArcIntern::new(child_def.file_path.clone())),
+                    kind: RelationshipKind::DefinitionToDefinition,
                     relationship_type,
-                    source_location: None,
-                });
+                    source_range: ArcIntern::new(parent_def.range),
+                    target_range: ArcIntern::new(child_def.range),
+                    ..Default::default()
+                };
+                relationships.push(relationship);
             }
         }
     }
@@ -898,7 +883,7 @@ impl PythonAnalyzer {
         // Prefer the most recent symbol: imported symbol if it exists and is more recent, otherwise definition, otherwise imported symbol
         match (matched_definition_node, matched_imported_symbol_node) {
             (Some(def_node), Some(imp_node)) => {
-                if imp_node.location.start_byte > def_node.location.start_byte {
+                if imp_node.location.start_byte > def_node.range.byte_offset.0 as i64 {
                     Some(ResolvedTarget::ImportedSymbol(imp_node.clone()))
                 } else {
                     Some(ResolvedTarget::Definition(def_node.clone()))
@@ -917,50 +902,41 @@ impl PythonAnalyzer {
         reference: &PythonReferenceInfo,
         source_definition: &Option<DefinitionNode>,
         target_definition_node: &DefinitionNode,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         is_ambiguous: bool,
     ) {
-        let source_location = Some(SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: reference.range.byte_offset.0 as i64,
-            end_byte: reference.range.byte_offset.1 as i64,
-            start_line: reference.range.start.line as i32,
-            end_line: reference.range.end.line as i32,
-            start_col: reference.range.start.column as i32,
-            end_col: reference.range.end.column as i32,
-        });
-
         if source_definition.is_none() {
-            let relationship = FileDefinitionRelationship {
-                file_path: file_path.to_string(),
-                definition_fqn: target_definition_node.fqn.clone(),
+            let relationship = ConsolidatedRelationship {
+                source_path: Some(ArcIntern::new(file_path.to_string())),
+                target_path: Some(ArcIntern::new(target_definition_node.file_path.clone())),
+                kind: RelationshipKind::FileToDefinition,
                 relationship_type: if is_ambiguous {
                     RelationshipType::AmbiguouslyCalls
                 } else {
                     RelationshipType::Calls
                 },
-                definition_location: target_definition_node.location.clone(),
-                source_location,
+                source_range: ArcIntern::new(reference.range),
+                target_range: ArcIntern::new(target_definition_node.range),
+                ..Default::default()
             };
-            file_definition_relationships.push(relationship);
+            // warn!("add_definition_reference_relationship::target range: {:?}", relationship.target_range);
+            relationships.push(relationship);
         } else {
             let source_definition = source_definition.as_ref().unwrap();
-            let relationship = DefinitionRelationship {
-                from_file_path: source_definition.location.file_path.clone(),
-                to_file_path: target_definition_node.location.file_path.clone(),
-                from_definition_fqn: source_definition.fqn.clone(),
-                to_definition_fqn: target_definition_node.fqn.clone(),
-                from_location: source_definition.location.clone(),
-                to_location: target_definition_node.location.clone(),
+            let relationship = ConsolidatedRelationship {
+                source_path: Some(ArcIntern::new(source_definition.file_path.clone())),
+                target_path: Some(ArcIntern::new(target_definition_node.file_path.clone())),
+                kind: RelationshipKind::DefinitionToDefinition,
                 relationship_type: if is_ambiguous {
                     RelationshipType::AmbiguouslyCalls
                 } else {
                     RelationshipType::Calls
                 },
-                source_location,
+                source_range: ArcIntern::new(source_definition.range),
+                target_range: ArcIntern::new(target_definition_node.range),
+                ..Default::default()
             };
-            definition_relationships.push(relationship);
+            relationships.push(relationship);
         }
     }
 
@@ -971,67 +947,45 @@ impl PythonAnalyzer {
         reference: &PythonReferenceInfo,
         source_definition: &Option<DefinitionNode>,
         target_imported_symbol_node: &ImportedSymbolNode,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
-        file_import_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         is_ambiguous: bool,
     ) {
-        let source_location = Some(SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: reference.range.byte_offset.0 as i64,
-            end_byte: reference.range.byte_offset.1 as i64,
-            start_line: reference.range.start.line as i32,
-            end_line: reference.range.end.line as i32,
-            start_col: reference.range.start.column as i32,
-            end_col: reference.range.end.column as i32,
-        });
-
         if source_definition.is_none() {
-            let relationship = FileImportedSymbolRelationship {
-                file_path: file_path.to_string(),
-                import_location: target_imported_symbol_node.location.clone(),
+            let relationship = ConsolidatedRelationship {
+                source_path: Some(ArcIntern::new(file_path.to_string())),
+                target_path: Some(ArcIntern::new(
+                    target_imported_symbol_node.location.file_path.clone(),
+                )),
+                kind: RelationshipKind::FileToImportedSymbol,
                 relationship_type: if is_ambiguous {
                     RelationshipType::AmbiguouslyCalls
                 } else {
                     RelationshipType::Calls
                 },
-                source_location,
+                source_range: ArcIntern::new(reference.range),
+                target_range: ArcIntern::new(target_imported_symbol_node.location.range()),
+                ..Default::default()
             };
-            file_import_relationships.push(relationship);
+            relationships.push(relationship);
         } else {
             let source_definition = source_definition.as_ref().unwrap();
-            let relationship = DefinitionImportedSymbolRelationship {
-                file_path: file_path.to_string(),
-                definition_fqn: source_definition.fqn.clone(),
-                imported_symbol_location: target_imported_symbol_node.location.clone(),
+            let relationship = ConsolidatedRelationship {
+                source_path: Some(ArcIntern::new(source_definition.file_path.clone())),
+                target_path: Some(ArcIntern::new(
+                    target_imported_symbol_node.location.file_path.clone(),
+                )),
+                kind: RelationshipKind::DefinitionToImportedSymbol,
                 relationship_type: if is_ambiguous {
                     RelationshipType::AmbiguouslyCalls
                 } else {
                     RelationshipType::Calls
                 },
-                definition_location: source_definition.location.clone(),
-                source_location,
+                source_range: ArcIntern::new(source_definition.range),
+                target_range: ArcIntern::new(target_imported_symbol_node.location.range()),
+                ..Default::default()
             };
-            definition_imported_symbol_relationships.push(relationship);
+            relationships.push(relationship);
         }
-    }
-
-    /// Create a definition location from a definition info
-    fn create_definition_location(
-        &self,
-        definition: &PythonDefinitionInfo,
-        file_path: &str,
-    ) -> Result<Option<(SourceLocation, PythonFqn)>, String> {
-        let location = SourceLocation {
-            file_path: file_path.to_string(),
-            start_byte: definition.range.byte_offset.0 as i64,
-            end_byte: definition.range.byte_offset.1 as i64,
-            start_line: definition.range.start.line as i32,
-            end_line: definition.range.end.line as i32,
-            start_col: definition.range.start.column as i32,
-            end_col: definition.range.end.column as i32,
-        };
-
-        Ok(Some((location, definition.fqn.clone())))
     }
 
     /// Create an imported symbol location from an imported symbol info

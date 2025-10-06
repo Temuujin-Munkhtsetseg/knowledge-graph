@@ -3,15 +3,15 @@ pub mod languages;
 pub mod types;
 
 use crate::analysis::types::{
-    DefinitionImportedSymbolRelationship, DefinitionNode, DefinitionRelationship, DirectoryNode,
-    DirectoryRelationship, FileDefinitionRelationship, FileImportedSymbolRelationship, FileNode,
-    FqnType, GraphData, ImportedSymbolDefinitionRelationship, ImportedSymbolFileRelationship,
-    ImportedSymbolImportedSymbolRelationship, ImportedSymbolLocation, ImportedSymbolNode,
-    OptimizedFileTree,
+    ConsolidatedRelationship, DefinitionNode, DirectoryNode, FileNode, FqnType, GraphData,
+    ImportedSymbolLocation, ImportedSymbolNode, OptimizedFileTree,
 };
+use crate::analysis::types::{RelationshipKind, rels_by_kind};
 use crate::parsing::processor::{FileProcessingResult, References};
 use database::graph::RelationshipType;
+use internment::ArcIntern;
 use parser_core::parser::SupportedLanguage;
+use parser_core::utils::{Position, Range};
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
@@ -85,23 +85,7 @@ impl AnalysisService {
         let mut imported_symbol_nodes: Vec<ImportedSymbolNode> = Vec::new();
         let mut directory_nodes: Vec<DirectoryNode> = Vec::new();
         let mut file_nodes: Vec<FileNode> = Vec::new();
-        let mut directory_relationships: Vec<DirectoryRelationship> = Vec::new();
-        let mut file_definition_relationships: Vec<FileDefinitionRelationship> = Vec::new();
-        let mut file_imported_symbol_relationships: Vec<FileImportedSymbolRelationship> =
-            Vec::new();
-        let mut definition_relationships: Vec<DefinitionRelationship> = Vec::new();
-
-        let mut definition_imported_symbol_relationships: Vec<
-            DefinitionImportedSymbolRelationship,
-        > = Vec::new();
-        let mut imported_symbol_imported_symbol_relationships: Vec<
-            ImportedSymbolImportedSymbolRelationship,
-        > = Vec::new();
-        let mut imported_symbol_definition_relationships: Vec<
-            ImportedSymbolDefinitionRelationship,
-        > = Vec::new();
-        let mut imported_symbol_file_relationships: Vec<ImportedSymbolFileRelationship> =
-            Vec::new();
+        let mut relationships: Vec<ConsolidatedRelationship> = Vec::new();
 
         // TODO: Deprecate these. Can make directory_nodes and directory_relationships HashMaps.
         let mut created_directories = HashSet::new();
@@ -121,7 +105,7 @@ impl AnalysisService {
                     &file_result,
                     &mut file_nodes,
                     &mut directory_nodes,
-                    &mut directory_relationships,
+                    &mut relationships,
                     &mut created_directories,
                     &mut created_dir_relationships,
                 );
@@ -129,8 +113,7 @@ impl AnalysisService {
                     &file_result,
                     &mut definition_map,
                     &mut imported_symbol_map,
-                    &mut file_definition_relationships,
-                    &mut file_imported_symbol_relationships,
+                    &mut relationships,
                 );
                 file_references.push((
                     self.filesystem_analyzer
@@ -149,8 +132,7 @@ impl AnalysisService {
                 language,
                 &definition_map,
                 &imported_symbol_map,
-                &mut definition_relationships,
-                &mut definition_imported_symbol_relationships,
+                &mut relationships,
             );
             if language == SupportedLanguage::Python {
                 let file_tree =
@@ -164,9 +146,7 @@ impl AnalysisService {
                     &mut imported_symbol_to_imported_symbols,
                     &mut imported_symbol_to_definitions,
                     &mut imported_symbol_to_files,
-                    &mut imported_symbol_imported_symbol_relationships,
-                    &mut imported_symbol_definition_relationships,
-                    &mut imported_symbol_file_relationships,
+                    &mut relationships,
                 );
             }
             self.extract_reference_relationships(
@@ -174,10 +154,7 @@ impl AnalysisService {
                 file_references,
                 &definition_map,
                 &imported_symbol_map,
-                &mut definition_relationships,
-                &mut definition_imported_symbol_relationships,
-                &mut file_definition_relationships,
-                &mut file_imported_symbol_relationships,
+                &mut relationships,
                 &imported_symbol_to_imported_symbols,
                 &imported_symbol_to_definitions,
                 &imported_symbol_to_files,
@@ -194,14 +171,7 @@ impl AnalysisService {
             definition_nodes.iter().map(|_d| 1).sum::<usize>(),
             imported_symbol_nodes.len(),
             imported_symbol_nodes.iter().map(|_i| 1).sum::<usize>(),
-            directory_relationships.len()
-                + file_definition_relationships.len()
-                + file_imported_symbol_relationships.len()
-                + definition_relationships.len()
-                + definition_imported_symbol_relationships.len()
-                + imported_symbol_imported_symbol_relationships.len()
-                + imported_symbol_definition_relationships.len()
-                + imported_symbol_file_relationships.len()
+            relationships.len()
         );
 
         Ok(GraphData {
@@ -209,14 +179,7 @@ impl AnalysisService {
             file_nodes,
             definition_nodes,
             imported_symbol_nodes,
-            directory_relationships,
-            file_imported_symbol_relationships,
-            file_definition_relationships,
-            definition_relationships,
-            definition_imported_symbol_relationships,
-            imported_symbol_imported_symbol_relationships,
-            imported_symbol_definition_relationships,
-            imported_symbol_file_relationships,
+            relationships,
         })
     }
 
@@ -240,7 +203,7 @@ impl AnalysisService {
         file_result: &FileProcessingResult,
         file_nodes: &mut Vec<FileNode>,
         directory_nodes: &mut Vec<DirectoryNode>,
-        directory_relationships: &mut Vec<DirectoryRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         created_directories: &mut HashSet<String>,
         created_dir_relationships: &mut HashSet<(String, String)>,
     ) {
@@ -248,7 +211,7 @@ impl AnalysisService {
         self.filesystem_analyzer.create_directory_hierarchy(
             &file_result.file_path,
             directory_nodes,
-            directory_relationships,
+            relationships,
             created_directories,
             created_dir_relationships,
         );
@@ -264,11 +227,10 @@ impl AnalysisService {
             .filesystem_analyzer
             .get_parent_directory(&file_result.file_path)
         {
-            directory_relationships.push(DirectoryRelationship {
-                from_path: parent_dir,
-                to_path: relative_file_path.clone(),
-                relationship_type: RelationshipType::DirContainsFile,
-            });
+            let mut rel =
+                ConsolidatedRelationship::dir_to_file(parent_dir, relative_file_path.clone());
+            rel.relationship_type = RelationshipType::DirContainsFile;
+            relationships.push(rel);
         }
         file_nodes.push(file_node);
     }
@@ -279,8 +241,7 @@ impl AnalysisService {
         file_result: &FileProcessingResult,
         definition_map: &mut HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &mut HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
-        file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         let relative_path = self
             .filesystem_analyzer
@@ -291,7 +252,7 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     definition_map,
-                    file_definition_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::Python => {
@@ -299,13 +260,13 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     definition_map,
-                    file_definition_relationships,
+                    relationships,
                 );
                 self.python_analyzer.process_imports(
                     file_result,
                     &relative_path,
                     imported_symbol_map,
-                    file_imported_symbol_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::Kotlin => {
@@ -313,13 +274,13 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     definition_map,
-                    file_definition_relationships,
+                    relationships,
                 );
                 self.kotlin_analyzer.process_imports(
                     file_result,
                     &relative_path,
                     imported_symbol_map,
-                    file_imported_symbol_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::Java => {
@@ -327,13 +288,13 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     definition_map,
-                    file_definition_relationships,
+                    relationships,
                 );
                 self.java_analyzer.process_imports(
                     file_result,
                     &relative_path,
                     imported_symbol_map,
-                    file_imported_symbol_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::CSharp => {
@@ -341,13 +302,13 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     definition_map,
-                    file_definition_relationships,
+                    relationships,
                 );
                 self.csharp_analyzer.process_imports(
                     file_result,
                     &relative_path,
                     imported_symbol_map,
-                    file_imported_symbol_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::TypeScript => {
@@ -355,13 +316,13 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     definition_map,
-                    file_definition_relationships,
+                    relationships,
                 );
                 self.typescript_analyzer.process_imports(
                     file_result,
                     &relative_path,
                     imported_symbol_map,
-                    file_imported_symbol_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::Rust => {
@@ -369,15 +330,15 @@ impl AnalysisService {
                     file_result,
                     &relative_path,
                     definition_map,
-                    file_definition_relationships,
+                    relationships,
                 );
                 self.rust_analyzer.process_imports(
                     file_result,
                     &relative_path,
                     imported_symbol_map,
-                    file_imported_symbol_relationships,
+                    relationships,
                 );
-            }
+            } // Note: use _ => {} as a catch-all if you want to disable some analyzers
         }
     }
 
@@ -394,11 +355,7 @@ impl AnalysisService {
         >,
         imported_symbol_to_definitions: &mut HashMap<ImportedSymbolLocation, Vec<DefinitionNode>>,
         imported_symbol_to_files: &mut HashMap<ImportedSymbolLocation, Vec<String>>,
-        imported_symbol_imported_symbol_relationships: &mut Vec<
-            ImportedSymbolImportedSymbolRelationship,
-        >,
-        imported_symbol_definition_relationships: &mut Vec<ImportedSymbolDefinitionRelationship>,
-        imported_symbol_file_relationships: &mut Vec<ImportedSymbolFileRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         if language == SupportedLanguage::Python {
             // Maps imported symbols to their sources (e.g. a definition, another imported symbol, etc.)
@@ -414,36 +371,49 @@ impl AnalysisService {
             // Create imported symbol -> imported symbol relationships
             for (source_location, target_imported_symbols) in imported_symbol_to_imported_symbols {
                 for target_imported_symbol in target_imported_symbols {
-                    let relationship = ImportedSymbolImportedSymbolRelationship {
-                        source_location: source_location.clone(),
-                        target_location: target_imported_symbol.location.clone(),
-                        relationship_type: RelationshipType::ImportedSymbolToImportedSymbol,
-                    };
-                    imported_symbol_imported_symbol_relationships.push(relationship);
+                    let source_range = source_location.range();
+                    let target_range = target_imported_symbol.location.range();
+                    let mut relationship = ConsolidatedRelationship::import_to_import(
+                        source_location.file_path.clone(),
+                        target_imported_symbol.location.file_path.clone(),
+                    );
+                    relationship.source_range = ArcIntern::new(source_range);
+                    relationship.target_range = ArcIntern::new(target_range);
+                    relationship.relationship_type =
+                        RelationshipType::ImportedSymbolToImportedSymbol;
+                    relationships.push(relationship);
                 }
             }
 
             // Create imported symbol -> definition relationships
             for (source_location, target_definitions) in imported_symbol_to_definitions {
                 for target_definition in target_definitions {
-                    let relationship = ImportedSymbolDefinitionRelationship {
-                        source_location: source_location.clone(),
-                        target_location: target_definition.location.clone(),
-                        relationship_type: RelationshipType::ImportedSymbolToDefinition,
-                    };
-                    imported_symbol_definition_relationships.push(relationship);
+                    let source_range = source_location.range();
+                    let target_range = target_definition.range;
+                    let mut relationship = ConsolidatedRelationship::import_to_definition(
+                        source_location.file_path.clone(),
+                        target_definition.file_path.clone(),
+                    );
+                    relationship.source_range = ArcIntern::new(source_range);
+                    relationship.target_range = ArcIntern::new(target_range);
+                    relationship.relationship_type = RelationshipType::ImportedSymbolToDefinition;
+                    relationships.push(relationship);
                 }
             }
 
             // Create imported symbol -> file relationships
             for (source_location, target_files) in imported_symbol_to_files {
                 for target_file in target_files {
-                    let relationship = ImportedSymbolFileRelationship {
-                        source_location: source_location.clone(),
-                        target_location: target_file.clone(),
-                        relationship_type: RelationshipType::ImportedSymbolToFile,
-                    };
-                    imported_symbol_file_relationships.push(relationship);
+                    let source_range = source_location.range();
+                    let target_range = Range::new(Position::new(0, 0), Position::new(0, 0), (0, 0));
+                    let mut relationship = ConsolidatedRelationship::import_to_file(
+                        source_location.file_path.clone(),
+                        target_file.clone(),
+                    );
+                    relationship.source_range = ArcIntern::new(source_range);
+                    relationship.target_range = ArcIntern::new(target_range);
+                    relationship.relationship_type = RelationshipType::ImportedSymbolToFile;
+                    relationships.push(relationship);
                 }
             }
         }
@@ -456,10 +426,7 @@ impl AnalysisService {
         file_references: Vec<(String, Option<References>)>,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
-        file_definition_relationships: &mut Vec<FileDefinitionRelationship>,
-        file_imported_symbol_relationships: &mut Vec<FileImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
         imported_symbol_to_imported_symbols: &HashMap<
             ImportedSymbolLocation,
             Vec<ImportedSymbolNode>,
@@ -475,10 +442,7 @@ impl AnalysisService {
                         &relative_path,
                         definition_map,
                         imported_symbol_map,
-                        definition_relationships,
-                        definition_imported_symbol_relationships,
-                        file_definition_relationships,
-                        file_imported_symbol_relationships,
+                        relationships,
                         imported_symbol_to_imported_symbols,
                         imported_symbol_to_definitions,
                         imported_symbol_to_files,
@@ -490,21 +454,19 @@ impl AnalysisService {
                             self.ruby_analyzer.process_references(
                                 &references,
                                 &relative_path,
-                                definition_relationships,
+                                relationships,
                             );
                         } else if language == SupportedLanguage::Java {
                             self.java_analyzer.process_references(
                                 &references,
                                 &relative_path,
-                                definition_relationships,
-                                definition_imported_symbol_relationships,
+                                relationships,
                             );
                         } else if language == SupportedLanguage::Kotlin {
                             self.kotlin_analyzer.process_references(
                                 &references,
                                 &relative_path,
-                                definition_relationships,
-                                definition_imported_symbol_relationships,
+                                relationships,
                             );
                         }
                     }
@@ -513,8 +475,7 @@ impl AnalysisService {
                     self.typescript_analyzer.process_references(
                         &references,
                         &relative_path,
-                        definition_relationships,
-                        file_definition_relationships,
+                        relationships,
                     );
                 }
                 _ => {}
@@ -551,50 +512,46 @@ impl AnalysisService {
         language: SupportedLanguage,
         definition_map: &HashMap<(String, String), (DefinitionNode, FqnType)>,
         imported_symbol_map: &HashMap<(String, String), Vec<ImportedSymbolNode>>,
-        definition_relationships: &mut Vec<DefinitionRelationship>,
-        definition_imported_symbol_relationships: &mut Vec<DefinitionImportedSymbolRelationship>,
+        relationships: &mut Vec<ConsolidatedRelationship>,
     ) {
         match language {
             SupportedLanguage::Ruby => {
                 self.ruby_analyzer
-                    .add_definition_relationships(definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, relationships);
             }
             SupportedLanguage::Python => {
                 self.python_analyzer.add_definition_relationships(
                     definition_map,
                     imported_symbol_map,
-                    definition_relationships,
-                    definition_imported_symbol_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::Kotlin => {
                 self.kotlin_analyzer
-                    .add_definition_relationships(definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, relationships);
             }
             SupportedLanguage::Java => {
                 self.java_analyzer
-                    .add_definition_relationships(definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, relationships);
             }
             SupportedLanguage::CSharp => {
                 self.csharp_analyzer
-                    .add_definition_relationships(definition_map, definition_relationships);
+                    .add_definition_relationships(definition_map, relationships);
             }
             SupportedLanguage::TypeScript => {
                 self.typescript_analyzer.add_definition_relationships(
                     definition_map,
                     imported_symbol_map,
-                    definition_relationships,
-                    definition_imported_symbol_relationships,
+                    relationships,
                 );
             }
             SupportedLanguage::Rust => {
                 self.rust_analyzer.add_definition_relationships(
                     definition_map,
                     imported_symbol_map,
-                    definition_relationships,
-                    definition_imported_symbol_relationships,
+                    relationships,
                 );
-            }
+            } // Note: use _ => {} as a catch-all if you want to disable some analyzers
         }
     }
 }
@@ -647,28 +604,7 @@ impl AnalysisStats {
                 .or_insert(0) += 1;
         }
 
-        // Count relationships by type
-        for rel in &graph_data.directory_relationships {
-            *relationships_by_type
-                .entry(rel.relationship_type)
-                .or_insert(0) += 1;
-        }
-        for rel in &graph_data.file_definition_relationships {
-            *relationships_by_type
-                .entry(rel.relationship_type)
-                .or_insert(0) += 1;
-        }
-        for rel in &graph_data.file_imported_symbol_relationships {
-            *relationships_by_type
-                .entry(rel.relationship_type)
-                .or_insert(0) += 1;
-        }
-        for rel in &graph_data.definition_relationships {
-            *relationships_by_type
-                .entry(rel.relationship_type)
-                .or_insert(0) += 1;
-        }
-        for rel in &graph_data.definition_imported_symbol_relationships {
+        for rel in &graph_data.relationships {
             *relationships_by_type
                 .entry(rel.relationship_type)
                 .or_insert(0) += 1;
@@ -679,15 +615,31 @@ impl AnalysisStats {
             total_files_analyzed: graph_data.file_nodes.len(),
             total_definitions_created: graph_data.definition_nodes.len(),
             total_imported_symbols_created: graph_data.imported_symbol_nodes.len(),
-            total_directory_relationships: graph_data.directory_relationships.len(),
-            total_file_definition_relationships: graph_data.file_definition_relationships.len(),
-            total_file_imported_symbol_relationships: graph_data
-                .file_imported_symbol_relationships
-                .len(),
-            total_definition_relationships: graph_data.definition_relationships.len(),
-            total_definition_imported_symbol_relationships: graph_data
-                .definition_imported_symbol_relationships
-                .len(),
+            total_directory_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::DirectoryToDirectory,
+            )
+            .len(),
+            total_file_definition_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::FileToDefinition,
+            )
+            .len(),
+            total_file_imported_symbol_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::FileToImportedSymbol,
+            )
+            .len(),
+            total_definition_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::DefinitionToDefinition,
+            )
+            .len(),
+            total_definition_imported_symbol_relationships: rels_by_kind(
+                &graph_data.relationships,
+                RelationshipKind::DefinitionToImportedSymbol,
+            )
+            .len(),
             analysis_duration,
             files_by_language,
             definitions_by_type,

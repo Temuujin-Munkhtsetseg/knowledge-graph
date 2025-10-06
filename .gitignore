@@ -46,6 +46,8 @@ packages/gkg-evals/run_artifacts
 
 # Summarization
 git_diff_full.txt
+logs.txt
+nextest.log
 
 # Gemini
 /.gemini
@@ -53,3 +55,6 @@ git_diff_full.txt
 
 # Ignore pipeline failure logs
 pipline fail/
+
+# Profiling - Samply
+profile.json.gz
