@@ -69,7 +69,7 @@ fn server_start_foreground_unix_socket_and_stop() {
     let line = read_server_info_line(child_stdout);
     let message = format!("HTTP server listening on {}", socket_path.display());
 
-    assert!(line.ends_with(&message));
+    assert!(line.contains(&message));
     assert!(socket_path.exists());
 
     // Give server some time to set up async signal handlers
@@ -108,7 +108,7 @@ fn server_start_foreground_tcp_socket_and_stop() {
     let line = read_server_info_line(child_stdout);
     let message = format!("HTTP server listening on {bind_addr}");
 
-    assert!(line.ends_with(&message));
+    assert!(line.contains(&message));
 
     signal::kill(Pid::from_raw(child.id() as i32), Signal::SIGTERM)
         .expect("failed to interrupt server");
@@ -162,7 +162,7 @@ fn server_creates_data_dir_if_missing() {
     let line = read_server_info_line(child_stdout);
     let message = format!("HTTP server listening on {bind_addr}");
 
-    assert!(line.ends_with(&message));
+    assert!(line.contains(&message));
 
     // Verify directory was created
     assert!(data_dir_path.exists());

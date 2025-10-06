@@ -18,6 +18,7 @@ pub enum LogMode {
     Cli,
     ServerForeground,
     ServerBackground,
+    ServerDeployed,
     DataStdout,
 }
 
@@ -28,7 +29,7 @@ pub struct LoggingGuards {
 
 pub fn init(mode: LogMode, verbose: bool) -> Result<Option<LoggingGuards>> {
     let filter = if verbose {
-        EnvFilter::new("info")
+        EnvFilter::new("debug")
     } else {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
     };
@@ -100,6 +101,16 @@ pub fn init(mode: LogMode, verbose: bool) -> Result<Option<LoggingGuards>> {
             Ok(Some(LoggingGuards {
                 _guards: vec![guard],
             }))
+        }
+        LogMode::ServerDeployed => {
+            tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .with_writer(std::io::stdout)
+                .with_ansi(false)
+                .json()
+                .init();
+
+            Ok(None)
         }
         LogMode::DataStdout => Ok(None),
     }
