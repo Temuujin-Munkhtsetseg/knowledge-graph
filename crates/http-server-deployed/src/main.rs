@@ -2,6 +2,7 @@ use http_server_deployed::{authentication, endpoints, metrics};
 
 use axum::{middleware, Router};
 use clap::Parser;
+use logging::{init, LogMode};
 use std::error::Error;
 use std::path::PathBuf;
 use tokio::net::{TcpListener, UnixListener};
@@ -31,7 +32,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    init_tracing();
+    init(LogMode::ServerDeployed, false)?;
 
     let args = Args::parse();
 
@@ -91,12 +92,6 @@ async fn serve_tcp_socket(bind: String, app: Router) {
     let listener = TcpListener::bind(bind.clone()).await.unwrap();
     info!("HTTP server listening on {}", bind);
     axum::serve(listener, app).await.unwrap();
-}
-
-fn init_tracing() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
 }
 
 async fn shutdown_signal(path: String) {

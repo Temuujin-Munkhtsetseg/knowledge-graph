@@ -18,6 +18,7 @@ pub enum LogMode {
     Cli,
     ServerForeground,
     ServerBackground,
+    ServerDeployed,
     DataStdout,
 }
 
@@ -100,6 +101,16 @@ pub fn init(mode: LogMode, verbose: bool) -> Result<Option<LoggingGuards>> {
             Ok(Some(LoggingGuards {
                 _guards: vec![guard],
             }))
+        }
+        LogMode::ServerDeployed => {
+            tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .with_writer(std::io::stdout)
+                .with_ansi(false)
+                .json()
+                .init();
+
+            Ok(None)
         }
         LogMode::DataStdout => Ok(None),
     }

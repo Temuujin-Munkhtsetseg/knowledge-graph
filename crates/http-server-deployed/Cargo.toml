@@ -23,6 +23,7 @@ tower-http = { workspace = true }
 prometheus = { workspace = true }
 lazy_static = { workspace = true }
 workspace-manager = { path = "../workspace-manager" }
+logging = { path = "../logging" }
 
 [[bin]]
 name = "http-server-deployed"
