@@ -1,22 +1,23 @@
 # Dockerization for the Knowledge Graph Project
 
-This directory contains the Docker setup for the `knowledge-graph` project. The containerization is organized into a multi-service application managed by Docker Compose.
+This directory contains the Docker setup for the `knowledge-graph` project. The containerization is organized into a multi-service application managed by Docker Compose, using a single, efficient multi-stage `Dockerfile`.
 
 ## Directory Structure
 
-The `docker/` directory is structured to provide a clean and separate build environment for each application:
+The `docker/` directory contains the core Docker assets:
 
--   `docker/gkg/`: Contains the `Dockerfile` for the `gkg` binary.
--   `docker/http-server-deployed/`: Contains the `Dockerfile` for the `http-server-deployed` binary, which is the web-facing server.
--   `docker/http-server-desktop/`: Contains the `Dockerfile` for the `dev-server` binary, which is the desktop version of the server.
+-   `Dockerfile`: A multi-stage Dockerfile that builds all the necessary service images (`gkg`, `webserver`, `indexer`, `desktop`).
+-   `push.sh`: A utility script to build and push all service images to a Docker registry.
+-   `README.md`: This file.
 
 ## Services
 
 The `docker-compose.yml` file at the root of the repository defines the following services:
 
--   `gkg`: A service for the `gkg` command-line interface.
--   `http-server-deployed`: The main web server for the deployed application. It exposes a public-facing API and serves the frontend.
--   `http-server-desktop`: The desktop version of the server, typically used for local development and interaction.
+-   `gkg`: A service for the `gkg` command-line interface, used for batch indexing of local workspaces.
+-   `webserver`: The main back-end API server for handling queries.
+-   `indexer`: The back-end service for handling API-driven, on-demand indexing of single repositories.
+-   `desktop`: The local development server that provides the graph visualization UI.
 
 ## Building and Running the Application
 
@@ -25,7 +26,7 @@ To build and run the entire stack, you can use Docker Compose from the root of t
 ### Prerequisites
 
 -   Docker and Docker Compose must be installed on your system.
--   A `jwt.secret` file must be present in the root directory for the `http-server-deployed` service to start. You can create one with a dummy value for local development by running the following command in the root of the repository:
+-   A `jwt.secret` file must be present in the root directory for the `webserver` and `indexer` services to start. You can create one for local development by running:
     ```bash
     echo "dummy-secret-for-development" > jwt.secret
     ```
@@ -40,7 +41,7 @@ docker compose build
 
 ### Run the Services
 
-To start all the services in detached mode, run:
+To start all services in detached mode, run:
 
 ```bash
 docker compose up -d
@@ -58,7 +59,7 @@ Or for a specific service:
 docker compose logs -f <service_name>
 ```
 
-(e.g., `docker compose logs -f http-server-deployed`)
+(e.g., `docker compose logs -f webserver`)
 
 ### Stop the Services
 
@@ -66,4 +67,14 @@ To stop all running services, run:
 
 ```bash
 docker compose down
+```
+
+## Pushing to a Docker Registry
+
+The `docker/push.sh` script is provided to build and push all images to a container registry. Before running, ensure you are logged in (`docker login`) and have updated the script with your registry username.
+
+To execute the script from the project root, run:
+
+```bash
+sh docker/push.sh
 ```

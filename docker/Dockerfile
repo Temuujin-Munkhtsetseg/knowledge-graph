@@ -69,22 +69,33 @@ RUN cargo build --release --bin dev-server
 # --- Runtime Stages ---
 
 # gkg runtime stage
-FROM debian:trixie-slim AS gkg
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+FROM debian:trixie-slim AS cli
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates bash && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/gkg /usr/local/bin/
 COPY --from=kuzu-downloader /kuzu/libkuzu.so /usr/lib/
+CMD ["tail", "-f", "/dev/null"]
 
-# http-server-deployed runtime stage
-FROM debian:trixie-slim AS http-server-deployed
+# desktop runtime stage
+FROM debian:trixie-slim AS desktop
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates bash && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=builder /app/target/release/dev-server /usr/local/bin/
+COPY --from=kuzu-downloader /kuzu/libkuzu.so /usr/lib/
+CMD ["dev-server", "--enable-reindexing"]
+
+# Base runtime stage for the deployed server
+FROM debian:trixie-slim AS gkg-server-base
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/http-server-deployed /usr/local/bin/
 COPY --from=kuzu-downloader /kuzu/libkuzu.so /usr/lib/
 
-# http-server-desktop runtime stage
-FROM debian:trixie-slim AS http-server-desktop
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY --from=builder /app/target/release/dev-server /usr/local/bin/
-COPY --from=kuzu-downloader /kuzu/libkuzu.so /usr/lib/
+# Specialized runtime stage for the webserver
+FROM gkg-server-base AS webserver
+CMD ["http-server-deployed", "-m", "webserver", "--bind", "0.0.0.0:3334", "--secret-path", "/secrets/jwt.secret", "--data-dir", "/root/.gkg"]
+
+# Specialized runtime stage for the indexer
+FROM gkg-server-base AS indexer
+CMD ["http-server-deployed", "-m", "indexer", "--bind", "0.0.0.0:3333", "--secret-path", "/secrets/jwt.secret", "--data-dir", "/root/.gkg"]
+
