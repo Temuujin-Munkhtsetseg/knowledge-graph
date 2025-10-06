@@ -28,7 +28,7 @@ pub struct LoggingGuards {
 
 pub fn init(mode: LogMode, verbose: bool) -> Result<Option<LoggingGuards>> {
     let filter = if verbose {
-        EnvFilter::new("info")
+        EnvFilter::new("debug")
     } else {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
     };
