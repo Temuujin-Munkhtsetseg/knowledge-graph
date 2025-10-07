@@ -58,3 +58,6 @@ pipline fail/
 
 # Profiling - Samply
 profile.json.gz
+
+# General
+.exclude/
