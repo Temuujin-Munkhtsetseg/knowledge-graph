@@ -1,3 +1,19 @@
+## [0.19.0](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.18.1...v0.19.0) (2025-10-07)
+
+### :sparkles: Features
+
+* **devtools:** add scripts that measure average rss + structure gtime output ([9b2209d](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/9b2209d96517640f82c552a331d5721391a1e844)) by Michael Usachenko
+* **logging:** add structured json logging to deployed http server ([a9a9bfe](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/a9a9bfe1923629561760dba4a02514ce1431eb57)) by Jean-Gabriel Doyon
+
+### :bug: Fixes
+
+* **ci:** add missing lint component ([866f570](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/866f5700ae3334f4647a5b9666037503cdb78f95)) by Jean-Gabriel Doyon
+* **logging:** fix verbose logging not using debug ([fa44f7e](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/fa44f7efd8c36d255fd055f7261f7dccea0b23a1)) by Jean-Gabriel Doyon
+
+### :fast_forward: Performance
+
+* **indexer:** simplify relationship structs ([3a9becf](https://gitlab.com/gitlab-org/rust/knowledge-graph/commit/3a9becfeeff2d7cba93e4afc1ec1631c6997d329)) by Michael Usachenko
+
 ## [0.18.1](https://gitlab.com/gitlab-org/rust/knowledge-graph/compare/v0.18.0...v0.18.1) (2025-10-03)
 
 ### :fast_forward: Performance
