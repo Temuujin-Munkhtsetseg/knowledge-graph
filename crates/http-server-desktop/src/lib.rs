@@ -75,7 +75,7 @@ pub async fn run(
     event_bus: Arc<EventBus>,
     mcp_configuration: Arc<McpConfiguration>,
 ) -> Result<()> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let cors_layer = CorsLayer::new().allow_origin(tower_http::cors::AllowOrigin::predicate(
         |origin: &HeaderValue, _| {
             if let Ok(origin_str) = origin.to_str()
@@ -207,14 +207,14 @@ async fn shutdown_signal() {
 const PREFERRED_PORT: u16 = 27495;
 
 pub fn find_unused_port() -> Result<u16> {
-    match TcpListener::bind(("127.0.0.1", PREFERRED_PORT)) {
+    match TcpListener::bind(("0.0.0.0", PREFERRED_PORT)) {
         Ok(listener) => Ok(listener.local_addr()?.port()),
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
             info!(
                 "Preferred port {} is busy, finding a random unused port",
                 PREFERRED_PORT
             );
-            let listener = TcpListener::bind("127.0.0.1:0")?;
+            let listener = TcpListener::bind("0.0.0.0:0")?;
             let port = listener.local_addr()?.port();
             Ok(port)
         }

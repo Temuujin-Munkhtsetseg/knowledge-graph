@@ -1,0 +1,65 @@
+# Docker Compose file for building and running the knowledge-graph services with nginx-proxy and acme-companion
+services:
+  gkg-cli:
+    image: temuujinmunkhtsetseg/gkg:cli
+    container_name: gkg-cli
+    volumes:
+      - ${WORKSPACE_PATH}:/workspace:ro
+      - gkg-data:/root/.gkg
+    restart: unless-stopped
+
+  gkg-webserver:
+    image: temuujinmunkhtsetseg/gkg:webserver
+    container_name: gkg-webserver
+    volumes:
+      - gkg-data:/root/.gkg
+      - ${JWT_SECRET}:/secrets/jwt.secret:ro
+    env_file: .env
+    environment:
+      LETSENCRYPT_HOST: # Leave Blank
+      VIRTUAL_PORT: 3334
+      VIRTUAL_PATH: /webserver/
+      VIRTUAL_DEST: /
+    restart: unless-stopped
+    networks:
+      - net
+
+  gkg-indexer:
+    image: temuujinmunkhtsetseg/gkg:indexer
+    container_name: gkg-indexer
+    volumes:
+      - gkg-data:/root/.gkg
+      - ${JWT_SECRET}:/secrets/jwt.secret:ro
+    env_file: .env
+    environment:
+      LETSENCRYPT_HOST: # Leave Blank
+      VIRTUAL_PORT: 3333
+      VIRTUAL_PATH: /indexer/
+      VIRTUAL_DEST: /
+    restart: unless-stopped
+    networks:
+      - net
+
+  gkg-desktop:
+    image: temuujinmunkhtsetseg/gkg:desktop
+    container_name: gkg-desktop
+    volumes:
+      - ${WORKSPACE_PATH}:/workspace:ro
+      - gkg-data:/root/.gkg
+    env_file: .env
+    environment:
+      DEV_PORT: 27495
+      VIRTUAL_PORT: 27495 # Must match DEV_PORT
+    restart: unless-stopped
+    networks:
+      - net
+      - cross-service
+
+volumes:
+  gkg-data:
+
+networks:
+  net:
+    external: true
+  cross-service:
+    external: true

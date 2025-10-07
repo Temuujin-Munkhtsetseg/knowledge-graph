@@ -1,0 +1,47 @@
+# Docker Compose file for building and running the knowledge-graph services with nginx-proxy and acme-companion
+services:
+  gkg-cli:
+    image: temuujinmunkhtsetseg/gkg:cli
+    container_name: gkg-cli
+    volumes:
+      - ${WORKSPACE_PATH}:/workspace:ro
+      - gkg-data:/root/.gkg
+    restart: unless-stopped
+
+  gkg-webserver:
+    image: temuujinmunkhtsetseg/gkg:webserver
+    container_name: gkg-webserver
+    volumes:
+      - gkg-data:/root/.gkg
+      - ${JWT_SECRET}:/secrets/jwt.secret:ro
+    ports:
+    - "3334:3334"
+    env_file: .env
+    restart: unless-stopped
+
+  gkg-indexer:
+    image: temuujinmunkhtsetseg/gkg:indexer
+    container_name: gkg-indexer
+    volumes:
+      - gkg-data:/root/.gkg
+      - ${JWT_SECRET}:/secrets/jwt.secret:ro
+    env_file: .env
+    ports:
+      - "3333:3333"
+    restart: unless-stopped
+
+  gkg-desktop:
+    image: temuujinmunkhtsetseg/gkg:desktop
+    container_name: gkg-desktop
+    volumes:
+      - ${WORKSPACE_PATH}:/workspace:ro
+      - gkg-data:/root/.gkg
+    env_file: .env
+    ports:
+      - "27495:27495"
+    environment:
+      DEV_PORT: 27495
+    restart: unless-stopped
+
+volumes:
+  gkg-data:

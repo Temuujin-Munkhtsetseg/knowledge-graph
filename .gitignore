@@ -11,7 +11,7 @@ kuzu_db
 # Kuzu (old)
 db.kuzu
 *.db
-
+jwt.secret
 
 # TypeScript test files
 test-bindings/
