@@ -10,11 +10,13 @@
     "vscode": {
       "extensions": [
         "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
         "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
         "ms-python.python",
         "ms-python.vscode-pylance"
       ]
     }
-  }
+  },
+  "postCreateCommand": "lefthook install"
 }
